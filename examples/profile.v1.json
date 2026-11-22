@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "movie": {
+        "canonicalId": "demo:prisoners",
+        "displayTitle": "Prisoners",
+        "originalTitle": "Prisoners"
+      },
+      "evaluations": [
+        { "kind": "historical_score", "source": "brief", "sourceId": "prisoners", "score": "9" }
+      ]
+    },
+    {
+      "movie": { "canonicalId": "demo:the-game", "displayTitle": "The Game" },
+      "evaluations": [
+        { "kind": "historical_score", "source": "brief", "sourceId": "the-game", "score": "8,5" }
+      ]
+    },
+    {
+      "movie": { "canonicalId": "demo:grave", "displayTitle": "Grave" },
+      "evaluations": [
+        { "kind": "historical_range", "source": "brief", "sourceId": "grave", "min": "8,5", "max": "9" }
+      ]
+    },
+    {
+      "movie": { "canonicalId": "demo:fictif-a", "displayTitle": "Les Échos du large (film fictif)" },
+      "status": "seen",
+      "favorites": [{ "source": "fiction", "spontaneous": true, "memorable": false, "rewatch": true }],
+      "evaluations": [
+        { "kind": "qualitative", "source": "fiction", "sourceId": "a", "appreciation": "Beaucoup aimé" }
+      ]
+    },
+    {
+      "movie": { "canonicalId": "demo:fictif-b", "displayTitle": "La Dernière Lampe (film fictif)" },
+      "status": "unseen"
+    },
+    {
+      "movie": { "canonicalId": "demo:fictif-c", "displayTitle": "Le Dernier Quai (film fictif)" },
+      "status": "unknown"
+    }
+  ]
+}
