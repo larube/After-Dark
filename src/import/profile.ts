@@ -117,12 +117,12 @@ async function storeFavorites(db: CinemaTransaction, movieId: number, preference
 
 async function storeStatus(db: CinemaTransaction, movieId: number, incoming: ProfileEntry["status"], hasEvaluations: boolean) {
   const saved = await db.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
-  const status = incoming === "unknown" && saved ? saved.status : incoming ?? saved?.status;
-  if (status === "unseen" && (hasEvaluations || await db.select({ id: movieEvaluations.id }).from(movieEvaluations)
+  if (incoming === "unseen" && (hasEvaluations || await db.select({ id: movieEvaluations.id }).from(movieEvaluations)
     .where(eq(movieEvaluations.movieId, movieId)).get())) {
     throw new Error("Le statut explicitement non vu est incompatible avec une évaluation existante ou importée.");
   }
-  if (status === undefined || status === saved?.status) return false;
+  const status = hasEvaluations ? "seen" : incoming;
+  if (status === undefined || status === saved?.status || (status === "unknown" && saved)) return false;
   await db.insert(movieStatuses).values({ movieId, status })
     .onConflictDoUpdate({ target: movieStatuses.movieId, set: { status } }).run();
   return true;

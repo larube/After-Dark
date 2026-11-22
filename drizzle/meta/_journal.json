@@ -15,6 +15,13 @@
       "when": 1795382361095,
       "tag": "0001_unseen_cannot_be_evaluated",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795384074778,
+      "tag": "0002_evaluations_imply_seen",
+      "breakpoints": true
     }
   ]
 }

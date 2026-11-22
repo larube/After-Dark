@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { eq } from "drizzle-orm";
@@ -63,7 +63,7 @@ describe("profil dans une base SQLite temporaire", () => {
     expect(await importProfile(connection.db, example)).toMatchObject({ created: 0, updated: 0, duplicates: 6, errors: [] });
     connection.close();
     connection = await openDatabase(filename, migrations);
-    expect(await getProfileSummary(connection.db)).toMatchObject({ movies: 6, seen: 1, evaluated: 4, unseen: 1 });
+    expect(await getProfileSummary(connection.db)).toMatchObject({ movies: 6, seen: 4, evaluated: 4, unseen: 1 });
     expect(await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id).all()).toMatchObject([
       { kind: "historical_score", score: "9" },
       { kind: "historical_score", score: "8,5" },
@@ -121,17 +121,80 @@ describe("profil dans une base SQLite temporaire", () => {
     expect(await getProfileSummary(connection.db)).toMatchObject({ movies: 2, seen: 1 });
   });
 
-  it("refuse les évaluations des films non vus dans l’import et dans SQLite", async () => {
+  it("marque comme vus les films évalués sans statut ou déclarés inconnus", async () => {
+    const first = { movie: film, evaluations: [{ kind: "historical_score", source, sourceId: "old", score: "8,50", evaluatedOn: "2020-03-03" }] } satisfies ProfileEntry;
+    const second = {
+      movie: { canonicalId: "film:b", displayTitle: "Film B" },
+      status: "unknown",
+      evaluations: [{ kind: "qualitative", source, sourceId: "b", appreciation: "Bien" }],
+    } satisfies ProfileEntry;
+    expect(await load(first, second)).toMatchObject({ created: 2, errors: [] });
+    expect(await load(first, second)).toMatchObject({ updated: 0, duplicates: 2, errors: [] });
+    expect(await getProfileSummary(connection.db)).toMatchObject({ movies: 2, seen: 2, evaluated: 2, unseen: 0 });
+    expect(await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id).all()).toMatchObject([
+      { source, sourceId: "old", score: "8,50", evaluatedOn: "2020-03-03" },
+      { source, sourceId: "b", appreciation: "Bien" },
+    ]);
+  });
+
+  it.each([undefined, "seen"] as const)("passe de non vu à vu après visionnage (statut fourni : %s)", async (status) => {
+    const unseen = { movie: film, status: "unseen" } satisfies ProfileEntry;
+    const evaluation = { kind: "score", source, sourceId: "later", score: 7 } as const;
+    const watched = { movie: film, status, evaluations: [evaluation] };
+    await load(unseen);
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 0, evaluated: 0, unseen: 1 });
+    expect(await load(watched)).toMatchObject({ updated: 1, errors: [] });
+    expect(await load(watched)).toMatchObject({ updated: 0, duplicates: 1, errors: [] });
+    expect(await load(unseen)).toMatchObject({ errors: [{ entry: 1 }], updated: 0 });
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 1, evaluated: 1, unseen: 0 });
+  });
+
+  it("refuse une déclaration non vue contradictoire dans l’import et dans SQLite", async () => {
     const evaluation = { kind: "score", source, sourceId: "invalid", score: 7 } as const;
     await load({ movie: film, status: "unseen" });
-    expect((await load({ movie: film, evaluations: [evaluation] })).errors).toHaveLength(1);
     expect((await load({ movie: film, status: "unseen", evaluations: [evaluation] })).errors).toHaveLength(1);
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 0, evaluated: 0, unseen: 1 });
     await expect(connection.db.insert(movieEvaluations).values({ ...evaluation, score: "7", movieId: 1 }).run())
       .rejects.toMatchObject({ cause: { message: expect.stringMatching(/explicitly unseen/) } });
-    expect((await load({ movie: film, status: "seen", evaluations: [evaluation] })).updated).toBe(1);
-    expect((await load({ movie: film, status: "unseen" })).errors).toHaveLength(1);
+    await load({ movie: film, status: "seen", evaluations: [evaluation] });
     await expect(connection.db.update(movieStatuses).set({ status: "unseen" }).where(eq(movieStatuses.movieId, 1)).run())
       .rejects.toMatchObject({ cause: { message: expect.stringMatching(/explicitly unseen/) } });
+  });
+
+  it("rétablit les statuts vus dans une base créée avant la migration sans toucher aux évaluations", async () => {
+    const legacyMigrations = join(dir, "legacy");
+    mkdirSync(join(legacyMigrations, "meta"), { recursive: true });
+    const journal = JSON.parse(readFileSync(join(migrations, "meta", "_journal.json"), "utf8"));
+    journal.entries = journal.entries.slice(0, 2);
+    writeFileSync(join(legacyMigrations, "meta", "_journal.json"), JSON.stringify(journal));
+    for (const tag of ["0000_initial", "0001_unseen_cannot_be_evaluated"]) {
+      copyFileSync(join(migrations, `${tag}.sql`), join(legacyMigrations, `${tag}.sql`));
+    }
+    const legacyFilename = join(dir, "legacy.sqlite");
+    const legacy = await openDatabase(legacyFilename, legacyMigrations);
+    let originalEvaluations: (typeof movieEvaluations.$inferSelect)[];
+    try {
+      await legacy.db.insert(movies).values([1, 2, 3, 4, 5].map((id) => ({ id, displayTitle: `Film ${id}` }))).run();
+      await legacy.db.insert(movieStatuses).values([
+        { movieId: 2, status: "unknown" }, { movieId: 3, status: "unknown" }, { movieId: 4, status: "unseen" },
+      ]).run();
+      await legacy.db.insert(movieEvaluations).values([1, 2].map((movieId) => ({
+        movieId, kind: "historical_score" as const, source, sourceId: String(movieId), score: "8,50",
+      }))).run();
+      originalEvaluations = await legacy.db.select().from(movieEvaluations).orderBy(movieEvaluations.id).all();
+    } finally {
+      legacy.close();
+    }
+    const upgraded = await openDatabase(legacyFilename, migrations);
+    try {
+      expect(await upgraded.db.select().from(movieStatuses).orderBy(movieStatuses.movieId).all()).toEqual([
+        { movieId: 1, status: "seen" }, { movieId: 2, status: "seen" },
+        { movieId: 3, status: "unknown" }, { movieId: 4, status: "unseen" },
+      ]);
+      expect(await upgraded.db.select().from(movieEvaluations).orderBy(movieEvaluations.id).all()).toEqual(originalEvaluations);
+    } finally {
+      upgraded.close();
+    }
   });
 
   it("applique les clés étrangères après un import transactionnel", async () => {
