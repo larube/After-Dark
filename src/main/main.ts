@@ -10,6 +10,7 @@ import { getProfileSummary } from "../db/profile";
 import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
+import { startEnrichment } from "./enrichment";
 import { findTonight, localTmdb } from "./recommend";
 import { attachPosters } from "./posters";
 
@@ -32,6 +33,7 @@ let window: BrowserWindow | undefined;
 let database: Awaited<ReturnType<typeof openDatabase>> | undefined;
 let importing = false;
 let recommending = false;
+let enrichment: ReturnType<typeof startEnrichment> | undefined;
 
 function trusted(event: IpcMainInvokeEvent) {
   const frame = event.senderFrame;
@@ -91,6 +93,11 @@ void app.whenReady().then(async () => {
 
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
+  if (database) enrichment = startEnrichment(database.db, () => localTmdb(app.getPath("userData")),
+    () => importing || recommending);
+  register(ipc.enrichment, async (): ReturnType<DesktopApi["enrichment"]> => enrichment
+    ? { ok: true, data: await enrichment.progress() }
+    : { ok: false, error: "Enrichissement indisponible." });
   register(ipc.summary, async (db): ReturnType<DesktopApi["summary"]> => ({
     ok: true, data: await getProfileSummary(db),
   }));
@@ -111,16 +118,19 @@ void app.whenReady().then(async () => {
       } catch (error) {
         return { ok: false, error: error instanceof SyntaxError ? "Ce fichier ne contient pas un JSON valide." : "Impossible de lire le fichier." };
       }
+      await enrichment?.settleWrite();
       const report = await importProfile(db, input);
       return { ok: true, data: { status: "completed", report, summary: await getProfileSummary(db) } };
     } finally {
       importing = false;
+      enrichment?.wake();
     }
   });
   register(ipc.recommend, async (db, _owner, [criteria, allowRecent]): ReturnType<DesktopApi["recommend"]> => {
     if (importing || recommending) return { ok: false, error: "Une opération est déjà en cours." };
     recommending = true;
     try {
+      await enrichment?.settleWrite();
       const directory = app.getPath("userData");
       const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent);
       await attachPosters(result, directory);
@@ -134,6 +144,7 @@ void app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  enrichment?.stop();
   database?.close();
   database = undefined;
 });

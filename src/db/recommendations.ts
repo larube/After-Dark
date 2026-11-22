@@ -11,7 +11,7 @@ import { favorites, moodSessions, movieEvaluations, movieIdentifiers, movies, mo
 const decimal = (value: string | null) => value === null ? undefined : Number(value.replace(",", "."));
 const defined = (metadata: Metadata) => Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined));
 
-export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm) {
+export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm, expectedMovieId?: number) {
   return db.transaction(async (tx) => {
     const movie = {
       canonicalId: "tmdb:" + film.tmdbId, tmdbId: film.tmdbId, displayTitle: film.title,
@@ -19,7 +19,7 @@ export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm) {
       externalIds: film.imdbId ? { imdb: film.imdbId } : undefined,
     };
     try {
-      await importEntry(tx, { movie });
+      await importEntry(tx, { movie }, { releaseYears: film.releaseYears, expectedMovieId });
     } catch (error) {
       if (error instanceof AmbiguousMovie) return false;
       throw error;
@@ -28,7 +28,10 @@ export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm) {
     if (!stored) return false;
     const previous = stored.metadata?.tmdb;
     const prior = previous && typeof previous === "object" && "data" in previous ? previous.data : undefined;
-    const tmdb = { source: "TMDB", fetchedAt: film.fetchedAt, data: { ...Object(prior), ...defined(film.metadata) } };
+    const savedYears = previous && typeof previous === "object" && "releaseYears" in previous && Array.isArray(previous.releaseYears)
+      ? previous.releaseYears.filter((year): year is number => Number.isInteger(year)) : [];
+    const releaseYears = [...new Set([...savedYears, ...film.releaseYears])].sort((a, b) => a - b);
+    const tmdb = { source: "TMDB", fetchedAt: film.fetchedAt, releaseYears, data: { ...Object(prior), ...defined(film.metadata) } };
     if (!isDeepStrictEqual(previous, tmdb)) {
       await tx.update(movies).set({ metadata: { ...stored.metadata, tmdb } }).where(eq(movies.id, stored.id)).run();
     }

@@ -3,7 +3,7 @@ import { ipc } from "../src/shared/ipc";
 
 describe("contrats IPC", () => {
   it("n’accepte ni chemin depuis le renderer ni argument dans les deux canaux", () => {
-    for (const route of [ipc.summary, ipc.importProfile]) {
+    for (const route of [ipc.summary, ipc.importProfile, ipc.enrichment]) {
       expect(route.request.safeParse([]).success).toBe(true);
       expect(route.request.safeParse([undefined]).success).toBe(false);
       expect(route.request.safeParse([{ path: "/tmp/file.json" }]).success).toBe(false);

@@ -50,19 +50,6 @@ export async function findTonight(
         hydrated.add(id);
         return client.film(id);
       };
-      const profileIds = new Set(state.signals.map(({ film }) => film.id));
-      const needsMetadata = state.movies.filter((movie) => profileIds.has(movie.id) && !isFresh(movie.metadata, now));
-      if (needsMetadata.length) {
-        const offset = (history.round * 4) % needsMetadata.length;
-        for (const movie of [...needsMetadata.slice(offset), ...needsMetadata.slice(0, offset)].slice(0, 4)) {
-          // Search by exact title and year; ratings and favorites stay in SQLite.
-          const id = movie.tmdbId ?? (movie.year ? await client.search(
-            [movie.displayTitle, ...(movie.originalTitle ? [movie.originalTitle] : [])], movie.year,
-          ) : undefined);
-          const film = id ? await hydrate(id) : undefined;
-          if (film) await cacheFilm(db, film);
-        }
-      }
       const discovery = await client.discover(criteria, history.round);
       const uncached = discovery.filter((id) => !isFresh(local.get(id)?.metadata ?? null, now));
       for (let index = 0; index < Math.min(uncached.length, 18); index += 3) {

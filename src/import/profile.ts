@@ -20,8 +20,16 @@ function suppliedIdentifiers(movie: MovieInput): Identifier[] {
   ];
 }
 
-async function conflicts(db: CinemaTransaction, candidate: Movie, movie: MovieInput) {
-  if (movie.year !== undefined && candidate.year !== null && candidate.year !== movie.year) return true;
+function compatibleYear(candidate: Movie, year: number | undefined, verifiedYears: readonly number[]) {
+  if (year === undefined || candidate.year === null || candidate.year === year) return true;
+  const cached = candidate.metadata?.tmdb;
+  const cachedYears = cached && typeof cached === "object" && "releaseYears" in cached && Array.isArray(cached.releaseYears)
+    ? cached.releaseYears as unknown[] : [];
+  return Math.abs(candidate.year - year) <= 1 && (verifiedYears.includes(candidate.year) || cachedYears.includes(year));
+}
+
+async function conflicts(db: CinemaTransaction, candidate: Movie, movie: MovieInput, verifiedYears: readonly number[]) {
+  if (!compatibleYear(candidate, movie.year, verifiedYears)) return true;
   if (movie.tmdbId !== undefined && candidate.tmdbId !== null && candidate.tmdbId !== movie.tmdbId) return true;
   const externalIds = movie.externalIds;
   if (!externalIds) return false;
@@ -30,7 +38,7 @@ async function conflicts(db: CinemaTransaction, candidate: Movie, movie: MovieIn
       && Object.hasOwn(externalIds, namespace) && externalIds[namespace] !== value);
 }
 
-async function resolveMovie(db: CinemaTransaction, movie: MovieInput, titles: string[]): Promise<Movie | undefined> {
+async function resolveMovie(db: CinemaTransaction, movie: MovieInput, titles: string[], verifiedYears?: readonly number[]): Promise<Movie | undefined> {
   const matches = new Map<number, Movie>();
   for (const { namespace, value } of suppliedIdentifiers(movie)) {
     const found = (await db.select({ movie: movies }).from(movieIdentifiers)
@@ -43,7 +51,7 @@ async function resolveMovie(db: CinemaTransaction, movie: MovieInput, titles: st
     if (found) matches.set(found.id, found);
   }
   const identified = matches.values().next().value;
-  if (matches.size > 1 || (identified && await conflicts(db, identified, movie))) {
+  if (matches.size > 1 || (identified && await conflicts(db, identified, movie, verifiedYears ?? []))) {
     throw new AmbiguousMovie("Les identifiants ou l’année contredisent les données du catalogue.");
   }
   if (identified) return identified;
@@ -54,7 +62,10 @@ async function resolveMovie(db: CinemaTransaction, movie: MovieInput, titles: st
     .where(inArray(movieTitles.normalizedTitle, names)).all();
   const candidates: Movie[] = [];
   for (const { movie: candidate } of titleMatches) {
-    if (!await conflicts(db, candidate, movie)) candidates.push(candidate);
+    if (!await conflicts(db, candidate, movie, verifiedYears ?? [])) candidates.push(candidate);
+    else if ((verifiedYears || (candidate.tmdbId !== null && movie.tmdbId === undefined)) && (candidate.year === null || movie.year === undefined || Math.abs(candidate.year - movie.year) <= 1)) {
+      throw new AmbiguousMovie("Un titre voisin présente une année ou un identifiant contradictoire.");
+    }
   }
   const [candidate] = candidates;
   if (candidates.length > 1 || (candidate && (candidate.year === null || movie.year === undefined))) {
@@ -128,10 +139,13 @@ async function storeStatus(db: CinemaTransaction, movieId: number, incoming: Pro
   return true;
 }
 
-export async function importEntry(db: CinemaTransaction, entry: ProfileEntry): Promise<Outcome> {
+export async function importEntry(db: CinemaTransaction, entry: ProfileEntry, identity?: { releaseYears: readonly number[]; expectedMovieId?: number }): Promise<Outcome> {
   const { movie } = entry;
   const titles = [...new Set([movie.displayTitle, ...(movie.originalTitle ? [movie.originalTitle] : []), ...(movie.aliases ?? [])])];
-  const existing = await resolveMovie(db, movie, titles);
+  const existing = await resolveMovie(db, movie, titles, identity?.releaseYears);
+  if (identity?.expectedMovieId !== undefined && existing?.id !== identity.expectedMovieId) {
+    throw new AmbiguousMovie("Le résultat TMDB ne désigne pas de façon certaine le film à enrichir.");
+  }
   const movieId = existing?.id ?? (await db.insert(movies).values({
     displayTitle: movie.displayTitle, originalTitle: movie.originalTitle, year: movie.year,
     tmdbId: movie.tmdbId, metadata: movie.metadata,

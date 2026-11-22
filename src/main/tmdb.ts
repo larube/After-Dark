@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import type { Criteria, Metadata } from "../shared/recommendation";
 import { normalizeTitle } from "../domain/ratings";
@@ -15,13 +16,16 @@ const details = listing.extend({
   credits: z.object({ crew: z.array(named.extend({ job: z.string() })) }).optional(),
   keywords: z.object({ keywords: z.array(named) }).optional(),
   alternative_titles: z.object({ titles: z.array(z.object({ title: z.string().min(1) })) }).optional(),
+  release_dates: z.object({ results: z.array(z.object({
+    release_dates: z.array(z.object({ release_date: z.string(), type: z.number() })),
+  })) }).optional(),
   imdb_id: z.string().nullish(), overview: z.string().nullish(), poster_path: z.string().nullish(),
   popularity: z.number().nonnegative().optional(),
 });
 
 export type TmdbFilm = {
   tmdbId: number; title: string; originalTitle?: string; year?: number;
-  imdbId?: string; aliases: string[]; metadata: Metadata; fetchedAt: string;
+  imdbId?: string; aliases: string[]; releaseYears: number[]; metadata: Metadata; fetchedAt: string;
 };
 type ConnectionError = "offline" | "limited" | "unauthorized" | "unavailable";
 
@@ -68,11 +72,21 @@ function synopsis(overview?: string | null) {
 
 export class TmdbClient {
   private retryUntil = 0;
+  private nextRequest = 0;
+  private requestGate = Promise.resolve();
 
   constructor(private readonly token: string, private readonly fetcher = fetch, private readonly now = () => new Date()) {}
 
   private async get<T extends z.ZodType>(path: string, parameters: Record<string, string>, schema: T): Promise<z.output<T> | undefined> {
     if (this.now().getTime() < this.retryUntil) throw new TmdbError("limited");
+    const turn = this.requestGate.then(async () => {
+      const wait = this.nextRequest - Date.now();
+      if (wait > 0) await delay(wait);
+      if (this.now().getTime() < this.retryUntil) throw new TmdbError("limited");
+      this.nextRequest = Date.now() + 250;
+    });
+    this.requestGate = turn.catch(() => undefined);
+    await turn;
     const url = new URL("https://api.themoviedb.org/3/" + path);
     url.search = new URLSearchParams({ language: "fr-FR", ...parameters }).toString();
     let response: Response;
@@ -118,27 +132,54 @@ export class TmdbClient {
     return [...ids];
   }
 
-  async search(titles: string[], year: number) {
+  async findImdb(imdbId: string) {
+    if (!/^tt\d+$/.test(imdbId)) return;
+    const response = await this.get("find/" + imdbId, { external_source: "imdb_id" },
+      z.object({ movie_results: z.array(listing) }));
+    const films = response?.movie_results.filter(({ adult }) => !adult);
+    return films?.length === 1 ? films[0].id : undefined;
+  }
+
+  async matchProfileFilm(titles: string[], year: number, shouldPause: () => boolean) {
     const keys = new Set(titles.map(normalizeTitle));
-    const ids = new Set<number>();
-    for (const title of titles.slice(0, 2)) {
-      const results = await this.list("search/movie", { query: title, year: String(year), include_adult: "false" });
-      const matches = results.filter((row) => yearOf(row.release_date) === year
-        && [row.title, row.original_title].some((name) => name && keys.has(normalizeTitle(name))));
-      for (const match of matches) ids.add(match.id);
-      if (ids.size > 1) return;
+    const possible = new Set<number>();
+    const exact = new Set<number>();
+    for (const title of [...new Map(titles.map((name) => [normalizeTitle(name), name])).values()].slice(0, 3)) {
+      if (shouldPause()) return;
+      const rows = await this.list("search/movie", { query: title, include_adult: "false" });
+      for (const row of rows) {
+        const releaseYear = yearOf(row.release_date);
+        if (releaseYear !== undefined && Math.abs(releaseYear - year) > 1) continue;
+        possible.add(row.id);
+        if ([row.title, row.original_title].some((name) => name && keys.has(normalizeTitle(name)))) exact.add(row.id);
+      }
+      if (exact.size > 1 || possible.size > 4) return;
     }
-    return ids.values().next().value;
+
+    let match: TmdbFilm | undefined;
+    for (const id of possible) {
+      if (shouldPause()) return;
+      const film = await this.film(id);
+      if (!film || ![film.title, film.originalTitle, ...film.aliases].some((name) => name && keys.has(normalizeTitle(name)))) continue;
+      if (match) return;
+      match = film;
+    }
+    if (match && match.year !== undefined && (match.year === year || match.releaseYears.includes(year))) return match;
   }
 
   async film(id: number): Promise<TmdbFilm | undefined> {
-    const movie = await this.get("movie/" + id, { append_to_response: "credits,keywords,alternative_titles" }, details);
+    const movie = await this.get("movie/" + id, { append_to_response: "credits,keywords,alternative_titles,release_dates" }, details);
     if (!movie || movie.adult || movie.id !== id) return;
     const valid = (value: string | null | undefined, regex: RegExp) => value && regex.test(value) ? value : undefined;
     return {
       tmdbId: id, title: movie.title, originalTitle: movie.original_title || undefined,
       year: yearOf(movie.release_date), imdbId: valid(movie.imdb_id, /^tt\d+$/),
       aliases: [...new Set((movie.alternative_titles?.titles ?? []).map(({ title }) => title.trim()).filter(Boolean))],
+      releaseYears: [...new Set([
+        yearOf(movie.release_date),
+        ...(movie.release_dates?.results.flatMap(({ release_dates }) => release_dates
+          .filter(({ type }) => type >= 1 && type <= 3).map(({ release_date }) => yearOf(release_date))) ?? []),
+      ].filter((year): year is number => year !== undefined))].sort((a, b) => a - b),
       fetchedAt: this.now().toISOString(),
       metadata: {
         minutes: movie.runtime && movie.runtime > 0 ? movie.runtime : undefined,

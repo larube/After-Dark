@@ -78,7 +78,7 @@ export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () 
           <label className="grid gap-1">Énergie disponible
             <select className={control} name="energy"><option value="">Indifférent</option><option value="low">Faible</option><option value="high">Élevée · durée libre</option></select>
           </label>
-          <label className="grid gap-1">Ambiance à éviter
+          <label className="grid gap-1">Ambiance à éviter de préférence
             <select className={control} name="avoid"><option value="">Aucune</option>
               {Object.entries(moods).filter(([key]) => key !== "surprise").map(([key, label]) => <option value={key} key={key}>{label}</option>)}
             </select>

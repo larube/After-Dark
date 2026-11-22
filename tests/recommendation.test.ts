@@ -51,8 +51,19 @@ describe("moteur de recommandation", () => {
     expect(run({ mood: "tension" }, [favorite]).films[0].reasons.join(" ")).toContain("Alejandro Amenábar");
     expect(run({}, [favorite]).personalized).toBe(true);
     expect(run().personalized).toBe(false);
-    expect(ids(run({ avoid: "laugh" }))).not.toContain(2);
+    expect(ids(run({ avoid: "laugh" }))).toContain(2);
     expect(run({ mood: "laugh", requiredCountries: ["US"] }).films[0].warnings).toHaveLength(1);
+  });
+
+  it("déclasse une ambiance à éviter, tout en conservant les filtres obligatoires", () => {
+    const preferred = { preferredCountries: ["AR"] };
+    expect(ids(run(preferred))[0]).toBe(2);
+    const soft = run({ ...preferred, avoid: "laugh" });
+    expect(ids(soft)[0]).not.toBe(2);
+    expect(soft.films.find(({ id }) => id === 2)?.warnings.join(" ")).toContain("dark comedy");
+    const strict = run({ avoid: "laugh", requiredCountries: ["AR"] });
+    expect(ids(strict)).toEqual([2]);
+    expect(run({ avoid: "laugh", requiredCountries: ["AR"], requiredLanguages: ["en"] }).status).toBe("no-match");
   });
 
   it("utilise les déceptions comme signal négatif et ne déduit rien d’une appréciation inconnue", () => {

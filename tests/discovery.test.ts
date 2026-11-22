@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase } from "../src/db/client";
+import { enrichmentQueue } from "../src/db/enrichment";
+import { enrichNext } from "../src/main/enrichment";
 import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
 import { importProfile } from "../src/import/profile";
@@ -18,7 +20,7 @@ const criteria = criteriaSchema.parse({
 const now = new Date("2026-07-13T00:00:00Z");
 const remote: TmdbFilm = {
   title: "Premier Contact", originalTitle: "Arrival", year: 2016, aliases: ["Arrival"], tmdbId: 329865,
-  imdbId: "tt2543164", fetchedAt: now.toISOString(),
+  imdbId: "tt2543164", releaseYears: [2016], fetchedAt: now.toISOString(),
   metadata: metadataSchema.parse({ countries: ["US"], minutes: 116, language: "en", directors: ["Denis Villeneuve"] }),
 };
 const mockResponse = (value: unknown) => Response.json(value);
@@ -60,6 +62,91 @@ describe("intégration TMDB et SQLite", () => {
     expect((await readCatalogue(db)).movies).toHaveLength(1);
   });
 
+  it("rapproche un titre alternatif et un décalage documenté sans changer l’année du profil", async () => {
+    const { db } = database;
+    await importProfile(db, { version: 1, entries: [
+      { movie: { canonicalId: "alt", displayTitle: "L’Arrivée", year: 2015, aliases: ["Arrival"] }, status: "seen" },
+    ] });
+    expect(await cacheFilm(db, remote)).toBe(false);
+    expect((await readCatalogue(db)).movies).toHaveLength(1);
+    const verified = { ...remote, releaseYears: [2015, 2016] };
+    expect(await cacheFilm(db, verified)).toBe(true);
+    expect(await importProfile(db, { version: 1, entries: [
+      { movie: { canonicalId: "edition", displayTitle: "Premier Contact", year: 2016 } },
+    ] })).toMatchObject({ updated: 1, created: 0 });
+    expect(await cacheFilm(db, { ...remote, tmdbId: 999, imdbId: undefined })).toBe(false);
+    const { movies, catalogue } = await readCatalogue(db);
+    expect(movies).toHaveLength(1);
+    expect(movies[0]).toMatchObject({ displayTitle: "L’Arrivée", year: 2015, tmdbId: remote.tmdbId });
+    expect(catalogue[0].status).toBe("seen");
+  });
+
+  it("refuse de fusionner en présence de deux titres locaux plausibles et accepte les remakes éloignés", async () => {
+    const { db } = database;
+    const entries = [
+      { movie: { canonicalId: "festival", displayTitle: "Arrival", year: 2015 } },
+      { movie: { canonicalId: "salle", displayTitle: "Premier Contact", year: 2016 } },
+    ];
+    await importProfile(db, { version: 1, entries });
+    expect(await cacheFilm(db, { ...remote, releaseYears: [2015, 2016] })).toBe(false);
+    expect((await readCatalogue(db)).movies.map(({ tmdbId }) => tmdbId)).toEqual([null, null]);
+    expect(await cacheFilm(db, { ...remote, year: 1996, releaseYears: [1996] })).toBe(true);
+    expect((await readCatalogue(db)).movies).toHaveLength(3);
+  });
+
+  it("valide un titre alternatif avec les années de projection et refuse deux résultats plausibles", async () => {
+    const listing = [{ id: remote.tmdbId, title: "Premier Contact", release_date: "2016-11-10" }];
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("search/movie")) return mockResponse({ results: listing });
+      return mockResponse({
+        ...listing[0], alternative_titles: { titles: [{ title: "L’Arrivée" }] },
+        release_dates: { results: [{ release_dates: [
+          { type: 1, release_date: "2015-12-31T00:00:00Z" },
+          { type: 4, release_date: "2017-01-01T00:00:00Z" },
+        ] }] },
+      });
+    });
+    const client = new TmdbClient("test-token", fetcher, () => now);
+    expect(await client.matchProfileFilm(["L’Arrivée"], 2015, () => false)).toMatchObject({
+      tmdbId: remote.tmdbId, releaseYears: [2015, 2016],
+    });
+    listing[0].title = "L’Arrivée";
+    listing.push({ id: 12345, title: "L’Arrivée", release_date: "2015-06-01" });
+    expect(await client.matchProfileFilm(["L’Arrivée"], 2015, () => false)).toBeUndefined();
+  });
+
+  it("reprend après réouverture, conserve les échecs réseau en attente et n’attend pas le réseau pour classer le cache", async () => {
+    await importProfile(database.db, { version: 1, entries: [
+      { movie: { canonicalId: "arrival", displayTitle: "Arrival", year: 2016, tmdbId: remote.tmdbId }, status: "unseen" },
+      { movie: { canonicalId: "cure", displayTitle: "Cure", year: 1997 }, status: "unseen" },
+    ] });
+    let releaseFetch: (response: Response) => void = () => undefined;
+    const fetcher = vi.fn<typeof fetch>().mockImplementationOnce(() => new Promise((resolveResponse) => { releaseFetch = resolveResponse; }))
+      .mockRejectedValueOnce(Error("offline")).mockResolvedValue(mockResponse({ results: [] }));
+    const client = new TmdbClient("test-token", fetcher, () => now);
+    const step = () => enrichNext(database.db, async () => client, () => false, (write) => write());
+    const first = step();
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    expect(await findTonight(database.db, criteria, async () => undefined, now)).toMatchObject({ status: "ready" });
+    releaseFetch(mockResponse({ id: remote.tmdbId, title: "Arrival", release_date: "2016-11-10" }));
+    expect(await first).toBe("working");
+    expect(await enrichmentQueue(database.db)).toMatchObject({ total: 2, enriched: 1, skipped: 0, pending: [expect.anything()] });
+    database.close();
+    database = await openDatabase(join(folder, "cinema.sqlite"), resolve("drizzle"));
+    expect(await step()).toBe("offline");
+    expect(await enrichmentQueue(database.db)).toMatchObject({ enriched: 1, skipped: 0, pending: [expect.anything()] });
+    expect(await step()).toBe("working");
+    expect(await step()).toBe("complete");
+    expect(await enrichmentQueue(database.db)).toMatchObject({ enriched: 1, skipped: 1, pending: [] });
+    await importProfile(database.db, { version: 1, entries: [
+      { movie: { canonicalId: "cure", displayTitle: "Cure", year: 1997, aliases: ["キュア"] } },
+    ] });
+    expect((await enrichmentQueue(database.db)).pending).toHaveLength(1);
+    expect(await enrichNext(database.db, async () => client, () => true, (write) => write())).toBe("waiting");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it("préserve le cache hors ligne, enregistre critères et version, évite les répétitions", async () => {
     const { db } = database;
     await cacheFilm(db, remote);
@@ -68,7 +155,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.0.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.1.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });

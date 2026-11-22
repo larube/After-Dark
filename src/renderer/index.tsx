@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { DesktopApi, ImportReport, ProfileSummary } from "../shared/ipc";
+import type { DesktopApi, EnrichmentProgress, ImportReport, ProfileSummary } from "../shared/ipc";
 import { Tonight } from "./tonight";
 import "./style.css";
 
@@ -13,7 +13,14 @@ const metrics = [
   ["evaluated", "Films évalués"], ["unseen", "Films explicitement non vus"],
 ] as const;
 
+const enrichmentMessages: Record<EnrichmentProgress["status"], string> = {
+  waiting: "En attente", working: "En arrière-plan", complete: "Terminé", unconfigured: "Jeton TMDB requis",
+  offline: "Reprise au retour du réseau", limited: "Pause demandée par TMDB",
+  unauthorized: "Vérifiez le jeton TMDB", unavailable: "TMDB est indisponible, reprise automatique",
+};
+
 function App() {
+  const [enrichment, setEnrichment] = useState<EnrichmentProgress>();
   const [summary, setSummary] = useState<ProfileSummary>();
   const [databaseError, setDatabaseError] = useState("");
   const [importError, setImportError] = useState("");
@@ -23,6 +30,18 @@ function App() {
 
   useEffect(() => {
     void refreshSummary();
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function loadProgress() {
+      try {
+        const reply = await window.afterDark.enrichment();
+        if (alive && reply.ok) setEnrichment(reply.data);
+      } finally {
+        if (alive) timer = setTimeout(() => void loadProgress().catch(() => undefined), 3000);
+      }
+    }
+    void loadProgress().catch(() => undefined);
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
 
   async function refreshSummary() {
@@ -70,6 +89,12 @@ function App() {
         {databaseError ? "Base locale indisponible" : summary ? "Base locale prête" : "Ouverture de la base locale…"}
       </p>
       {databaseError && <p className="mt-2 text-rose-200" role="alert">{databaseError}</p>}
+      {!!enrichment?.total && <p className="mt-2 text-sm text-zinc-300">
+        Enrichissement TMDB · {enrichment.enriched} enrichi(s) sur {enrichment.total}
+        {enrichment.skipped > 0 && ` · ${enrichment.skipped} sans rapprochement certain`}
+        {enrichment.pending > 0 && ` · ${enrichment.pending} restant(s)`}
+        {" · "}{enrichmentMessages[enrichment.status]}
+      </p>}
       <Tonight ready={!!summary && !importing} onComplete={() => void refreshSummary()} />
       {summary && (
         <>

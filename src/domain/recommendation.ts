@@ -1,7 +1,7 @@
 import type { Criteria, Metadata, Recommendation } from "../shared/recommendation";
 import { normalizeTitle } from "./ratings";
 
-export const engineVersion = "1.0.0";
+export const engineVersion = "1.1.0";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
   status?: "seen" | "unseen" | "unknown";
@@ -38,8 +38,7 @@ export function eligible(film: Film, criteria: Criteria) {
   return film.status !== "seen"
     && (!criteria.requiredCountries.length || countries.some((country) => criteria.requiredCountries.includes(country)))
     && (!criteria.requiredLanguages.length || (language !== undefined && criteria.requiredLanguages.includes(language)))
-    && (criteria.maxMinutes === undefined || (minutes !== undefined && minutes <= criteria.maxMinutes))
-    && (!criteria.avoid || !moodEvidence(film.metadata, criteria.avoid).weight);
+    && (criteria.maxMinutes === undefined || (minutes !== undefined && minutes <= criteria.maxMinutes));
 }
 
 function features(metadata: Metadata) {
@@ -92,6 +91,7 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   const { metadata } = film;
   const affinity = affinityFor(film, traits);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
+  const avoided = criteria.avoid ? moodEvidence(metadata, criteria.avoid) : undefined;
   const preferredCountry = metadata.countries.some((code) => criteria.preferredCountries.includes(code));
   const preferredLanguage = !!metadata.language && criteria.preferredLanguages.includes(metadata.language);
   const duration = metadata.minutes;
@@ -106,6 +106,7 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
     ...(energy > 0 ? ["Durée courte pour une soirée à faible énergie."] : []),
   ];
   const warnings = [
+    ...(avoided?.weight ? [`Moins prioritaire : indices de l’ambiance que vous préférez éviter (${avoided.labels.join(", ")}).`] : []),
     ...(mood && !mood.weight ? ["Les métadonnées donnent peu d’indices sur le mood demandé."] : []),
     ...(energy < 0 ? ["Séance longue pour une soirée à faible énergie."] : []),
     ...(affinity.negative.length ? [`Traits associés aussi à des appréciations négatives : ${affinity.negative.join(", ")}.`] : []),
@@ -113,7 +114,7 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   return {
     film, affinity: affinity.score, exploration, reasons, warnings,
     score: affinity.score * 1.6 + (mood?.weight ?? 0) * 1.4 + Number(preferredCountry) * 1.4
-      + Number(preferredLanguage) * 1.2 + energy + exploration * (criteria.mood === "surprise" ? 1.5 : 0.5),
+      + Number(preferredLanguage) * 1.2 + energy - (avoided?.weight ?? 0) * 1.5 + exploration * (criteria.mood === "surprise" ? 1.5 : 0.5),
     traits: new Set(features(metadata).map((feature) => feature.id)),
   };
 }

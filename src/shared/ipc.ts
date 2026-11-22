@@ -32,7 +32,14 @@ function reply<T extends z.ZodType>(data: T) {
   ]);
 }
 
+const enrichmentSchema = z.strictObject({
+  total: count, enriched: count, skipped: count, pending: count,
+  status: z.enum(["waiting", "working", "complete", "unconfigured", "offline", "limited", "unauthorized", "unavailable"]),
+});
+export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
+
 export const ipc = {
+  enrichment: { channel: "profile:enrichment", request: z.tuple([]), response: reply(enrichmentSchema) },
   summary: { channel: "profile:summary", request: z.tuple([]), response: reply(summarySchema) },
   importProfile: { channel: "profile:import", request: z.tuple([]), response: reply(importResultSchema) },
   recommend: { channel: "cinema:recommend", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(recommendationSchema) },
