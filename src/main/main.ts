@@ -10,6 +10,10 @@ import { getProfileSummary } from "../db/profile";
 import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
+import { startEnrichment } from "./enrichment";
+import { findTonight, localTmdb } from "./recommend";
+import { attachPosters } from "./posters";
+
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
@@ -28,28 +32,31 @@ const rendererUrl = developmentUrl ?? pathToFileURL(rendererPath).href;
 let window: BrowserWindow | undefined;
 let database: Awaited<ReturnType<typeof openDatabase>> | undefined;
 let importing = false;
+let recommending = false;
+let enrichment: ReturnType<typeof startEnrichment> | undefined;
 
 function trusted(event: IpcMainInvokeEvent) {
   const frame = event.senderFrame;
   return window?.webContents === event.sender && frame && frame === event.sender.mainFrame && frame.url === rendererUrl;
 }
 
-function register<T extends z.ZodType>(
-  route: { channel: string; request: z.ZodType; response: T },
-  run: (db: NonNullable<typeof database>["db"], owner: BrowserWindow) => z.input<NoInfer<T>> | Promise<z.input<NoInfer<T>>>,
+function register<T extends z.ZodType, A extends z.ZodType<unknown[]>>(
+  route: { channel: string; request: A; response: T },
+  run: (db: NonNullable<typeof database>["db"], owner: BrowserWindow, args: z.output<NoInfer<A>>) => z.input<NoInfer<T>> | Promise<z.input<NoInfer<T>>>,
 ) {
   ipcMain.handle(route.channel, async (event, ...args: unknown[]) => {
-    if (!window || !trusted(event) || !route.request.safeParse(args).success) {
+    const request = route.request.safeParse(args);
+    if (!window || !trusted(event) || !request.success) {
       return route.response.parse({ ok: false, error: "Requête refusée." });
     }
     if (!database) {
       return route.response.parse({ ok: false, error: "Base indisponible. Relancez After Dark après avoir vérifié le dossier de données." });
     }
     try {
-      return route.response.parse(await run(database.db, window));
+      return route.response.parse(await run(database.db, window, request.data));
     } catch (error) {
       console.error(`Échec IPC ${route.channel}`, error instanceof Error ? error.name : "UnknownError");
-      return route.response.parse({ ok: false, error: "L’opération a échoué. Vérifiez le fichier et réessayez." });
+      return route.response.parse({ ok: false, error: "L’opération a échoué. Réessayez." });
     }
   });
 }
@@ -86,10 +93,16 @@ void app.whenReady().then(async () => {
 
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
+  if (database) enrichment = startEnrichment(database.db, () => localTmdb(app.getPath("userData")),
+    () => importing || recommending);
+  register(ipc.enrichment, async (): ReturnType<DesktopApi["enrichment"]> => enrichment
+    ? { ok: true, data: await enrichment.progress() }
+    : { ok: false, error: "Enrichissement indisponible." });
   register(ipc.summary, async (db): ReturnType<DesktopApi["summary"]> => ({
     ok: true, data: await getProfileSummary(db),
   }));
   register(ipc.importProfile, async (db, owner): ReturnType<DesktopApi["importProfile"]> => {
+    if (recommending) return { ok: false, error: "Une recherche est en cours." };
     if (importing) return { ok: false, error: "Un import est déjà en cours." };
     importing = true;
     try {
@@ -105,10 +118,25 @@ void app.whenReady().then(async () => {
       } catch (error) {
         return { ok: false, error: error instanceof SyntaxError ? "Ce fichier ne contient pas un JSON valide." : "Impossible de lire le fichier." };
       }
+      await enrichment?.settleWrite();
       const report = await importProfile(db, input);
       return { ok: true, data: { status: "completed", report, summary: await getProfileSummary(db) } };
     } finally {
       importing = false;
+      enrichment?.wake();
+    }
+  });
+  register(ipc.recommend, async (db, _owner, [criteria, allowRecent]): ReturnType<DesktopApi["recommend"]> => {
+    if (importing || recommending) return { ok: false, error: "Une opération est déjà en cours." };
+    recommending = true;
+    try {
+      await enrichment?.settleWrite();
+      const directory = app.getPath("userData");
+      const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent);
+      await attachPosters(result, directory);
+      return { ok: true, data: result };
+    } finally {
+      recommending = false;
     }
   });
   createWindow();
@@ -116,6 +144,7 @@ void app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  enrichment?.stop();
   database?.close();
   database = undefined;
 });
