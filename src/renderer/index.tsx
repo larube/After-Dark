@@ -21,10 +21,16 @@ function App() {
   const [cancelled, setCancelled] = useState(false);
 
   useEffect(() => {
-    window.afterDark.summary().then((result) => {
-      if (result.ok) setSummary(result.data);
-      else setDatabaseError(result.error);
-    }).catch(() => setDatabaseError("Impossible de lire l’état de la base locale."));
+    async function loadSummary() {
+      try {
+        const result = await window.afterDark.summary();
+        if (result.ok) setSummary(result.data);
+        else setDatabaseError(result.error);
+      } catch {
+        setDatabaseError("Impossible de lire l’état de la base locale.");
+      }
+    }
+    void loadSummary();
   }, []);
 
   async function chooseProfile() {

@@ -13,7 +13,7 @@ git switch codex/pr1-desktop-foundations  # tant que la PR est en revue
 npm ci
 ```
 
-Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 45.4.1, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, better-sqlite3 12.11.1, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. La fenêtre utilise les éléments HTML natifs et Tailwind pour son interface minimale.
+Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 44.11.5, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, better-sqlite3 12.11.1, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. La fenêtre utilise les éléments HTML natifs et Tailwind pour son interface minimale.
 
 ## Test manuel en développement
 
