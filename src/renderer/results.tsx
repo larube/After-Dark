@@ -25,7 +25,7 @@ function RecommendationCard({ film, featured, personalized }: {
   return <article className="film-card">
     {posterData ? <img className="poster" src={posterData} alt="" /> : <div className="poster poster-empty" aria-hidden="true"><span>◈</span></div>}
     <div className="film-copy">
-      <span className="badge">{category === "safe" && !personalized ? "Choix du soir" : categories[category]}</span>
+      <span className="badge" data-category={category}>{category === "safe" && !personalized ? "Choix du soir" : categories[category]}</span>
       <h3>{title}</h3>
       <p className="film-meta">{[
         year, metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",

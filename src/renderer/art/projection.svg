@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 590 315">
+  <defs>
+    <pattern id="screen" width="5" height="5" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#0d0c0b"/>
+    </pattern>
+    <filter id="print" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".64" numOctaves="3" seed="7"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="2.4" intercept="-1.15"/>
+      </feComponentTransfer>
+    </filter>
+    <path id="sheet" d="m247 17 22 3 9-7 35 2 14-8 31 4 44-8 14 6 33-5 22 6 48-5 19 5 52-7v311H108l25-25 5-16 25-5 6-18 13-5 7-19 15-8 4-20 13-6-1-22 13-15-5-13 15-20-4-13 11-18-5-21 10-24Z"/>
+    <clipPath id="paper"><use href="#sheet"/></clipPath>
+  </defs>
+  <path d="m411 180 23 1 13-10 34 4 18-11 30 3 61-20v168H333l20-37 9-6 5-23 25-21 2-18Z" fill="#a92726"/>
+  <use href="#sheet" fill="#f1e6d2" opacity=".78"/>
+  <g clip-path="url(#paper)">
+    <path d="M213 263 590 1v78L238 310H131Z" fill="#c7b398"/>
+    <path d="M300 315 590 147v168Z" fill="#a92726"/>
+    <g transform="translate(468 111) rotate(-22)">
+      <path d="M-15 23c-28 99-131 74-183 152l25 18C-126 131 7 147 18 25Z" fill="#292522"/>
+      <path d="M-17 30c-27 95-125 74-174 151M14 30C-4 150-125 128-174 186" stroke="#f1e6d2" stroke-width="4" stroke-dasharray="5 7" fill="none"/>
+      <circle r="119" fill="#171614" stroke="#292522" stroke-width="5"/>
+      <circle r="107" fill="none" stroke="#a59785" stroke-width="2"/>
+      <circle r="97" fill="none" stroke="#a59785" stroke-dasharray="2 4" opacity=".5"/>
+      <g fill="#d1c2a9">
+        <circle cy="-62" r="24"/>
+        <circle cy="-62" r="24" transform="rotate(72)"/>
+        <circle cy="-62" r="24" transform="rotate(144)"/>
+        <circle cy="-62" r="24" transform="rotate(216)"/>
+        <circle cy="-62" r="24" transform="rotate(288)"/>
+        <circle r="13"/>
+      </g>
+      <circle r="6" fill="#292522"/>
+    </g>
+    <path d="M100 0h490v315H100z" fill="url(#screen)" opacity=".56"/>
+    <rect width="590" height="315" filter="url(#print)" opacity=".72"/>
+  </g>
+  <path d="m447 281 29-13 21-2 13-9 29 2 22-13 29-2v71H371l21-12 25 1 13-13Z" fill="#a92726"/>
+  <path d="m447 281 29-13 21-2 13-9 29 2 22-13 29-2v71H371l21-12 25 1 13-13Z" fill="url(#screen)" opacity=".6"/>
+</svg>

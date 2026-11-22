@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="170" viewBox="0 0 220 170">
+  <filter id="print" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" stitchTiles="stitch" seed="29"/>
+    <feComponentTransfer>
+      <feFuncA type="linear" slope="2.1" intercept="-.96"/>
+    </feComponentTransfer>
+  </filter>
+  <rect width="220" height="170" filter="url(#print)" opacity=".35"/>
+</svg>

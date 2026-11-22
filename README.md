@@ -67,9 +67,11 @@ Ouvrez **Profil**, puis cliquez sur **Importer un profil** et choisissez un fich
 - `favorites` est un tableau facultatif. Chaque objet a une `source` et les préférences connues `spontaneous`, `memorable` et `rewatch`, indépendantes. Les champs omis laissent la valeur existante intacte.
 - Zod vérifie tout le document avant de modifier la base. Les entrées valides sont traitées en ordre dans une transaction. Une ambiguïté ou un conflit entraîne l’annulation de l’entrée concernée. Le rapport indique quelles entrées corriger. Une réimportation identique de données non contradictoires laisse le profil inchangé.
 
-## Interface Neon Underground
+## Interface Neon Underground 2.0
 
-Le renderer utilise une palette charbon, papier crème, orange brûlé et rouge usé. Georgia compose les titres et la police système de macOS reste utilisée pour les contrôles. La lumière de projection, le grain et les motifs du hero sont dessinés en CSS. Les affiches sont lues via le cache local existant.
+Le renderer associe le noir encre, l’ivoire papier, l’orange brûlé et le rouge affiche. **Barlow Condensed Black** compose le logotype, les titres et le CTA. **IBM Plex Sans** porte les commandes et la lecture. Les trois fichiers WOFF2 et leurs [licences OFL](public/licenses/) sont distribués avec l’application.
+
+La maquette *Suspense au cinéma* guide le graphisme imprimé et les déchirures. La maquette *Votre Séance Personnelle* guide la rangée de moods, les filtres et la séparation entre la vedette et les autres films. Une bobine tramée dessinée en SVG remplace les collages photographiques des références. Les affiches de films viennent du cache local existant.
 
 - **Ce soir** affiche les humeurs, les filtres et les recommandations. Les raccourcis France et Espagne ajoutent des pays de production préférés. Ouvrez les filtres pour définir une contrainte obligatoire ou saisir plusieurs codes.
 - **Ma collection** montre les compteurs et favoris. Le détail du catalogue est à venir.

@@ -50,7 +50,7 @@ export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () 
 
   return <>
     <header className="hero">
-      <div className="projection" aria-hidden="true"><i /><i /><i /></div>
+      <div className="projection" aria-hidden="true" />
       <h1>Ce soir<span> ?</span></h1>
       <p>Éteins la lumière. Quel film pour ton humeur&nbsp;?</p>
     </header>
