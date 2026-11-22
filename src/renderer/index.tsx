@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { DesktopApi, ImportReport, ProfileSummary } from "../shared/ipc";
+import { Tonight } from "./tonight";
 import "./style.css";
 
 declare global {
@@ -21,17 +22,20 @@ function App() {
   const [cancelled, setCancelled] = useState(false);
 
   useEffect(() => {
-    async function loadSummary() {
-      try {
-        const result = await window.afterDark.summary();
-        if (result.ok) setSummary(result.data);
-        else setDatabaseError(result.error);
-      } catch {
-        setDatabaseError("Impossible de lire l’état de la base locale.");
-      }
-    }
-    void loadSummary();
+    void refreshSummary();
   }, []);
+
+  async function refreshSummary() {
+    try {
+      const result = await window.afterDark.summary();
+      if (result.ok) {
+        setDatabaseError("");
+        setSummary(result.data);
+      } else setDatabaseError(result.error);
+    } catch {
+      setDatabaseError("Impossible de lire l’état de la base locale.");
+    }
+  }
 
   async function chooseProfile() {
     setImporting(true);
@@ -66,6 +70,7 @@ function App() {
         {databaseError ? "Base locale indisponible" : summary ? "Base locale prête" : "Ouverture de la base locale…"}
       </p>
       {databaseError && <p className="mt-2 text-rose-200" role="alert">{databaseError}</p>}
+      <Tonight ready={!!summary && !importing} onComplete={() => void refreshSummary()} />
       {summary && (
         <>
           <dl className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">

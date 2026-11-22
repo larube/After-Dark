@@ -51,9 +51,9 @@ Le produit de Forge est une application locale de développement, sans signature
 
 ## Architecture et migrations
 
-- `src/main` possède la connexion SQLite, ouvre le sélecteur de fichier natif et autorise deux canaux IPC. Il vérifie le document appelant, les arguments et les réponses.
-- `src/preload` expose uniquement `summary()` et `importProfile()` via `contextBridge` et valide leurs réponses. `src/renderer` utilise cette API avec React. Le renderer est isolé, sandboxé, sans Node.js, avec une CSP spécifique au développement et une CSP de production qui interdit les connexions réseau.
-- `src/shared` contient les contrats Zod. `src/domain` contient les fonctions TypeScript pures. `src/db` contient les schémas et requêtes et `src/import` gère l’import. Le futur moteur peut vivre dans `src/domain` sans dépendre d’Electron ou de SQLite.
+- `src/main` possède la connexion SQLite, ouvre le sélecteur de fichier natif et autorise trois canaux IPC. Il vérifie le document appelant, les arguments et les réponses.
+- `src/preload` expose `summary()`, `importProfile()` et `recommend(criteria, allowRecent)` via `contextBridge` et valide leurs réponses. `src/renderer` utilise cette API avec React. Le renderer est isolé, sandboxé, sans Node.js, avec une CSP spécifique au développement et une CSP de production qui interdit les connexions réseau.
+- `src/shared` contient les contrats Zod. `src/domain` contient les fonctions TypeScript pures. `src/db` contient les schémas et requêtes et `src/import` gère l’import. Le moteur pur vit dans `src/domain/recommendation.ts`. Le Main orchestre la découverte et le cache, le moteur applique les filtres et classe les candidats, puis une transaction enregistre la session, le rang, la version et les explications. La PR 2 réutilise les migrations et les tables existantes.
 - Le Main ouvre `after-dark.sqlite` dans `app.getPath("userData")`. Les clés étrangères, le délai d’attente d’écriture et le journal WAL sont activés. Les migrations Drizzle s’appliquent au démarrage. Une base existante reste en place si une migration échoue.
 - Après une modification de schéma, lancez `npm run db:generate -- --name=nom_de_la_migration`, relisez le SQL, puis versionnez `drizzle/` avec le schéma. Forge copie ce dossier dans `Contents/Resources/drizzle`. Forge place le binaire libSQL macOS précompilé hors d’ASAR. Le Main utilise exclusivement le client fichier de libSQL, avec l’adaptateur officiel de Drizzle. Le module natif utilise Node-API, dont l’ABI est stable entre versions de Node et d’Electron compatibles.
 
@@ -66,6 +66,40 @@ Cliquez sur **Importer un profil** et choisissez un fichier JSON v1. [L’exempl
 - `status` est facultatif. `seen` désigne un film vu, `unseen` un film explicitement non vu, `unknown` une mention explicite d’incertitude. Toute évaluation valide établit que le film est vu, y compris une évaluation historique importée sans statut ou avec `unknown`. Si un import précédent indiquait `unseen`, l’import d’une évaluation fait passer le film à `seen`. Déclarer `unseen` avec une évaluation dans la même entrée, ou pour un film déjà évalué, est refusé. Une migration marque aussi comme vus les films déjà évalués dont le statut était inconnu ou absent.
 - `favorites` est un tableau facultatif. Chaque objet a une `source` et les préférences connues `spontaneous`, `memorable` et `rewatch`, indépendantes. Les champs omis laissent la valeur existante intacte.
 - Zod vérifie tout le document avant de modifier la base. Les entrées valides sont traitées en ordre dans une transaction. Une ambiguïté ou un conflit entraîne l’annulation de l’entrée concernée. Le rapport indique quelles entrées corriger. Une réimportation identique de données non contradictoires laisse le profil inchangé.
+
+## Ce soir et configuration de TMDB
+
+**Ce soir** est disponible dès le démarrage. Pour découvrir de nouveaux films, récupérez le **jeton d’accès en lecture API** dans [les paramètres développeur TMDB](https://www.themoviedb.org/settings/api). L’application lit `tmdb.json` dans le même dossier que la base, normalement `~/Library/Application Support/After Dark/`. Avec `AFTER_DARK_USER_DATA`, placez le fichier dans le dossier de test.
+
+```json
+{"tmdbReadToken":"REMPLACEZ_PAR_VOTRE_JETON_D_ACCES_EN_LECTURE"}
+```
+
+Gardez ce fichier hors du dépôt et limitez son accès avec `chmod 600`. La variable d’environnement `AFTER_DARK_TMDB_READ_TOKEN` est également lue par le Main et prend la priorité. Le fichier fonctionne aussi quand on lance le paquet depuis Finder. Le Main lit le jeton à chaque recherche, donc la création ou la correction du fichier est prise en compte au prochain clic. Les évaluations, favoris et explications restent dans la base locale. Le Main envoie les filtres de découverte à TMDB et peut rechercher jusqu’à quatre films du profil par titre et année pour enrichir les signaux disponibles. Pour rester entièrement local, utilisez l’application sans jeton.
+
+Sans jeton ou en cas d’erreur réseau, de quota ou d’authentification, After Dark classe les films déjà enregistrés. Les affiches déjà téléchargées restent disponibles dans le dossier local `posters/`. Les films importés servent aussi de candidats s’ils restent à découvrir. Les entrées fictives du profil d’exemple sont écartées de « Ce soir ». L’application indique explicitement quand le profil est insuffisant pour personnaliser la sélection.
+
+### Vérifier le parcours sur Mac
+
+1. Si vous voulez préserver votre profil normal, lancez `npm start` avec `AFTER_DARK_USER_DATA` pointant vers un dossier temporaire absolu. Ouvrez **Ce soir**, choisissez une humeur et lancez la recherche. Sur une base vierge sans jeton, vérifiez que le catalogue vide est annoncé.
+2. Ajoutez `tmdb.json` dans ce dossier, puis relancez la recherche. Vérifiez les titres, les métadonnées disponibles et les raisons de la sélection. Essayez **Autres propositions**. Avec un catalogue assez fourni, les résultats récents doivent disparaître de la nouvelle sélection.
+3. Dans les filtres facultatifs, essayez `ES` en pays de production obligatoire puis `es` en langue originale obligatoire. Un film coproduit en Espagne satisfait le filtre `ES`. Vérifiez aussi une durée maximale et un jeu de contraintes sans correspondance. Une contrainte non satisfaite ne doit jamais être assouplie automatiquement.
+4. Quittez avec **⌘Q**. Exécutez `npm run package`, puis lancez le binaire du paquet avec **le même dossier de données temporaire**, selon le parcours de packaging ci-dessus. Renommez temporairement `tmdb.json` et retirez la variable d’environnement si vous l’utilisiez. Les métadonnées et l’historique doivent encore servir aux propositions. Si le catalogue a été épuisé, utilisez **Revoir des propositions récentes**. Vérifiez que les affiches déjà téléchargées apparaissent encore.
+5. Pour examiner le résultat avec votre profil réel, importez-le dans une autre base isolée. Testez plusieurs humeurs, avec et sans contraintes. Les exemples et les tests ci-dessous ne mesurent pas votre satisfaction personnelle.
+
+### Découverte et classement
+
+La découverte intercale trois recherches TMDB par demande. Elles combinent popularité, périodes de sortie tournantes et une sélection plafonnée en nombre de votes qui explore aussi sans filtre de genre. Les détails TMDB âgés de moins de 30 jours sont réutilisés. La provenance et la date d’actualisation sont stockées dans `movies.metadata.tmdb`. Les recherches sont bornées en volume et en durée par appel. Un HTTP 429 suspend les appels selon `Retry-After` ou pendant 60 secondes en l’absence de valeur exploitable. La déduplication utilise TMDB, IMDb, les titres connus et l’année selon les règles de l’import. Les correspondances ambiguës sont écartées.
+
+- Les statuts vus, le plafond de durée, les pays et langues obligatoires, et les indices reconnus pour une ambiance à éviter sont traités avant le classement. Pour plusieurs codes obligatoires dans un champ, un code correspondant suffit. Les filtres pays, langue et durée s’appliquent conjointement. Une durée, un pays ou une langue inconnus échouent au filtre obligatoire correspondant.
+- L’affinité pèse 1,6 fois son score borné entre −4 et 4. Elle utilise les signaux par film et les traits partagés, pondérés à 2,5 pour la réalisation, 1,4 pour les mots-clés, 1 pour les genres et 0,7 pour le pays. Les notes numériques sont centrées sur 6. Une fourchette contribue par son milieu au classement seulement. Les valeurs historiques restent intactes. La table `qualitativeWeights` règle séparément les signaux qualitatifs. Les préférences spontanée, marquante et de revisionnage ajoutent respectivement 0,45, 0,25 et 0,2 au signal du film. L’absence d’évaluation n’ajoute aucun signal négatif.
+- Le mood pèse 1,4 fois ses indices, avec jusqu’à 4 points d’indices combinés par genres et mots-clés. Le pays préféré ajoute 1,4 et la langue préférée 1,2. Une énergie faible favorise légèrement les séances de 100 minutes ou moins et pénalise celles de plus de 135 minutes. Une énergie élevée laisse la durée libre. Ces indices ne permettent pas d’établir la difficulté réelle d’un film.
+- L’exploration favorise une popularité TMDB modérée à hauteur de 0,5, ou 1,5 en mode **Surprends-moi**. La sélection donne un bonus d’affinité au rôle **Valeur sûre**, d’exploration au rôle **Pépite**, et atténue l’avantage des profils familiers pour le **Wildcard**. La proximité des traits et la même langue pénalisent la répétition dans la sélection. Les 15 dernières propositions sont écartées par défaut. La liste peut compter moins de trois films si peu satisfont les critères.
+- Les raisons citent les métadonnées et préférences qui ont contribué au choix. Le synopsis affiche au plus la première phrase courte disponible. TMDB fournit ce texte, dont le contenu ne peut pas garantir l’absence de spoiler. Les données manquantes sont fréquentes et les pondérations sont heuristiques.
+
+### Comparaison par masquage
+
+`evaluateHoldout(catalogue, signals, criteria, heldOut)` écarte tous les signaux des identifiants masqués avant le classement. Leurs films redeviennent candidats dans cette comparaison isolée. La fonction renvoie leur rang éventuel et les appréciations réelles pour comparer les choix, sans modifier le statut enregistré dans SQLite. Pour l’utiliser avec un profil complet, chargez une copie de la base avec `readCatalogue`, choisissez explicitement les identifiants à masquer et appelez la fonction avec des critères correspondant à la comparaison souhaitée. Le test Vitest vérifie le mécanisme sur des fixtures. Un petit échantillon permet seulement une lecture descriptive.
 
 ## Sauvegarder et restaurer SQLite
 

@@ -11,7 +11,7 @@ type MovieInput = ProfileEntry["movie"];
 type Identifier = { namespace: string; value: string };
 type Outcome = "created" | "updated" | "duplicates";
 
-class AmbiguousMovie extends Error {}
+export class AmbiguousMovie extends Error {}
 
 function suppliedIdentifiers(movie: MovieInput): Identifier[] {
   return [
@@ -128,7 +128,7 @@ async function storeStatus(db: CinemaTransaction, movieId: number, incoming: Pro
   return true;
 }
 
-async function importEntry(db: CinemaTransaction, entry: ProfileEntry): Promise<Outcome> {
+export async function importEntry(db: CinemaTransaction, entry: ProfileEntry): Promise<Outcome> {
   const { movie } = entry;
   const titles = [...new Set([movie.displayTitle, ...(movie.originalTitle ? [movie.originalTitle] : []), ...(movie.aliases ?? [])])];
   const existing = await resolveMovie(db, movie, titles);

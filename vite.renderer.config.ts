@@ -8,7 +8,7 @@ export default defineConfig(({ command }) => {
     "default-src 'none'",
     `script-src 'self'${development ? " 'unsafe-inline'" : ""}`,
     `style-src 'self'${development ? " 'unsafe-inline'" : ""}`,
-    "img-src 'self'",
+    "img-src 'self' data:",
     development ? "connect-src 'self' ws://127.0.0.1:*" : "connect-src 'none'",
     "object-src 'none'",
     "base-uri 'none'",
