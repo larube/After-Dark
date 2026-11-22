@@ -71,7 +71,14 @@ Ouvrez **Profil**, puis cliquez sur **Importer un profil** et choisissez un fich
 
 Le renderer associe le noir encre, l’ivoire papier, l’orange brûlé et le rouge affiche. **Barlow Condensed Black** compose le logotype, les titres et le CTA. **IBM Plex Sans** porte les commandes et la lecture. Les trois fichiers WOFF2 et leurs [licences OFL](public/licenses/) sont distribués avec l’application.
 
-La maquette *Suspense au cinéma* guide le graphisme imprimé et les déchirures. La maquette *Votre Séance Personnelle* guide la rangée de moods, les filtres et la séparation entre la vedette et les autres films. Une bobine tramée dessinée en SVG remplace les collages photographiques des références. Les affiches de films viennent du cache local existant.
+Le [prototype « Ce soir » validé](docs/prototypes/ce-soir/README.md) guide la composition. La marquise, le portrait tramé et les six vignettes d’humeur sont des WebP locaux. L’affiche de la vedette repose sur un montage papier et les films suivants occupent une colonne décalée sur écran large. Les affiches proviennent du cache local TMDB. Un emplacement imprimé signale clairement une affiche indisponible.
+
+| Largeur Electron | Avant recherche | Après recherche |
+| --- | --- | --- |
+| 1160 px | [Ce soir](docs/screenshots/electron-ce-soir.jpg) | [Sélection](docs/screenshots/electron-recommandations.jpg) |
+| 520 px | [Ce soir](docs/screenshots/electron-fenetre-etroite.jpg) | [Sélection](docs/screenshots/electron-recommandations-etroite.jpg) |
+
+Les captures proviennent d’une session Electron macOS avec une base de test isolée et des affiches réelles mises en cache. La sélection est calculée par le moteur. À 520 px, la capture après recherche montre la partie résultats de la fenêtre.
 
 - **Ce soir** affiche les humeurs, les filtres et les recommandations. Les raccourcis France et Espagne ajoutent des pays de production préférés. Ouvrez les filtres pour définir une contrainte obligatoire ou saisir plusieurs codes.
 - **Ma collection** montre les compteurs et favoris. Le détail du catalogue est à venir.

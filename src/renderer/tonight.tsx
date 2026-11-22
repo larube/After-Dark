@@ -26,7 +26,9 @@ export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () 
         const heading = resultsHeading.current;
         if (heading?.getClientRects().length) {
           heading.focus({ preventScroll: true });
-          heading.scrollIntoView({ block: "nearest" });
+          if (heading.getBoundingClientRect().top > window.innerHeight - 240) {
+            heading.scrollIntoView({ block: "start" });
+          }
         }
         onComplete();
       } else setError(reply.error);
@@ -51,14 +53,14 @@ export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () 
   return <>
     <header className="hero">
       <div className="projection" aria-hidden="true" />
-      <h1>Ce soir<span> ?</span></h1>
-      <p>Éteins la lumière. Quel film pour ton humeur&nbsp;?</p>
+      <h1>Ce soir ?</h1>
+      <p>Une envie, une ambiance.<br /> Le reste attendra.</p>
     </header>
     <form className="programme" onSubmit={submit}>
       <MoodSelector value={mood} onChange={setMood} busy={loading} />
       <FilterPanel busy={loading} />
-      <button className="button button-primary" disabled={loading || !ready}>
-        {loading ? "Recherche en cours…" : "Trouve-moi un film"} <span aria-hidden="true">↗</span>
+      <button className="button button-primary" type="submit" disabled={loading || !ready}>
+        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Trouve-moi un film"}
       </button>
     </form>
     <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} repeat={(allowRecent) => {

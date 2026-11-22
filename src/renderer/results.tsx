@@ -23,13 +23,16 @@ function RecommendationCard({ film, featured, personalized }: {
 }) {
   const { title, year, metadata, posterData, category, reasons, warnings } = film;
   return <article className="film-card">
-    {posterData ? <img className="poster" src={posterData} alt="" /> : <div className="poster poster-empty" aria-hidden="true"><span>◈</span></div>}
+    <div className="poster-mount">
+      {posterData ? <img className="poster" src={posterData} alt="" /> :
+        <div className="poster poster-empty"><span aria-hidden="true">◈</span><span>Affiche indisponible</span></div>}
+    </div>
     <div className="film-copy">
       <span className="badge" data-category={category}>{category === "safe" && !personalized ? "Choix du soir" : categories[category]}</span>
       <h3>{title}</h3>
       <p className="film-meta">{[
-        year, metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",
-        metadata.countries.length ? metadata.countries.map((code) => regions.of(code)).join(", ") : "Pays inconnu",
+        year, metadata.countries.length ? metadata.countries.map((code) => regions.of(code)).join(", ") : "Pays inconnu",
+        metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",
       ].filter(Boolean).join(" · ")}</p>
       {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
       <details className="film-reasons" open={featured || undefined}><summary>Pourquoi ce film ?</summary>
@@ -44,20 +47,27 @@ export function Results({ headingRef, result, loading, ready, error, repeat }: {
   headingRef?: Ref<HTMLHeadingElement>; result?: Recommendation; loading: boolean; ready: boolean; error: string; repeat: (allowRecent: boolean) => void;
 }) {
   return <section className="results" aria-labelledby="results-heading">
-    <h2 id="results-heading" ref={headingRef} tabIndex={-1}>À l’affiche</h2>
-    <div role="status" className="live-status">
-      {loading ? "Recherche en cours…" : result ? connections[result.connection] : "Choisissez une humeur pour lancer la séance."}
-    </div>
+    <header className="results-header">
+      <h2 id="results-heading" ref={headingRef} tabIndex={-1}>À l’affiche</h2>
+      <p role="status" className="live-status">
+        {loading ? "Recherche en cours…" : result ? connections[result.connection] : "Choisissez une humeur pour lancer la séance."}
+      </p>
+    </header>
     {error && <p className="notice error" role="alert">{error}</p>}
     {loading && <div className="loading-bar" aria-hidden="true" />}
     {result && <div aria-busy={loading}>
-      {!result.personalized && <p className="notice">Votre profil a encore peu de signaux exploitables. La sélection s’appuie sur votre humeur, vos critères et le catalogue.</p>}
+      {!result.personalized && <p className="profile-note">Votre profil a encore peu de signaux exploitables. La sélection s’appuie sur votre humeur, vos critères et le catalogue.</p>}
       {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3><p>{empty[result.status][1]}</p></div>}
-      {result.films.length > 0 && <ol className="film-list">
-        {result.films.map((film, index) => <li className={index === 0 ? "featured" : ""} key={film.id}>
-          <RecommendationCard film={film} featured={index === 0} personalized={result.personalized} />
-        </li>)}
-      </ol>}
+      {result.films.length > 0 && <div className="film-list">
+        <div className="featured">
+          <RecommendationCard key={result.films[0].id} film={result.films[0]} featured personalized={result.personalized} />
+        </div>
+        {result.films.length > 1 && <ol className="alternatives" start={2} aria-label="Propositions suivantes">
+          {result.films.slice(1).map((film) => <li key={film.id}>
+            <RecommendationCard film={film} featured={false} personalized={result.personalized} />
+          </li>)}
+        </ol>}
+      </div>}
       {result.status !== "empty" && <div className="actions">
         <button className="button" type="button" disabled={loading || !ready} onClick={() => repeat(false)}>Autres propositions</button>
         {result.status === "exhausted" && <button className="button button-quiet" type="button" disabled={loading || !ready}
