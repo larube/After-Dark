@@ -1,26 +1,25 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { pathToFileURL } from "node:url";
+import { createClient } from "@libsql/client/sqlite3";
+import { drizzle } from "drizzle-orm/libsql/sqlite3";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import * as schema from "./schema";
 
-export function openDatabase(filename: string, migrationsFolder: string) {
-  if (filename !== ":memory:") mkdirSync(dirname(filename), { recursive: true });
-  const sqlite = new Database(filename);
+export async function openDatabase(filename: string, migrationsFolder: string) {
+  mkdirSync(dirname(filename), { recursive: true });
+  const client = createClient({ url: pathToFileURL(filename).href, timeout: 5000 });
   try {
-    sqlite.pragma("foreign_keys = ON");
-    sqlite.pragma("busy_timeout = 5000");
-    sqlite.pragma("journal_mode = WAL");
-    const db = drizzle(sqlite, { schema });
-    migrate(db, { migrationsFolder });
-    return { db, close: () => sqlite.close() };
+    await client.execute("PRAGMA foreign_keys = ON");
+    await client.execute("PRAGMA journal_mode = WAL");
+    const db = drizzle(client, { schema });
+    await migrate(db, { migrationsFolder });
+    return { db, close: () => client.close() };
   } catch (error) {
-    sqlite.close();
+    client.close();
     throw error;
   }
 }
 
-type Connection = ReturnType<typeof openDatabase>["db"];
-export type CinemaTransaction = Parameters<Parameters<Connection["transaction"]>[0]>[0];
-export type CinemaDatabase = Omit<Connection, "$client">;
+export type CinemaDatabase = Awaited<ReturnType<typeof openDatabase>>["db"];
+export type CinemaTransaction = Parameters<Parameters<CinemaDatabase["transaction"]>[0]>[0];

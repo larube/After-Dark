@@ -4,7 +4,7 @@ After Dark est une application macOS personnelle pour importer et consulter son 
 
 ## Installation sur macOS
 
-Prérequis : macOS 13 ou version ultérieure, Node.js 22 LTS (22.13 ou plus récent), npm 10 ou ultérieur et Git. Utilisez un Node natif pour votre Mac (`arm64` sur Apple Silicon, `x64` sur Intel). Le premier téléchargement des dépendances et le packaging requièrent une connexion. Si le module natif SQLite doit être compilé, installez Python 3 et les outils de ligne de commande Xcode (`xcode-select --install`).
+Prérequis : macOS 13 ou version ultérieure, Node.js 22 LTS (22.13 ou plus récent), npm 10 ou ultérieur et Git. Utilisez un Node natif pour votre Mac (`arm64` sur Apple Silicon, `x64` sur Intel). Le premier téléchargement des dépendances et le packaging requièrent une connexion.
 
 ```sh
 git clone https://github.com/larube/After-Dark.git ~/Work/after-dark
@@ -13,7 +13,7 @@ git switch codex/pr1-desktop-foundations  # tant que la PR est en revue
 npm ci
 ```
 
-Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 44.11.5, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, better-sqlite3 12.11.1, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. La fenêtre utilise les éléments HTML natifs et Tailwind pour son interface minimale.
+Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 45.4.1, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, libSQL local 0.17.4, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. La fenêtre utilise les éléments HTML natifs et Tailwind pour son interface minimale.
 
 ## Test manuel en développement
 
@@ -55,7 +55,7 @@ Le produit de Forge est une application locale de développement, sans signature
 - `src/preload` expose uniquement `summary()` et `importProfile()` via `contextBridge` et valide leurs réponses. `src/renderer` utilise cette API avec React. Le renderer est isolé, sandboxé, sans Node.js, avec une CSP spécifique au développement et une CSP de production qui interdit les connexions réseau.
 - `src/shared` contient les contrats Zod. `src/domain` contient les fonctions TypeScript pures. `src/db` contient les schémas et requêtes et `src/import` gère l’import. Le futur moteur peut vivre dans `src/domain` sans dépendre d’Electron ou de SQLite.
 - Le Main ouvre `after-dark.sqlite` dans `app.getPath("userData")`. Les clés étrangères, le délai d’attente d’écriture et le journal WAL sont activés. Les migrations Drizzle s’appliquent au démarrage. Une base existante reste en place si une migration échoue.
-- Après une modification de schéma, lancez `npm run db:generate -- --name=nom_de_la_migration`, relisez le SQL, puis versionnez `drizzle/` avec le schéma. Forge copie ce dossier dans `Contents/Resources/drizzle`. Le module natif SQLite est reconstruit pour Electron lors du packaging et décompressé hors d’ASAR.
+- Après une modification de schéma, lancez `npm run db:generate -- --name=nom_de_la_migration`, relisez le SQL, puis versionnez `drizzle/` avec le schéma. Forge copie ce dossier dans `Contents/Resources/drizzle`. Forge place le binaire libSQL macOS précompilé hors d’ASAR. Le Main utilise exclusivement le client fichier de libSQL, avec l’adaptateur officiel de Drizzle. Le module natif utilise Node-API, dont l’ABI est stable entre versions de Node et d’Electron compatibles.
 
 ## Importer un profil
 
@@ -83,11 +83,8 @@ npm run build
 npm run package
 ```
 
-Vitest ouvre une base temporaire et applique les migrations. `build` compile les trois cibles Vite sans démarrer de fenêtre. `package` reconstruit les cibles avec Forge et vérifie le parcours de packaging macOS. Forge peut reconstruire better-sqlite3 pour l’ABI Electron au démarrage en développement. Si Vitest signale ensuite une erreur `NODE_MODULE_VERSION`, quittez l’application et restaurez le binaire Node avec `npm rebuild better-sqlite3` avant de relancer les tests. Si Electron n’a pas encore téléchargé son binaire, lancez `npm exec -- install-electron` avec une connexion. En cas d’erreur native, vérifiez l’architecture de Node et la présence de Python 3 et des outils Xcode.
+Vitest ouvre une base temporaire et applique les migrations. `build` compile les trois cibles Vite sans démarrer de fenêtre. `package` reconstruit les cibles avec Forge et crée le paquet macOS.
 
-Si Clang ne trouve pas l’en-tête C++ `climits` et que Xcode complet est installé, sélectionnez sa chaîne pour la commande concernée, sans changer le réglage global :
+Le pilote libSQL fournit des binaires précompilés Apple Silicon et Intel via les dépendances facultatives de npm. Si le chargement du binaire échoue, vérifiez `node -p process.arch` et lancez `npm ci --include=optional` avec un Node de l’architecture voulue. Si Electron n’a pas encore téléchargé son binaire, lancez `npm exec -- install-electron` avec une connexion.
 
-```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer npm start
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer npm run package
-```
+Pour mettre Electron à jour, utilisez `npm install -D --save-exact electron@latest`, puis relancez le lint, TypeScript, les tests, le build et les deux parcours macOS. Gardez le même dossier temporaire avant et après le changement de version afin de vérifier la compatibilité de la base.

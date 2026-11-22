@@ -26,7 +26,7 @@ const developmentUrl = !app.isPackaged && MAIN_WINDOW_VITE_DEV_SERVER_URL
 const rendererPath = join(__dirname, "../renderer", MAIN_WINDOW_VITE_NAME, "index.html");
 const rendererUrl = developmentUrl ?? pathToFileURL(rendererPath).href;
 let window: BrowserWindow | undefined;
-let database: ReturnType<typeof openDatabase> | undefined;
+let database: Awaited<ReturnType<typeof openDatabase>> | undefined;
 let importing = false;
 
 function trusted(event: IpcMainInvokeEvent) {
@@ -76,18 +76,18 @@ function createWindow() {
   });
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
   try {
     const migrations = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), "drizzle");
-    database = openDatabase(join(app.getPath("userData"), "after-dark.sqlite"), migrations);
+    database = await openDatabase(join(app.getPath("userData"), "after-dark.sqlite"), migrations);
   } catch (error) {
     console.error("Ouverture ou migration SQLite impossible", error instanceof Error ? error.name : "UnknownError");
   }
 
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
-  register(ipc.summary, (db): Awaited<ReturnType<DesktopApi["summary"]>> => ({
-    ok: true, data: getProfileSummary(db),
+  register(ipc.summary, async (db): ReturnType<DesktopApi["summary"]> => ({
+    ok: true, data: await getProfileSummary(db),
   }));
   register(ipc.importProfile, async (db, owner): ReturnType<DesktopApi["importProfile"]> => {
     if (importing) return { ok: false, error: "Un import est déjà en cours." };
@@ -105,8 +105,8 @@ void app.whenReady().then(() => {
       } catch (error) {
         return { ok: false, error: error instanceof SyntaxError ? "Ce fichier ne contient pas un JSON valide." : "Impossible de lire le fichier." };
       }
-      const report = importProfile(db, input);
-      return { ok: true, data: { status: "completed", report, summary: getProfileSummary(db) } };
+      const report = await importProfile(db, input);
+      return { ok: true, data: { status: "completed", report, summary: await getProfileSummary(db) } };
     } finally {
       importing = false;
     }

@@ -3,7 +3,7 @@ module.exports = {
     asar: true,
     appBundleId: "com.larube.afterdark",
     extraResource: ["drizzle"],
-    // Forge Vite's default filter excludes the external native SQLite dependency.
+    // Forge Vite's default filter excludes the external SQLite driver.
     // Keep node_modules here and let Packager prune development packages.
     ignore: (file) => file !== "" && file !== "/package.json" && file !== "/.vite"
       && !/^\/\.vite\/(build|renderer)(\/|$)/.test(file)
