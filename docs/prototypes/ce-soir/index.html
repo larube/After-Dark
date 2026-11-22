@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self'">
+  <title>After Dark · Prototype Ce soir</title>
+  <link rel="stylesheet" href="prototype.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand" aria-label="After Dark"><span>AFTER</span><span>DARK</span></div>
+    <ul class="views" aria-label="Vues de l’application">
+      <li class="active" aria-current="page"><span>◩</span> Ce soir</li>
+      <li><span>◎</span> Ma collection</li>
+      <li><span>◇</span> Découvertes</li>
+      <li><span>◷</span> Historique</li>
+      <li><span>◉</span> Profil</li>
+    </ul>
+  </aside>
+  <main>
+    <header class="hero">
+      <p class="prototype">Prototype visuel · données de démonstration</p>
+      <h1>Ce soir ?</h1>
+      <p class="intro">Une envie, une ambiance.<br>Le reste attendra.</p>
+    </header>
+    <form class="controls" aria-label="Critères de la séance">
+      <fieldset class="moods">
+        <legend>Humeur</legend>
+        <label><input type="radio" name="mood" value="surprise">Surprends-moi</label>
+        <label><input type="radio" name="mood" value="tension" checked>Suspense et tension</label>
+        <label><input type="radio" name="mood" value="strange">Étrange / dérangeant</label>
+        <label><input type="radio" name="mood" value="laugh">Envie de rire</label>
+        <label><input type="radio" name="mood" value="emotion">Émotion</label>
+        <label><input type="radio" name="mood" value="immersion">Immersif</label>
+      </fieldset>
+      <div class="filters">
+        <label>Pays de production<select><option>Tous</option><option>France</option><option>Espagne</option></select></label>
+        <label>Langue originale<select><option>Toutes</option><option>Français</option><option>Espagnol</option></select></label>
+        <label>Durée max.<select><option>Sans limite</option><option>2 h</option><option>2 h 30</option></select></label>
+        <label>Énergie<select><option>Indifférente</option><option>Modérée</option></select></label>
+        <label>Ambiance à éviter<select><option>Aucune</option><option>Violence</option></select></label>
+      </div>
+      <div class="search">
+        <button type="submit"><span aria-hidden="true">▶</span> Trouve-moi un film</button>
+        <p role="status" id="demo-status"></p>
+      </div>
+    </form>
+    <section class="lineup" aria-label="Sélection de démonstration" id="selection" tabindex="-1">
+      <article class="feature">
+        <figure class="feature-art">
+          <div class="paper"><img src="assets/prisoners.jpg" alt="Affiche de Prisoners"></div>
+        </figure>
+        <div class="feature-copy">
+          <p class="role">Valeur sûre</p>
+          <h2>Prisoners</h2>
+          <p class="meta">2013 · États-Unis · 2 h 33</p>
+          <p>Deux fillettes disparaissent. Alors que l’enquête piétine, l’un des pères décide d’agir seul.</p>
+          <details open><summary>Pourquoi ce choix ?</summary><p>Exemple de justification · Une enquête sous pression pour une soirée de suspense.</p></details>
+        </div>
+      </article>
+      <div class="alternatives">
+        <article>
+          <img src="assets/nightcrawler.jpg" alt="Affiche de Nightcrawler">
+          <div><p class="role">Pépite</p><h2>Nightcrawler</h2><p class="meta">2014 · États-Unis · 1 h 57</p><p>Un vidéaste indépendant traque les faits divers dans les rues de Los Angeles.</p></div>
+        </article>
+        <article>
+          <img src="assets/under-the-skin.jpg" alt="Affiche de Under the Skin">
+          <div><p class="role wildcard">Wildcard</p><h2>Under the Skin</h2><p class="meta">2013 · Royaume-Uni · 1 h 48</p><p>Une femme mystérieuse sillonne les routes d’Écosse.</p></div>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

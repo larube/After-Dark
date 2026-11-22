@@ -9,6 +9,7 @@ export default defineConfig(({ command }) => {
     `script-src 'self'${development ? " 'unsafe-inline'" : ""}`,
     `style-src 'self'${development ? " 'unsafe-inline'" : ""}`,
     "img-src 'self' data:",
+    "font-src 'self'",
     development ? "connect-src 'self' ws://127.0.0.1:*" : "connect-src 'none'",
     "object-src 'none'",
     "base-uri 'none'",

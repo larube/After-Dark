@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { DesktopApi, EnrichmentProgress, ImportReport, ProfileSummary } from "../shared/ipc";
+import { AppShell, type Page } from "./shell";
+import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
 import { Tonight } from "./tonight";
 import "./style.css";
 
@@ -8,18 +10,8 @@ declare global {
   interface Window { afterDark: DesktopApi }
 }
 
-const metrics = [
-  ["movies", "Films enregistrés"], ["seen", "Films vus"],
-  ["evaluated", "Films évalués"], ["unseen", "Films explicitement non vus"],
-] as const;
-
-const enrichmentMessages: Record<EnrichmentProgress["status"], string> = {
-  waiting: "En attente", working: "En arrière-plan", complete: "Terminé", unconfigured: "Jeton TMDB requis",
-  offline: "Reprise au retour du réseau", limited: "Pause demandée par TMDB",
-  unauthorized: "Vérifiez le jeton TMDB", unavailable: "TMDB est indisponible, reprise automatique",
-};
-
 function App() {
+  const [page, setPage] = useState<Page>("tonight");
   const [enrichment, setEnrichment] = useState<EnrichmentProgress>();
   const [summary, setSummary] = useState<ProfileSummary>();
   const [databaseError, setDatabaseError] = useState("");
@@ -76,62 +68,44 @@ function App() {
     }
   }
 
-  return (
-    <main className="mx-auto max-w-3xl px-7 py-9">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-4xl font-semibold tracking-tight">After Dark</h1>
-        <button className="rounded-md bg-violet-200 px-4 py-2 font-medium text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-200 disabled:opacity-50"
-          onClick={chooseProfile} disabled={!summary || importing}>
-          {importing ? "Import en cours…" : "Importer un profil"}
-        </button>
-      </header>
-      <p className="mt-3 text-zinc-400" role="status">
-        {databaseError ? "Base locale indisponible" : summary ? "Base locale prête" : "Ouverture de la base locale…"}
-      </p>
-      {databaseError && <p className="mt-2 text-rose-200" role="alert">{databaseError}</p>}
-      {!!enrichment?.total && <p className="mt-2 text-sm text-zinc-300">
-        Enrichissement TMDB · {enrichment.enriched} enrichi(s) sur {enrichment.total}
-        {enrichment.skipped > 0 && ` · ${enrichment.skipped} sans rapprochement certain`}
-        {enrichment.pending > 0 && ` · ${enrichment.pending} restant(s)`}
-        {" · "}{enrichmentMessages[enrichment.status]}
-      </p>}
+  function navigate(next: Page) {
+    if (page === next) return;
+    setPage(next);
+    window.scrollTo(0, 0);
+  }
+
+  const status = databaseError ? "Base locale indisponible" : summary ? "Base locale prête" : "Ouverture de la base locale…";
+  return <AppShell page={page} navigate={navigate} status={status}>
+    {databaseError && <p className="notice error" role="alert">{databaseError}</p>}
+    <div hidden={page !== "tonight"}>
       <Tonight ready={!!summary && !importing} onComplete={() => void refreshSummary()} />
-      {summary && (
-        <>
-          <dl className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {metrics.map(([key, label]) => (
-              <div key={key} className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-                <dt className="text-sm text-zinc-300">{label}</dt>
-                <dd className="mt-2 text-2xl tabular-nums">{summary[key]}</dd>
-              </div>
-            ))}
-          </dl>
-          {summary.movies === 0 && <p className="mt-4 text-zinc-300">Importez un profil JSON pour commencer.</p>}
-          <section className="mt-7" aria-labelledby="favorites">
-            <h2 id="favorites" className="text-xl font-semibold">Favoris</h2>
-            {summary.favorites.length === 0
-              ? <p className="mt-2 text-zinc-400">Aucun favori spontané enregistré.</p>
-              : <ul className="mt-2 divide-y divide-zinc-800">
-                {summary.favorites.map(({ id, title, year }) => <li className="py-2" key={id}>{title}{year !== null && ` (${year})`}</li>)}
-              </ul>}
-          </section>
-        </>
-      )}
-      {importError && <p className="mt-5 text-rose-200" role="alert">{importError}</p>}
-      {cancelled && <p className="mt-5 text-zinc-300" role="status">Import annulé.</p>}
-      {report && (
-        <section className="mt-7 border-t border-zinc-700 pt-4" aria-labelledby="report" aria-live="polite">
-          <h2 id="report" className="text-xl font-semibold">Résultat de l’import</h2>
-          <p className="mt-2 text-zinc-300">
-            {report.created} créée(s), {report.updated} mise(s) à jour, {report.duplicates} inchangée(s), {report.ambiguities.length} ambiguïté(s), {report.errors.length} erreur(s).
-          </p>
-          {[...report.ambiguities, ...report.errors].map(({ entry, path, message }, index) => (
-            <p className="mt-2 text-amber-200" key={index}>{[entry && `Entrée ${entry}`, path, message].filter(Boolean).join(" · ")}</p>
-          ))}
-        </section>
-      )}
-    </main>
-  );
+      <Enrichment progress={enrichment} />
+    </div>
+    {page === "collection" && <>
+      <header className="page-heading"><h1>Ma collection</h1><p>Vos films enregistrés et vos favoris.</p></header>
+      <CatalogueSummary summary={summary} />
+      <p className="notice">À venir · La liste détaillée des films.</p>
+      <button className="button" onClick={() => navigate("profile")}>Importer un profil</button>
+    </>}
+    {page === "discover" && <>
+      <header className="page-heading"><h1>Découvertes</h1><p>Retrouvez les propositions de votre séance dans « Ce soir ».</p></header>
+      <p className="notice">À venir · Une vue dédiée aux découvertes.</p>
+      <button className="button button-primary" onClick={() => navigate("tonight")}>Retour à Ce soir</button>
+    </>}
+    {page === "history" && <>
+      <header className="page-heading"><h1>Historique</h1></header>
+      <p className="notice">À venir · La consultation des recommandations passées.</p>
+    </>}
+    {page === "profile" && <>
+      <header className="page-heading"><h1>Profil</h1><p>Votre profil cinéphile est enregistré sur ce Mac.</p></header>
+      <button className="button button-primary" onClick={chooseProfile} disabled={!summary || importing}>
+        {importing ? "Import en cours…" : "Importer un profil"}
+      </button>
+      <ImportFeedback error={importError} cancelled={cancelled} report={report} />
+      <Enrichment progress={enrichment} />
+      <div className="library-section"><CatalogueSummary summary={summary} /></div>
+    </>}
+  </AppShell>;
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
