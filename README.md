@@ -13,7 +13,7 @@ git switch codex/pr1-desktop-foundations  # tant que la PR est en revue
 npm ci
 ```
 
-Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 45.4.1, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, libSQL local 0.17.4, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. La fenêtre utilise les éléments HTML natifs et Tailwind pour son interface minimale.
+Les versions exactes sont fixées dans `package-lock.json`. Les principales versions utilisées sont Electron 45.4.1, Forge 7.11.2, React 19.3.1, Vite 6.4.6, TypeScript 5.9.3, Tailwind CSS 4.3.5, libSQL local 0.17.4, Drizzle ORM 0.45.4, Drizzle Kit 0.31.11, Zod 4.6.7 et Vitest 3.2.7. Le renderer utilise React, des contrôles HTML natifs et des styles CSS partagés.
 
 ## Test manuel en développement
 
@@ -26,7 +26,7 @@ npm start
 ```
 
 1. Vérifiez que la fenêtre **After Dark** affiche **Base locale prête**, quatre compteurs à zéro et aucun favori.
-2. Cliquez sur **Importer un profil** et choisissez `examples/profile.v1.json` dans le checkout. Dans la boîte de dialogue macOS, `⌘⇧G` permet de saisir le dossier `~/Work/after-dark/examples`. Attendez **6 créées, 0 mises à jour, 0 inchangées, 0 ambiguïté, 0 erreur**.
+2. Ouvrez **Profil**, puis cliquez sur **Importer un profil** et choisissez `examples/profile.v1.json` dans le checkout. Dans la boîte de dialogue macOS, `⌘⇧G` permet de saisir le dossier `~/Work/after-dark/examples`. Attendez **6 créées, 0 mises à jour, 0 inchangées, 0 ambiguïté, 0 erreur**.
 3. Vérifiez les compteurs par libellé : **6 enregistrés**, **4 vus**, **4 évalués**, **1 explicitement non vu**. Le favori **Les Échos du large (film fictif)** doit apparaître.
 4. Réimportez le même fichier. Le rapport doit indiquer **6 inchangées** et zéro création, mise à jour, ambiguïté ou erreur. Les compteurs restent identiques. Un clic sur **Annuler** dans la boîte de dialogue doit afficher **Import annulé**.
 5. Quittez complètement avec **⌘Q**. Fermer la fenêtre avec le bouton rouge peut laisser le processus actif sous macOS. Quand le Terminal rend la main, lancez `ls -l "$AFTER_DARK_USER_DATA/after-dark.sqlite"`, puis relancez `npm start`. Les quatre valeurs et le favori doivent réapparaître dès l’ouverture, avant tout nouvel import. Le rapport d’import décrit la session de la fenêtre et redémarre vide.
@@ -59,13 +59,24 @@ Le produit de Forge est une application locale de développement, sans signature
 
 ## Importer un profil
 
-Cliquez sur **Importer un profil** et choisissez un fichier JSON v1. [L’exemple](examples/profile.v1.json) reprend seulement trois évaluations citées dans le brief et emploie des films fictifs pour illustrer les favoris et les statuts. Le dataset complet sera fourni séparément. Gardez-le localement en dehors du dépôt.
+Ouvrez **Profil**, puis cliquez sur **Importer un profil** et choisissez un fichier JSON v1. [L’exemple](examples/profile.v1.json) reprend seulement trois évaluations citées dans le brief et emploie des films fictifs pour illustrer les favoris et les statuts. Le dataset complet sera fourni séparément. Gardez-le localement en dehors du dépôt.
 
 - Chaque entrée comporte un objet `movie` avec un `canonicalId` stable et un `displayTitle`. Ajoutez, quand ils sont connus, `originalTitle`, `year`, `tmdbId`, `externalIds` (par exemple `{"imdb":"…"}`), `aliases` et `metadata`. Identifiants cohérents ou variante de titre et année permettent le rapprochement. Un titre seul ne suffit pas. Pour Seven / Se7en, indiquez explicitement l’alias ou fournissez une identité commune.
 - Une évaluation reçoit un couple `source` / `sourceId` stable et unique, avec une date `evaluatedOn` facultative au format `AAAA-MM-JJ`. Les formats sont `score` (entier JSON de 0 à 10), `historical_score` (texte tel que `"8,50"`), `historical_range` (bornes texte `min` et `max`) et `qualitative` (texte `appreciation`). Le texte historique conserve séparateur et précision. Les déceptions peuvent être des appréciations qualitatives. Fournissez un nouvel identifiant de provenance pour une évaluation distincte ou révisée.
 - `status` est facultatif. `seen` désigne un film vu, `unseen` un film explicitement non vu, `unknown` une mention explicite d’incertitude. Toute évaluation valide établit que le film est vu, y compris une évaluation historique importée sans statut ou avec `unknown`. Si un import précédent indiquait `unseen`, l’import d’une évaluation fait passer le film à `seen`. Déclarer `unseen` avec une évaluation dans la même entrée, ou pour un film déjà évalué, est refusé. Une migration marque aussi comme vus les films déjà évalués dont le statut était inconnu ou absent.
 - `favorites` est un tableau facultatif. Chaque objet a une `source` et les préférences connues `spontaneous`, `memorable` et `rewatch`, indépendantes. Les champs omis laissent la valeur existante intacte.
 - Zod vérifie tout le document avant de modifier la base. Les entrées valides sont traitées en ordre dans une transaction. Une ambiguïté ou un conflit entraîne l’annulation de l’entrée concernée. Le rapport indique quelles entrées corriger. Une réimportation identique de données non contradictoires laisse le profil inchangé.
+
+## Interface Neon Underground
+
+Le renderer utilise une palette charbon, papier crème, orange brûlé et rouge usé. Georgia compose les titres et la police système de macOS reste utilisée pour les contrôles. La lumière de projection, le grain et les motifs du hero sont dessinés en CSS. Les affiches sont lues via le cache local existant.
+
+- **Ce soir** affiche les humeurs, les filtres et les recommandations. Les raccourcis France et Espagne ajoutent des pays de production préférés. Ouvrez les filtres pour définir une contrainte obligatoire ou saisir plusieurs codes.
+- **Ma collection** montre les compteurs et favoris. Le détail du catalogue est à venir.
+- **Profil** réunit l’import JSON, le rapport et la progression de l’enrichissement.
+- **Découvertes** et **Historique** indiquent les vues à venir. Découvertes donne accès à la sélection courante dans Ce soir.
+
+Pour vérifier l’ergonomie, réduisez la fenêtre à sa largeur minimale puis agrandissez-la. Utilisez Tab pour atteindre les commandes et les flèches pour changer d’humeur. Activez « Réduire les animations » dans les réglages d’accessibilité de macOS, puis vérifiez la recherche. Les critères saisis restent disponibles entre deux vues tant que la fenêtre est ouverte.
 
 ## Ce soir et configuration de TMDB
 
