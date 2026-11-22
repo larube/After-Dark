@@ -1,0 +1,8 @@
+node_modules/
+.vite/
+out/
+coverage/
+*.sqlite
+*.sqlite-*
+*.tsbuildinfo
+.DS_Store
