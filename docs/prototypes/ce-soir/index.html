@@ -3,9 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self'">
   <title>After Dark · Prototype Ce soir</title>
   <link rel="stylesheet" href="prototype.css">
+  <script src="prototype.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -27,12 +28,12 @@
     <form class="controls" aria-label="Critères de la séance">
       <fieldset class="moods">
         <legend>Humeur</legend>
-        <label><input type="radio" name="mood" value="surprise"><span class="symbol" aria-hidden="true">⤨</span>Surprends-moi</label>
-        <label><input type="radio" name="mood" value="tension" checked><span class="symbol" aria-hidden="true">ϟ</span>Suspense et tension</label>
-        <label><input type="radio" name="mood" value="strange"><span class="symbol" aria-hidden="true">◈</span>Étrange / dérangeant</label>
-        <label><input type="radio" name="mood" value="laugh"><span class="symbol" aria-hidden="true">✷</span>Envie de rire</label>
-        <label><input type="radio" name="mood" value="emotion"><span class="symbol" aria-hidden="true">♥</span>Émotion</label>
-        <label><input type="radio" name="mood" value="immersion"><span class="symbol" aria-hidden="true">◉</span>Immersif</label>
+        <label><input type="radio" name="mood" value="surprise">Surprends-moi</label>
+        <label><input type="radio" name="mood" value="tension" checked>Suspense et tension</label>
+        <label><input type="radio" name="mood" value="strange">Étrange / dérangeant</label>
+        <label><input type="radio" name="mood" value="laugh">Envie de rire</label>
+        <label><input type="radio" name="mood" value="emotion">Émotion</label>
+        <label><input type="radio" name="mood" value="immersion">Immersif</label>
       </fieldset>
       <div class="filters">
         <label>Pays de production<select><option>Tous</option><option>France</option><option>Espagne</option></select></label>
@@ -41,10 +42,16 @@
         <label>Énergie<select><option>Indifférente</option><option>Modérée</option></select></label>
         <label>Ambiance à éviter<select><option>Aucune</option><option>Violence</option></select></label>
       </div>
+      <div class="search">
+        <button type="submit"><span aria-hidden="true">▶</span> Trouve-moi un film</button>
+        <p role="status" id="demo-status"></p>
+      </div>
     </form>
-    <section class="lineup" aria-label="Sélection de démonstration">
+    <section class="lineup" aria-label="Sélection de démonstration" id="selection" tabindex="-1">
       <article class="feature">
-        <div class="paper"><img src="assets/prisoners.jpg" alt="Affiche de Prisoners"></div>
+        <figure class="feature-art">
+          <div class="paper"><img src="assets/prisoners.jpg" alt="Affiche de Prisoners"></div>
+        </figure>
         <div class="feature-copy">
           <p class="role">Valeur sûre</p>
           <h2>Prisoners</h2>
