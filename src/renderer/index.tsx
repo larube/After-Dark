@@ -153,7 +153,7 @@ function App() {
       <Enrichment progress={enrichment} />
     </div>
     {page === "collection" && <>
-      <header className="page-heading collection-heading"><h1>Ma collection</h1><p>Vos films enregistrés et vos favoris.</p></header>
+      <header className="page-heading"><h1>Ma collection</h1><p>Vos films enregistrés et vos favoris.</p></header>
       {collectionError && <button className="button" onClick={() => void refreshCollection()}>Recharger les retours</button>}
       <FeedbackCollection entries={collection} error={collectionError} disabled={importing || saving} save={save} />
       <CatalogueSummary summary={summary} />

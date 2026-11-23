@@ -103,6 +103,7 @@ main { min-width: 0; max-width: 1380px; width: 100%; margin: 0 auto; padding: 0 
   position: relative; isolation: isolate; display: grid; grid-template-columns: minmax(0, 1fr) auto;
   align-items: center; gap: 8px 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
 }
+.programme:has(.ticket-picker[open]) { z-index: 1; }
 .hero {
   grid-column: 1 / -1; display: grid; align-content: center; justify-items: start;
   min-height: clamp(200px, 22vw, 248px); padding: 18px 0 22px;
@@ -309,9 +310,17 @@ summary:hover { color: var(--focus); }
 .alternatives :is(.film-meta, .synopsis, .warning) { font-size: .84rem; line-height: 1.4; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
 
-.page-heading { background: url("./art/projection.svg") right center / auto 160% no-repeat; padding: 36px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.page-heading {
+  display: grid; align-content: center; justify-items: start;
+  min-height: clamp(152px, 19vw, 214px); padding: 22px clamp(14px, 3vw, 32px);
+  background:
+    linear-gradient(0deg, var(--canvas), transparent 42%),
+    linear-gradient(90deg, #100d0cf5 10%, #100d0cd4 42%, #100d0c21 78%),
+    url("./art/hero-collage.jpg") right 32% / cover no-repeat;
+  border-bottom: 1px solid var(--border); margin-bottom: 20px;
+}
 .page-heading h1 { border-bottom: 6px solid var(--accent); padding-bottom: 8px; font-size: clamp(2.8rem, 7vw, 6.4rem); }
-.page-heading p { margin-top: 12px; color: var(--muted); max-width: 63ch; }
+.page-heading p { margin-top: 12px; color: var(--paper); max-width: 52ch; }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; }
 .metrics div { display: flex; flex-direction: column-reverse; padding: 13px; background: var(--surface); border-top: 1px solid var(--accent); }
 .metrics dt { color: var(--muted); }
@@ -354,9 +363,11 @@ summary:hover { color: var(--focus); }
   .mood { min-height: 65px; padding: 22px 5px 6px; font-size: .96rem; }
   .programme { grid-template-columns: minmax(0, 1fr); }
   .programme .button-primary { justify-self: start; }
-  .collection-heading {
-    background: linear-gradient(90deg, var(--canvas) 15%, #100d0cba 64%, #100d0c42),
-      url("./art/projection.svg") right center / auto 160% no-repeat;
+  .page-heading {
+    background:
+      linear-gradient(0deg, var(--canvas), transparent 50%),
+      linear-gradient(90deg, #100d0cf5 8%, #100d0cba 59%, #100d0c3d),
+      url("./art/hero-collage.jpg") right 37% / cover no-repeat;
   }
   .film-list { gap: 17px; }
   .alternatives { grid-template-columns: minmax(0, 1fr); }
