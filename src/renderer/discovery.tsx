@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { discoveryModes, type DiscoveryFilm, type DiscoveryMode, type DiscoveryView } from "../shared/discovery";
+import { discoveryExportNotice } from "./discovery-export";
 
 const modes = {
   gems: { title: "Les pépites", description: "Des films de popularité TMDB plus basse dans le catalogue, avec des liens possibles avec vos goûts." },
@@ -109,11 +110,7 @@ export function Discovery({ active, disabled, actions }: {
     setExporting(true);
     setExportNotice("");
     try {
-      const reply = await window.afterDark.discoveryExport(mode, view.id);
-      if (!reply.ok) setExportNotice(reply.error);
-      else if (reply.data === "saved") setExportNotice("Diagnostic enregistré.");
-    } catch {
-      setExportNotice("Impossible d’exporter le diagnostic.");
+      setExportNotice(await discoveryExportNotice(window.afterDark, mode, view.id));
     } finally {
       setExporting(false);
     }
