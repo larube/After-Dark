@@ -10,6 +10,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
   const [mood, setMood] = useState<Criteria["mood"]>("surprise");
   const [filters, setFilters] = useState(defaultFilters);
   const [result, setResult] = useState<Recommendation>();
+  const [selectionNumber, setSelectionNumber] = useState(0);
   const [posters, setPosters] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState<Criteria>();
   const [loading, setLoading] = useState(false);
@@ -39,6 +40,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
     try {
       const reply = await window.afterDark.recommend(criteria, allowRecent);
       if (reply.ok) {
+        setSelectionNumber((number) => number + 1);
         setPosters({});
         setResult(reply.data);
         setSubmitted(criteria);
@@ -84,7 +86,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
         <FilterPanel busy={loading} value={filters} onChange={setFilters} />
       </details>
     </form>
-    <Results headingRef={resultsHeading} result={result} posters={posters} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
+    <Results headingRef={resultsHeading} result={result} posters={posters} selectionNumber={selectionNumber} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);
     }} />
   </>;

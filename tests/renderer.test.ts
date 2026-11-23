@@ -98,7 +98,7 @@ describe("Interface Neon Underground", () => {
       }],
     });
     const html = renderToStaticMarkup(createElement(Results, { result: data, ready: true, loading: false, error: "", repeat() {}, filmActions: () => "Actions film" }));
-    for (const value of ["featured", "Cure", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Actions film", "Autres propositions"]) {
+    for (const value of ["featured", "Cure", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Actions film", "Autres propositions", "Pas ce soir · Cure"]) {
       expect(html).toContain(value);
     }
     expect(html).not.toMatch(/Valeur sûre|Pépite|Wildcard|data-category/);
@@ -139,6 +139,7 @@ describe("Interface Neon Underground", () => {
       }, disabled: false, async save() {},
     }));
     expect(html).toContain('aria-label="Choix pour Cure"');
+    expect(html).not.toContain("Pas ce soir");
     expect(html).toContain('aria-pressed="true"');
     for (const label of ["Je lance ce film", "Pour ce soir", "Pas pour moi", "Déjà vu", "À voir un jour", "Dans ma liste"]) expect(html).toContain(label);
   });

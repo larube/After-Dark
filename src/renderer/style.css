@@ -320,6 +320,10 @@ summary:hover { color: var(--focus); }
 .alternatives > li { min-width: 0; padding: 10px 1px 14px; border-top: 1px solid var(--border); }
 .alternatives h3 { font-size: clamp(1.35rem, 2.1vw, 1.85rem); line-height: 1; }
 .alternatives :is(.film-meta, .synopsis, .warning) { font-size: .84rem; line-height: 1.4; }
+.film-list .film-card.film-card-skipped { grid-template-columns: minmax(0, 1fr); padding: 6px 8px; }
+.film-card-skipped .poster-mount { display: none; }
+.film-skipped-label { color: var(--muted); font-size: .85rem; }
+.film-skipped-label strong { color: var(--paper); }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
 
 .page-heading {
