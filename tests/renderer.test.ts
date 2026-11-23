@@ -5,6 +5,7 @@ import { ipc } from "../src/shared/ipc";
 import { recommendationSchema } from "../src/shared/recommendation";
 import { MoodSelector, moodOrder } from "../src/renderer/controls";
 import { readCriteria } from "../src/renderer/criteria";
+import { FilmActions } from "../src/renderer/feedback";
 import { Results } from "../src/renderer/results";
 import { AppShell } from "../src/renderer/shell";
 
@@ -43,14 +44,14 @@ describe("Interface Neon Underground", () => {
         metadata: { minutes: 111, countries: ["JP"] }, reasons: ["Indice : mystère."], warnings: ["Séance longue."],
       }],
     });
-    const html = renderToStaticMarkup(createElement(Results, { result: data, ready: true, loading: false, error: "", repeat() {} }));
-    for (const value of ["featured", "Cure", "Pépite", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Autres propositions"]) {
+    const html = renderToStaticMarkup(createElement(Results, { result: data, ready: true, loading: false, error: "", repeat() {}, filmActions: () => "Actions film" }));
+    for (const value of ["featured", "Cure", "Pépite", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Actions film", "Autres propositions"]) {
       expect(html).toContain(value);
     }
   });
 
   it("annonce chargement, erreurs, absence de résultat et mode dégradé", () => {
-    const props = { ready: true, loading: true, error: "Requête refusée.", repeat() {} };
+    const props = { ready: true, loading: true, error: "Requête refusée.", repeat() {}, filmActions: () => null };
     expect(renderToStaticMarkup(createElement(Results, props))).toContain('role="alert"');
     expect(renderToStaticMarkup(createElement(Results, props))).toContain("Recherche en cours");
     const result = recommendationSchema.parse({ connection: "offline", personalized: false, status: "exhausted", films: [] });
@@ -58,6 +59,17 @@ describe("Interface Neon Underground", () => {
     for (const value of ["TMDB est inaccessible", "Propositions récentes épuisées", "Revoir des propositions récentes"]) {
       expect(html).toContain(value);
     }
+  });
+
+  it("rend les actions natives et annonce l’intention sélectionnée", () => {
+    const html = renderToStaticMarkup(createElement(FilmActions, {
+      movieId: 1, title: "Cure", entry: {
+        movieId: 1, title: "Cure", year: 1997, intention: "watch_later", seenAt: null, score: null, appreciation: null,
+      }, disabled: false, async save() {},
+    }));
+    expect(html).toContain('aria-label="Actions pour Cure · À voir un jour"');
+    expect(html).toContain('aria-pressed="true">À voir un jour');
+    for (const label of ["Pour ce soir", "Pas intéressé", "Déjà vu", "Retirer l’intention"]) expect(html).toContain(label);
   });
 
   it("expose la navigation avec une page courante et des contrôles natifs", () => {

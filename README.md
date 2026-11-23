@@ -127,6 +127,16 @@ La découverte intercale trois recherches TMDB par demande. Elles combinent popu
 
 `evaluateHoldout(catalogue, signals, criteria, heldOut)` écarte tous les signaux des identifiants masqués avant le classement. Leurs films redeviennent candidats dans cette comparaison isolée. La fonction renvoie leur rang éventuel et les appréciations réelles pour comparer les choix, sans modifier le statut enregistré dans SQLite. Pour l’utiliser avec un profil complet, chargez une copie de la base avec `readCatalogue`, choisissez explicitement les identifiants à masquer et appelez la fonction avec des critères correspondant à la comparaison souhaitée. Le test Vitest vérifie le mécanisme sur des fixtures. Un petit échantillon permet seulement une lecture descriptive.
 
+## Retours personnels et watchlist
+
+Ouvrez **Actions** sur une proposition. **À voir un jour**, **Pour ce soir** et **Pas intéressé** sont trois intentions exclusives et modifiables. **Retirer l’intention** rend le film neutre. **Pour ce soir** reste visible jusqu’à son retrait, son remplacement ou un visionnage. Cette version ne programme ni séance ni rappel.
+
+**Déjà vu** enregistre le statut même si vous laissez la note et le texte vides. Une note entière de 0 à 10 et une appréciation libre peuvent coexister. Dans **Ma collection → Vus récemment**, **Modifier mon retour** permet de corriger ou de vider chaque champ. Le premier enregistrement fixe la date du visionnage dans cette liste. Marquer un film vu efface son intention et l’exclut des futures découvertes. Un réimport contradictoire qui déclare ce film non vu est signalé dans le rapport. Un import qui confirme un premier visionnage retire également l’intention.
+
+La migration `0003_movie_feedback` ajoute une ligne par film avec une intention et/ou le retour de visionnage, séparée des statuts, des favoris et des séances planifiées. La note manuelle est liée à une seule ligne `movie_evaluations` de source `after-dark:manual`. Une édition conserve son identifiant et sa provenance. Effacer la note supprime uniquement cette ligne. Le texte libre est stocké séparément des appréciations historiques structurées. Les notes manuelles suivent les règles d’affinité existantes. L’exploitation des intentions par le moteur est réservée à la PR 5. Dans cette version, un film écarté peut réapparaître, et le marquage vu reste définitif depuis l’interface.
+
+Pour vérifier la persistance, utilisez un dossier `AFTER_DARK_USER_DATA` temporaire et un catalogue de test avec plusieurs candidats, puis enregistrez une watchlist, un choix pour ce soir et un film vu avec note et commentaire. Vérifiez ces états dans **Ma collection** et relancez une recherche pour confirmer l’exclusion du film vu. Quittez avec **⌘Q**, relancez le paquet macOS sur le même dossier temporaire, sans jeton TMDB, puis vérifiez les listes et modifiez un retour. Refaites un import et vérifiez les historiques et le rapport de conflits.
+
 ## Sauvegarder et restaurer SQLite
 
 Le fichier normal est `~/Library/Application Support/After Dark/after-dark.sqlite`. Quittez complètement l’application avant de copier le fichier. Pour une sauvegarde à chaud, utilisez `sqlite3 "$HOME/Library/Application Support/After Dark/after-dark.sqlite" '.backup after-dark-backup.sqlite'`.

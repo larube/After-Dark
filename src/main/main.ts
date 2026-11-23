@@ -6,6 +6,7 @@ import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { z } from "zod";
 import { openDatabase } from "../db/client";
+import { getCollection, saveFeedback } from "../db/feedback";
 import { getProfileSummary } from "../db/profile";
 import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
@@ -33,6 +34,7 @@ let window: BrowserWindow | undefined;
 let database: Awaited<ReturnType<typeof openDatabase>> | undefined;
 let importing = false;
 let recommending = false;
+let savingFeedback = false;
 let enrichment: ReturnType<typeof startEnrichment> | undefined;
 
 function trusted(event: IpcMainInvokeEvent) {
@@ -94,15 +96,27 @@ void app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   if (database) enrichment = startEnrichment(database.db, () => localTmdb(app.getPath("userData")),
-    () => importing || recommending);
+    () => importing || recommending || savingFeedback);
   register(ipc.enrichment, async (): ReturnType<DesktopApi["enrichment"]> => enrichment
     ? { ok: true, data: await enrichment.progress() }
     : { ok: false, error: "Enrichissement indisponible." });
   register(ipc.summary, async (db): ReturnType<DesktopApi["summary"]> => ({
     ok: true, data: await getProfileSummary(db),
   }));
+  register(ipc.collection, async (db): ReturnType<DesktopApi["collection"]> => ({ ok: true, data: await getCollection(db) }));
+  register(ipc.saveFeedback, async (db, _owner, [request]): ReturnType<DesktopApi["saveFeedback"]> => {
+    if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
+    savingFeedback = true;
+    try {
+      await enrichment?.settleWrite();
+      return await saveFeedback(db, request);
+    } finally {
+      savingFeedback = false;
+      enrichment?.wake();
+    }
+  });
   register(ipc.importProfile, async (db, owner): ReturnType<DesktopApi["importProfile"]> => {
-    if (recommending) return { ok: false, error: "Une recherche est en cours." };
+    if (recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
     if (importing) return { ok: false, error: "Un import est déjà en cours." };
     importing = true;
     try {
@@ -127,7 +141,7 @@ void app.whenReady().then(async () => {
     }
   });
   register(ipc.recommend, async (db, _owner, [criteria, allowRecent]): ReturnType<DesktopApi["recommend"]> => {
-    if (importing || recommending) return { ok: false, error: "Une opération est déjà en cours." };
+    if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
     recommending = true;
     try {
       await enrichment?.settleWrite();

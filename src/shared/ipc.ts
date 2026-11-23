@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { criteriaSchema, recommendationSchema } from "./recommendation";
 
 const count = z.number().int().nonnegative();
@@ -39,6 +40,8 @@ const enrichmentSchema = z.strictObject({
 export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
 export const ipc = {
+  collection: { channel: "cinema:collection", request: z.tuple([]), response: reply(z.array(feedbackEntrySchema)) },
+  saveFeedback: { channel: "cinema:feedback", request: z.tuple([feedbackRequestSchema]), response: reply(feedbackEntrySchema.nullable()) },
   enrichment: { channel: "profile:enrichment", request: z.tuple([]), response: reply(enrichmentSchema) },
   summary: { channel: "profile:summary", request: z.tuple([]), response: reply(summarySchema) },
   importProfile: { channel: "profile:import", request: z.tuple([]), response: reply(importResultSchema) },

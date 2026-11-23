@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import type { CinemaDatabase, CinemaTransaction } from "../db/client";
-import { favorites, movieEvaluations, movieIdentifiers, movies, movieStatuses, movieTitles } from "../db/schema";
+import { favorites, movieEvaluations, movieFeedback, movieIdentifiers, movies, movieStatuses, movieTitles } from "../db/schema";
 import { normalizeTitle } from "../domain/ratings";
 import type { ImportReport } from "../shared/ipc";
 import { profileSchema, type ProfileEntry } from "../shared/profile";
@@ -128,6 +128,11 @@ async function storeFavorites(db: CinemaTransaction, movieId: number, preference
 
 async function storeStatus(db: CinemaTransaction, movieId: number, incoming: ProfileEntry["status"], hasEvaluations: boolean) {
   const saved = await db.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
+  if (incoming === undefined && !hasEvaluations) return false;
+  if (incoming === "unseen" && (await db.select({ seenAt: movieFeedback.seenAt }).from(movieFeedback)
+    .where(eq(movieFeedback.movieId, movieId)).get())?.seenAt) {
+    throw new Error("Le statut non vu contredit un visionnage enregistré dans After Dark.");
+  }
   if (incoming === "unseen" && (hasEvaluations || await db.select({ id: movieEvaluations.id }).from(movieEvaluations)
     .where(eq(movieEvaluations.movieId, movieId)).get())) {
     throw new Error("Le statut explicitement non vu est incompatible avec une évaluation existante ou importée.");
@@ -136,6 +141,9 @@ async function storeStatus(db: CinemaTransaction, movieId: number, incoming: Pro
   if (status === undefined || status === saved?.status || (status === "unknown" && saved)) return false;
   await db.insert(movieStatuses).values({ movieId, status })
     .onConflictDoUpdate({ target: movieStatuses.movieId, set: { status } }).run();
+  if (status === "seen") {
+    await db.delete(movieFeedback).where(and(eq(movieFeedback.movieId, movieId), isNull(movieFeedback.seenAt))).run();
+  }
   return true;
 }
 

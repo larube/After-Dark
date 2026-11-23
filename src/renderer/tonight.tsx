@@ -1,10 +1,12 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type ReactNode, type FormEvent } from "react";
 import type { Criteria, Recommendation } from "../shared/recommendation";
 import { FilterPanel, MoodSelector } from "./controls";
 import { readCriteria } from "./criteria";
 import { Results } from "./results";
 
-export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () => void }) {
+export function Tonight({ ready, onComplete, filmActions }: {
+  ready: boolean; onComplete: () => void; filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
+}) {
   const [mood, setMood] = useState<Criteria["mood"]>("surprise");
   const [result, setResult] = useState<Recommendation>();
   const [submitted, setSubmitted] = useState<Criteria>();
@@ -63,7 +65,7 @@ export function Tonight({ ready, onComplete }: { ready: boolean; onComplete: () 
         <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Trouve-moi un film"}
       </button>
     </form>
-    <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} repeat={(allowRecent) => {
+    <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);
     }} />
   </>;
