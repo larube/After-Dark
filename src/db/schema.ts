@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { intentions } from "../shared/feedback";
+import type { LabSelections } from "../domain/lab";
+import type { LabFilmSnapshot } from "../shared/lab";
+import type { Criteria } from "../shared/recommendation";
 import type { Mood } from "../shared/profile";
 
 export const movies = sqliteTable("movies", {
@@ -124,4 +127,51 @@ export const recommendationHistory = sqliteTable("recommendation_history", {
   unique("recommendation_session_movie").on(table.moodSessionId, table.movieId),
   unique("recommendation_session_rank").on(table.moodSessionId, table.rank),
   check("recommendation_rank", sql`${table.rank} > 0`),
+]);
+
+export const labSessions = sqliteTable("lab_sessions", {
+  id: text().primaryKey(),
+  open: integer().unique(),
+  paused: integer({ mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  finishedAt: text("finished_at"),
+  abandonedAt: text("abandoned_at"),
+  protocol: text().notNull(),
+  engine: text().notNull(),
+  seed: text().notNull(),
+  referenceDate: text("reference_date").notNull(),
+  criteria: text({ mode: "json" }).$type<Criteria>().notNull(),
+  fingerprint: text().notNull(),
+  selections: text({ mode: "json" }).$type<LabSelections>().notNull(),
+  classicHistory: text("classic_history", { mode: "json" }).$type<number[]>().notNull(),
+  labHistory: text("lab_history", { mode: "json" }).$type<number[]>().notNull(),
+  collisions: integer().notNull(),
+  repeated: integer().notNull(),
+}, (table) => [
+  check("lab_session_lifecycle", sql`(${table.open} IS 1 AND ${table.finishedAt} IS NULL AND ${table.abandonedAt} IS NULL)
+    OR (${table.open} IS NULL AND ${table.paused} = 0 AND
+      ((${table.finishedAt} IS NULL) != (${table.abandonedAt} IS NULL)))`),
+]);
+
+export const labProposals = sqliteTable("lab_proposals", {
+  sessionId: text("session_id").notNull().references(() => labSessions.id, { onDelete: "cascade" }),
+  position: integer().notNull(),
+  movieId: integer("movie_id").notNull(),
+  model: text({ enum: ["current", "normalized", "rarity", "hybrid"] }).notNull(),
+  originalRank: integer("original_rank").notNull(),
+  film: text({ mode: "json" }).$type<LabFilmSnapshot>().notNull(),
+  interest: text({ enum: ["eager", "maybe", "pass"] }),
+  seen: integer({ mode: "boolean" }),
+  reason: text(),
+  answeredAt: text("answered_at"),
+}, (table) => [
+  primaryKey({ columns: [table.sessionId, table.position] }),
+  unique().on(table.sessionId, table.movieId),
+  unique().on(table.sessionId, table.model),
+  check("lab_proposal_position", sql`${table.position} BETWEEN 1 AND 4 AND ${table.originalRank} BETWEEN 1 AND 5`),
+  check("lab_proposal_answer", sql`
+    (${table.answeredAt} IS NULL AND ${table.interest} IS NULL AND ${table.seen} IS NULL AND ${table.reason} IS NULL)
+    OR (${table.answeredAt} IS NOT NULL AND
+      ((${table.seen} IS 1 AND ${table.interest} IS NULL) OR
+       (${table.seen} IS 0 AND ${table.interest} IS NOT NULL AND ${table.interest} IN ('eager', 'maybe', 'pass'))))`),
 ]);

@@ -5,7 +5,7 @@ import { engineVersion, type Film, type Signal } from "../domain/recommendation"
 import { importEntry, AmbiguousMovie } from "../import/profile";
 import type { TmdbFilm } from "../main/tmdb";
 import { metadataSchema, type Criteria, type Metadata, type Recommendation } from "../shared/recommendation";
-import type { CinemaDatabase } from "./client";
+import type { CinemaDatabase, CinemaTransaction } from "./client";
 import { favorites, moodSessions, movieEvaluations, movieIdentifiers, movies, movieStatuses, recommendationHistory } from "./schema";
 
 const decimal = (value: string | null) => value === null ? undefined : Number(value.replace(",", "."));
@@ -58,7 +58,7 @@ function normalizeMetadata(input: Record<string, unknown> | null): Metadata {
   };
 }
 
-export async function readCatalogue(db: CinemaDatabase) {
+export async function readCatalogue(db: CinemaDatabase | CinemaTransaction) {
   const demo = await db.select({ movieId: movieIdentifiers.movieId }).from(movieIdentifiers)
     .where(and(eq(movieIdentifiers.namespace, "canonical"), like(movieIdentifiers.value, "demo:fictif-%")));
   const fictional = new Set(demo.map(({ movieId }) => movieId));
@@ -100,7 +100,7 @@ export async function readCatalogue(db: CinemaDatabase) {
   };
 }
 
-export async function readHistory(db: CinemaDatabase) {
+export async function readHistory(db: CinemaDatabase | CinemaTransaction) {
   const sessions = await db.select({ id: moodSessions.id }).from(moodSessions).orderBy(desc(moodSessions.id)).limit(1);
   const last = await db.select({ movieId: recommendationHistory.movieId })
     .from(recommendationHistory).orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(15);

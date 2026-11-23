@@ -5,6 +5,7 @@ import { AppShell, type Page } from "./shell";
 import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
 import { needsRating, type FeedbackEntry, type FeedbackRequest } from "../shared/feedback";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "./feedback";
+import { Laboratory } from "./lab";
 import { Tonight } from "./tonight";
 import "./style.css";
 
@@ -164,6 +165,7 @@ function App() {
       <p className="notice">À venir · Une vue dédiée aux découvertes.</p>
       <button className="button button-primary" onClick={() => navigate("tonight")}>Retour à Ce soir</button>
     </>}
+    {page === "lab" && <Laboratory />}
     {page === "history" && <>
       <header className="page-heading"><h1>Historique</h1></header>
       <p className="notice">À venir · La consultation des recommandations passées.</p>

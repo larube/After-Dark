@@ -43,6 +43,13 @@
       "when": 1795427849734,
       "tag": "0005_active_viewings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795432894803,
+      "tag": "0006_blind_lab",
+      "breakpoints": true
     }
   ]
 }

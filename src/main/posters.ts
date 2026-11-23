@@ -26,26 +26,30 @@ async function download(path: string) {
   return Buffer.concat(chunks);
 }
 
-export async function attachPosters(result: Recommendation, userData: string) {
+export async function posterData(path: string | undefined, userData: string, online = false) {
+  if (!path || !/^\/[A-Za-z0-9_-]+\.jpg$/.test(path)) return;
   const directory = join(userData, "posters");
+  const filename = join(directory, basename(path));
+  try {
+    const saved = await stat(filename).catch(() => undefined);
+    let image = saved?.isFile() && saved.size <= maxBytes ? await readFile(filename) : undefined;
+    if (!image && online) {
+      image = await download(path);
+      if (image) {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        await writeFile(filename, image, { mode: 0o600 });
+      }
+    }
+    if (image?.[0] === 0xff && image[1] === 0xd8) return "data:image/jpeg;base64," + image.toString("base64");
+  } catch {
+    // Illustrations are optional. The text and recommendations remain available.
+  }
+}
+
+export async function attachPosters(result: Recommendation, userData: string) {
   const online = result.connection === "online" || result.connection === "cached";
   await Promise.all(result.films.map(async (film) => {
-    const path = film.metadata.poster;
-    if (!path || !/^\/[A-Za-z0-9_-]+\.jpg$/.test(path)) return;
-    const filename = join(directory, basename(path));
-    try {
-      const saved = await stat(filename).catch(() => undefined);
-      let image = saved?.isFile() && saved.size <= maxBytes ? await readFile(filename) : undefined;
-      if (!image && online) {
-        image = await download(path);
-        if (image) {
-          await mkdir(directory, { recursive: true, mode: 0o700 });
-          await writeFile(filename, image, { mode: 0o600 });
-        }
-      }
-      if (image?.[0] === 0xff && image[1] === 0xd8) film.posterData = "data:image/jpeg;base64," + image.toString("base64");
-    } catch {
-      // Illustrations are optional. The text and recommendations remain available.
-    }
+    const data = await posterData(film.metadata.poster, userData, online);
+    if (data) film.posterData = data;
   }));
 }
