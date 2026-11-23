@@ -8,6 +8,7 @@ function invoke<A extends unknown[], T>(route: {
 }
 
 const api: DesktopApi = {
+  discoveryCurrent: invoke(ipc.discoveryCurrent), discoveryGenerate: invoke(ipc.discoveryGenerate),
   labCurrent: invoke(ipc.labCurrent), labStart: invoke(ipc.labStart), labPause: invoke(ipc.labPause),
   labAbandon: invoke(ipc.labAbandon), labAnswer: invoke(ipc.labAnswer), labFinish: invoke(ipc.labFinish), labResults: invoke(ipc.labResults),
   labExport: invoke(ipc.labExport),
