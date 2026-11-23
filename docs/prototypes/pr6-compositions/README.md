@@ -24,3 +24,5 @@ Ouvrir `index.html` pour A, ou `index.html?layout=b` pour B. Les données sont f
 | 410 | [Capture](captures/a-410.jpg) | [Capture](captures/b-410.jpg) |
 
 Par rapport à la PR actuelle, les deux variantes suppriment la colonne de quatre films sur un côté. A donne la priorité à la vedette et à la lecture. B crée une planche plus dense sur grand écran et montre plus de films côte à côte sur petit écran. Les deux études conservent cinq emplacements et illustrent catégories, explications et actions. Le prototype permet de tester la composition et les disclosures. L’intégration gardera le formulaire de la PR 5 et les opérations existantes de la PR 4.
+
+Les quatre gros plans du dossier local `design-references` ont servi à préciser la finition commune aux deux variantes. Le gros plan de l’affiche guide le masque texturé de la vedette. Le plan de hiérarchie guide la différence d’échelle entre vedette et secondaires. Le gros plan des filtres guide l’alignement bas et le bouton sur papier orange. Le gros plan du hero guide le prolongement du collage jusqu’aux commandes. Les PNG de référence ne sont pas incorporés au prototype.

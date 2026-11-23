@@ -46,3 +46,8 @@ summary{cursor:pointer;width:fit-content}
 @media(max-width:900px){.variant-b .films{grid-template-columns:1fr 1fr}.variant-b .featured{grid-column:1/-1;grid-row:auto;grid-template-columns:minmax(0,185px) minmax(0,1fr)}.variant-b .featured figure{width:100%}}
 @media(max-width:640px){.shell{display:block}aside{display:flex;gap:20px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--edge)}aside strong{font-size:28px;transform:none}aside br{display:none}aside p{margin:0;padding:4px 8px}main{padding-inline:12px}.portrait{inset-inline:-12px;background-position:right 41%;background-size:auto,auto 100%}.headline{min-height:155px}.moods{grid-template-columns:repeat(3,minmax(0,1fr))}.moods label{min-height:56px}.ticket{grid-template-columns:1fr 1fr}.ticket button{justify-self:start}.ticket details{grid-column:auto;justify-self:end}.featured,.variant-b .featured{grid-template-columns:minmax(0,38%) minmax(0,1fr);gap:12px}.secondary{grid-template-columns:minmax(0,72px) minmax(0,1fr)}.variant-a .secondary{grid-column:1/-1}.variant-b .secondary figure{width:74px}}
 figure{align-self:start}
+.portrait{inset-block-end:0;background-image:linear-gradient(0deg,var(--ink),#100d0c1a 20%,transparent 40%),url(hero.jpg)}
+.ticket{position:relative;text-shadow:0 1px 2px #000}
+.ticket button{background:url(paper.svg),#eb7144;text-shadow:none;clip-path:polygon(0 8%,17% 3%,27% 6%,59% 0,100% 5%,98% 62%,99% 94%,71% 99%,48% 95%,20% 100%,1% 94%)}
+figure{clip-path:none;mask:url(tear.svg) center/100% 100% no-repeat}
+.featured figure img,.featured figure span{mask:url(tear.svg) center/100% 100% no-repeat}
