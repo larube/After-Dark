@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { intentions } from "../shared/feedback";
 import type { Mood } from "../shared/profile";
 
 export const movies = sqliteTable("movies", {
@@ -64,6 +65,19 @@ export const movieStatuses = sqliteTable("movie_statuses", {
   movieId: integer("movie_id").primaryKey().references(() => movies.id, { onDelete: "cascade" }),
   status: text({ enum: ["seen", "unseen", "unknown"] }).notNull(),
 }, (table) => [check("movie_status", sql`${table.status} IN ('seen', 'unseen', 'unknown')`)]);
+
+export const movieFeedback = sqliteTable("movie_feedback", {
+  movieId: integer("movie_id").primaryKey().references(() => movies.id, { onDelete: "cascade" }),
+  intention: text({ enum: intentions }).notNull().default("none"),
+  seenAt: text("seen_at"),
+  previousStatus: text("previous_status", { enum: ["seen", "unseen", "unknown"] }),
+  scoreId: integer("score_id").unique().references(() => movieEvaluations.id, { onDelete: "set null" }),
+  appreciation: text(),
+}, (table) => [
+  check("feedback_intention", sql`${table.intention} IN ('none', 'watch_later', 'tonight', 'not_interested')`),
+  check("feedback_seen", sql`(${table.seenAt} IS NULL AND ${table.scoreId} IS NULL AND ${table.appreciation} IS NULL)
+    OR (${table.seenAt} IS NOT NULL AND ${table.intention} = 'none')`),
+]);
 
 export const favorites = sqliteTable("favorites", {
   movieId: integer("movie_id").notNull().references(() => movies.id, { onDelete: "cascade" }),

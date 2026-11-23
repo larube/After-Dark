@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import type { Recommendation } from "../shared/recommendation";
 
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
@@ -18,8 +18,8 @@ const empty = {
   exhausted: ["Propositions récentes épuisées", "Les films compatibles ont déjà été proposés récemment."],
 } as const;
 
-function RecommendationCard({ film, featured, personalized }: {
-  film: Recommendation["films"][number]; featured: boolean; personalized: boolean;
+function RecommendationCard({ film, featured, personalized, actions }: {
+  film: Recommendation["films"][number]; featured: boolean; personalized: boolean; actions: ReactNode;
 }) {
   const { title, year, metadata, posterData, category, reasons, warnings } = film;
   return <article className="film-card">
@@ -39,12 +39,14 @@ function RecommendationCard({ film, featured, personalized }: {
         <ul>{reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
       </details>
       {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
+      {actions}
     </div>
   </article>;
 }
 
-export function Results({ headingRef, result, loading, ready, error, repeat }: {
+export function Results({ headingRef, result, loading, ready, error, repeat, filmActions }: {
   headingRef?: Ref<HTMLHeadingElement>; result?: Recommendation; loading: boolean; ready: boolean; error: string; repeat: (allowRecent: boolean) => void;
+  filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
 }) {
   return <section className="results" aria-labelledby="results-heading">
     <header className="results-header">
@@ -60,11 +62,11 @@ export function Results({ headingRef, result, loading, ready, error, repeat }: {
       {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3><p>{empty[result.status][1]}</p></div>}
       {result.films.length > 0 && <div className="film-list">
         <div className="featured">
-          <RecommendationCard key={result.films[0].id} film={result.films[0]} featured personalized={result.personalized} />
+          <RecommendationCard key={result.films[0].id} film={result.films[0]} actions={filmActions(result.films[0], loading)} featured personalized={result.personalized} />
         </div>
         {result.films.length > 1 && <ol className="alternatives" start={2} aria-label="Propositions suivantes">
           {result.films.slice(1).map((film) => <li key={film.id}>
-            <RecommendationCard film={film} featured={false} personalized={result.personalized} />
+            <RecommendationCard film={film} actions={filmActions(film, loading)} featured={false} personalized={result.personalized} />
           </li>)}
         </ol>}
       </div>}

@@ -352,3 +352,27 @@ summary:hover { color: var(--focus); }
 @media (max-width: 650px) {
   .country-shortcuts > span { flex: none; }
 }
+
+.feedback-actions { margin-top: 10px; border-top: 1px solid var(--border); min-width: 0; }
+.feedback-actions summary { padding: 9px 0; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
+.feedback-state { display: inline-block; margin-left: 7px; padding: 2px 7px; border: 1px solid var(--accent); color: var(--focus); font-size: .8rem; }
+.feedback-body { padding: 9px; background: var(--surface); border-left: 2px solid var(--accent); }
+.feedback-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.feedback-body .button { min-height: 34px; padding: 5px 9px; }
+.feedback-choices button[aria-pressed=true] { border-color: var(--accent); color: var(--focus); }
+.feedback-choices button[aria-pressed=true]::before { content: "✓ "; }
+.feedback-form { display: grid; gap: 8px; margin-top: 8px; }
+.feedback-form label { display: grid; gap: 4px; color: var(--paper); }
+.feedback-form input, .feedback-form textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 9px; font: inherit;
+  color: var(--paper); background: var(--canvas); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.feedback-form textarea { resize: vertical; }
+.feedback-form input { max-width: 8em; }
+.feedback-form .button-primary { font-size: 1.22rem; justify-self: start; }
+.feedback-collection ul { display: grid; gap: 9px; padding: 0; list-style: none; }
+.feedback-collection li { padding: 10px 14px; background: var(--surface); border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+.feedback-collection li h3 { font: 900 1.65rem/1.1 var(--display); }
+.feedback-collection li small { color: var(--muted); font: .85rem var(--text); }
+.feedback-appreciation { white-space: pre-wrap; }
+.feedback-live { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
