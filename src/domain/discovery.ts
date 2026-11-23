@@ -157,11 +157,12 @@ function diversify(ranked: Ranked[], mode: DiscoveryMode, options: DiscoveryOpti
 }
 
 export function inspectDiscoveryRanking(catalogue: Film[], signals: Signal[], excluded: ReadonlySet<number>, mode: DiscoveryMode,
-  rotation: Rotation, seed: string, referenceDate: string, options: DiscoveryOptions = {}) {
+  rotation: Rotation, seed: string, referenceDate: string, options: DiscoveryOptions = {},
+  admit?: (candidate: Ranked) => boolean) {
   const pool = discoveryPool(catalogue, excluded, referenceDate);
   const ranked = rankCandidates(pool, signals, mode, rotation, seed, options,
     options.calibrated ? catalogueFrequency(catalogue) : undefined);
-  const selected = diversify(ranked, mode, options);
+  const selected = diversify(admit ? ranked.filter(admit) : ranked, mode, options);
   return {
     ranked,
     eligible: pool.length,

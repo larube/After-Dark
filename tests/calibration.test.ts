@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { blindCalibration, calibrationVotes, compareCalibration } from "../src/diagnostics/calibration";
+import { compareCalibration } from "../src/diagnostics/calibration";
 import { buildAffinity, catalogueFrequency } from "../src/domain/affinity";
 import { calibratedContributions, productionPreferences } from "../src/domain/discovery-calibration";
 import { inspectDiscoveryRanking } from "../src/domain/discovery";
@@ -90,20 +90,4 @@ it("allows highly relevant exceptions even after the period target is reached", 
   expect(selected.slice(0, 2).map(({ film }) => film.id).sort()).toEqual([1, 2]);
   expect(selected[1].decision.explicitPenalty).toBeGreaterThan(0);
   expect(selected.slice(2).map(({ film }) => film.id)).toEqual([3, 4]);
-});
-
-it("discloses attribution only in the finalized blind result and abandons without one", async () => {
-  const cards: unknown[] = [];
-  const complete = await blindCalibration(input, "affinities", async (card, index, total) => {
-    expect(total).toBe(4);
-    expect(index).toBe(cards.length + 1);
-    expect(Object.keys(card).sort()).toEqual(["minutes", "synopsis", "title", "year"]);
-    cards.push(card);
-    return calibrationVotes[0];
-  });
-  expect(new Set(complete?.responses.map(({ movieId }) => movieId)).size).toBe(4);
-  expect(complete?.responses.map(({ arm }) => arm).sort()).toEqual(["A", "B", "C", "D"]);
-  expect(await blindCalibration(input, "affinities", async () => undefined)).toBeNull();
-  const replay = await blindCalibration(input, "affinities", async () => calibrationVotes[0]);
-  expect(replay).toEqual(complete);
 });

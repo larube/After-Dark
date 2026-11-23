@@ -1,5 +1,5 @@
 import { calibrationProtocol, type DiscoveryOptions } from "../domain/discovery-calibration";
-import { discoveryHash, inspectDiscoveryRanking, type Rotation } from "../domain/discovery";
+import { discoveryHash, discoverySize, inspectDiscoveryRanking, type Rotation } from "../domain/discovery";
 import { assignBlindFilms } from "../domain/lab";
 import { engineVersion, holdoutInputs, type Film, type Signal } from "../domain/recommendation";
 import { discoveryModes, type DiscoveryMode } from "../shared/discovery";
@@ -125,21 +125,33 @@ export function compareCalibration(input: Experiment) {
 
 export const calibrationVotes = ["Très envie de voir", "Pourquoi pas", "Pas intéressé", "Déjà vu"] as const;
 
-export async function blindCalibration(input: Experiment, mode: DiscoveryMode,
-  vote: (card: { title: string; year: number | null; minutes?: number; synopsis?: string }, index: number, total: number) =>
-    Promise<typeof calibrationVotes[number] | undefined>) {
-  const selections = Object.fromEntries(arms.map((arm) => [arm, ids(run(input, mode, armOptions(arm, input.preferences)))
-    .map((movieId, i) => ({ movieId, rank: i + 1 }))])) as Record<typeof arms[number], { movieId: number; rank: number }[]>;
-  const assignment = assignBlindFilms(arms, selections, new Set(input.rotations[mode].previous.flat()), input.seed);
+
+export const blindCalibrationProtocol = "discovery-calibration-blind-v2";
+export type CalibrationVote = typeof calibrationVotes[number];
+
+export function planBlindCalibration(input: Experiment, mode: DiscoveryMode, presented: ReadonlySet<number> = new Set()) {
+  const history = [...presented].sort((a, b) => a - b);
+  const recent = new Set(input.rotations[mode].previous.flat());
+  const selections = Object.fromEntries(arms.map((arm) => {
+    const ranking = inspectDiscoveryRanking(input.catalogue, input.signals, input.excluded, mode,
+      input.rotations[mode], input.seed, input.date, armOptions(arm, input.preferences),
+      ({ film, qualityTier }) => !presented.has(film.id) && qualityTier === 0);
+    return [arm, ranking.selected.map(({ film }, index) => ({ movieId: film.id, rank: index + 1 }))];
+  })) as Record<typeof arms[number], { movieId: number; rank: number }[]>;
+  const assignment = assignBlindFilms(arms, selections, recent, input.seed);
   const films = new Map(input.catalogue.map((film) => [film.id, film]));
-  const responses = [];
-  for (const { movieId, model, rank } of assignment.entries) {
+  const proposals = assignment.entries.map(({ movieId, model: arm, rank }) => {
     const { title, year, metadata: { minutes, synopsis } } = films.get(movieId)!;
-    const response = await vote({ title, year, minutes, synopsis }, responses.length + 1, assignment.entries.length);
-    if (response === undefined) return null;
-    responses.push({ movieId, title, arm: model, rank, response });
-  }
-  return { protocol: calibrationProtocol, engine: engineVersion, fingerprint: experimentFingerprint(input),
-    mode, date: input.date, seed: input.seed, preferences: input.preferences,
-    collisions: assignment.collisions, coveredArms: responses.length, totalArms: arms.length, responses };
+    return { movieId, title, arm, rank, card: { title, year, minutes, synopsis } };
+  });
+  return {
+    protocol: blindCalibrationProtocol, engine: engineVersion,
+    catalogueFingerprint: discoveryHash(input.catalogue),
+    fingerprint: discoveryHash([experimentFingerprint(input), history, mode, blindCalibrationProtocol]),
+    mode, date: input.date, seed: input.seed, preferences: {
+      lessIndianCinema: !!input.preferences.lessIndianCinema, preferFrUs1960To1979: !!input.preferences.preferFrUs1960To1979,
+    },
+    collisions: assignment.collisions, coveredArms: proposals.length, totalArms: arms.length,
+    poolLimit: discoverySize, poolSizes: { A: selections.A.length, B: selections.B.length, C: selections.C.length, D: selections.D.length }, proposals,
+  } as const;
 }
