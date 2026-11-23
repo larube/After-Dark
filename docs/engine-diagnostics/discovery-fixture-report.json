@@ -1,5 +1,5 @@
 {
-  "protocol": "discovery-v2",
+  "protocol": "discovery-v3",
   "date": "2026-11-23",
   "firstSeed": "fixture-v1",
   "secondSeed": "second",
@@ -101,15 +101,15 @@
       "picks": [
         {
           "title": "Les phares du nord 2",
-          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : Jules Nuit, mystère."
         },
         {
           "title": "Archives de brume 2",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Les phares du nord 1",
-          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : mystère, Canada."
         },
         {
           "title": "Les cartes sans bord 1",
@@ -117,11 +117,11 @@
         },
         {
           "title": "Les phares du nord 3",
-          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : Jules Nuit, mystère."
         },
         {
           "title": "Les phares du nord 5",
-          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : Jules Nuit, mystère."
         },
         {
           "title": "Jardins de sel 1",
@@ -129,7 +129,7 @@
         },
         {
           "title": "Archives de brume 1",
-          "reason": "Traits associés à vos appréciations positives : family, love."
+          "reason": "Traits associés à vos appréciations positives : thriller, France."
         }
       ]
     },
@@ -190,35 +190,35 @@
       "picks": [
         {
           "title": "Archives de brume 9",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Archives de brume 8",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Archives de brume 6",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Archives de brume 5",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Archives de brume 2",
-          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, thriller."
         },
         {
           "title": "Archives de brume 4",
-          "reason": "Traits associés à vos appréciations positives : family, love."
+          "reason": "Traits associés à vos appréciations positives : thriller, France."
         },
         {
           "title": "Les phares du nord 8",
-          "reason": "Traits associés à vos appréciations positives : love, friendship."
+          "reason": "Traits associés à vos appréciations positives : Jules Nuit, mystère."
         },
         {
           "title": "Archives de brume 1",
-          "reason": "Traits associés à vos appréciations positives : family, love."
+          "reason": "Traits associés à vos appréciations positives : thriller, France."
         }
       ]
     },
@@ -279,11 +279,11 @@
       "picks": [
         {
           "title": "Les cartes sans bord 1",
-          "reason": "À explorer : Luz Mer II, Animation, des repères absents de vos retours."
+          "reason": "À explorer : Luz Mer II, animation, des repères absents de vos retours."
         },
         {
           "title": "Jardins de sel 9",
-          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+          "reason": "À explorer : Saki Aube, documentaire, des repères absents de vos retours."
         },
         {
           "title": "Les phares du nord 7",
@@ -295,19 +295,19 @@
         },
         {
           "title": "Les cartes sans bord 2",
-          "reason": "À explorer : Luz Mer, Animation, des repères absents de vos retours."
+          "reason": "À explorer : Luz Mer, animation, des repères absents de vos retours."
         },
         {
           "title": "Jardins de sel 4",
-          "reason": "À explorer : Saki Aube II, Documentary, des repères absents de vos retours."
+          "reason": "À explorer : Saki Aube II, documentaire, des repères absents de vos retours."
         },
         {
           "title": "Jardins de sel 2",
-          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+          "reason": "À explorer : Saki Aube, documentaire, des repères absents de vos retours."
         },
         {
           "title": "Jardins de sel 3",
-          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+          "reason": "À explorer : Saki Aube, documentaire, des repères absents de vos retours."
         }
       ]
     }

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { openDatabase, type CinemaDatabase } from "../src/db/client";
-import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab } from "../src/db/lab";
+import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab, transferLabSeen } from "../src/db/lab";
+import { getCollection } from "../src/db/feedback";
 import { readCatalogue, readHistory } from "../src/db/recommendations";
 import { favorites, labProposals, movieEvaluations, movieStatuses, movies, moodSessions } from "../src/db/schema";
 import { affinityModels } from "../src/domain/affinity";
@@ -104,6 +105,7 @@ describe("procédure du Laboratoire", () => {
       expect(await exportLab(database.db)).toMatchObject({ sessions: [], pending: { responses: 1 } });
       expect(JSON.stringify(await exportLab(database.db))).not.toMatch(/stable|hybrid|Souvenir/);
       expect((await labResults(database.db)).latest).toBeNull();
+      expect(await transferLabSeen(database.db, id, 1)).toMatchObject({ ok: false });
 
       database.close();
       database = await openDatabase(filename, "drizzle");
@@ -141,6 +143,19 @@ describe("procédure du Laboratoire", () => {
       expect(await readCatalogue(database.db)).toEqual(before);
       expect(await readHistory(database.db)).toEqual(history);
       expect(await database.db.select().from(moodSessions)).toEqual([]);
+      const [transfer] = results.seenForCollection;
+      expect(transfer).toMatchObject({ sessionId: id, position: 1 });
+      expect(await transferLabSeen(database.db, id, 2)).toMatchObject({ ok: false });
+      const evaluations = await database.db.select().from(movieEvaluations);
+      expect(await transferLabSeen(database.db, id, 1, date)).toMatchObject({ ok: true });
+      expect(await transferLabSeen(database.db, id, 1)).toEqual({ ok: true, data: null });
+      expect(await getCollection(database.db)).toContainEqual(expect.objectContaining({
+        movieId: session.proposals[0].movieId, seenAt: date.toISOString(), score: null, appreciation: null,
+      }));
+      expect(await labResults(database.db)).toEqual({ ...results, incomplete: 1, seenForCollection: [] });
+      expect(await database.db.select().from(movieEvaluations)).toEqual(evaluations);
+      expect(await exportLab(database.db)).toEqual(withAbandoned);
+      expect((await readCatalogue(database.db)).signals).toEqual(before.signals);
     } finally {
       database.close();
       await rm(folder, { recursive: true, force: true });

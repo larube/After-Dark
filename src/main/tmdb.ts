@@ -168,6 +168,14 @@ export class TmdbClient {
     if (match && match.year !== undefined && (match.year === year || match.releaseYears.includes(year))) return match;
   }
 
+  async moviePoster(id: number) {
+    const movie = await this.get("movie/" + id, {}, z.object({
+      id: idSchema, adult: z.boolean().optional(), poster_path: z.string().nullish(),
+    }));
+    const path = movie?.poster_path;
+    if (movie?.id === id && !movie.adult && path && /^\/[A-Za-z0-9_-]+\.jpg$/.test(path)) return path;
+  }
+
   async film(id: number): Promise<TmdbFilm | undefined> {
     const movie = await this.get("movie/" + id, { append_to_response: "credits,keywords,alternative_titles,release_dates" }, details);
     if (!movie || movie.adult || movie.id !== id) return;

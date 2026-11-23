@@ -29,6 +29,7 @@ export const labStateSchema = z.discriminatedUnion("status", [
 ]);
 export const labResultsSchema = z.strictObject({
   complete: count, incomplete: count,
+  seenForCollection: z.array(z.strictObject({ sessionId: labSessionId, position: labPosition, title: z.string(), year: z.number().int().nullable() })),
   models: z.array(z.strictObject({
     model: labModelSchema, eager: count, maybe: count, pass: count, seen: count,
   })),

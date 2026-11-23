@@ -1,9 +1,10 @@
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { openDatabase } from "../src/db/client";
-import { currentDiscovery, generateDiscovery } from "../src/db/discovery";
+import { currentDiscovery, discoveryDiagnostic, generateDiscovery, inspectDiscovery } from "../src/db/discovery";
 import { getCollection, saveFeedback } from "../src/db/feedback";
 import { startLab } from "../src/db/lab";
 import { readCatalogue, readHistory } from "../src/db/recommendations";
@@ -106,6 +107,63 @@ describe("Découvertes", () => {
     expect(single(keywords)).toBe(single(keywords.slice(0, 3)));
     const pool = discoveryPool(fixture.catalogue, fixture.excluded, discoveryDate);
     expect(pool.map(({ id }) => id)).toEqual(expect.arrayContaining([19, 28, 37]));
+  });
+
+  it("affiche seulement des indices personnels vérifiables, sans libellés anglais génériques", () => {
+    const source = fixture.signals[0];
+    const metadata = { genres: [], directors: [], countries: [],
+      keywords: ["based on novel or book", "friendship", "creature", "remake", "untranslated trait"] };
+    const film = { ...source.film, id: 191, status: "unknown" as const, metadata };
+    const signal = { ...source, film: { ...source.film, metadata } };
+    const pick = explore([film], [signal], new Set(), "affinities", blank, "labels", discoveryDate).selected[0];
+    expect(pick.fit).toBeGreaterThan(0);
+    expect(pick.reason).toBe("Une proposition du catalogue local sans lien positif assez marqué à afficher.");
+    const rare = { ...film, metadata: { ...metadata, keywords: ["space travel"] } };
+    const neutral = { ...film, id: 192, metadata: { ...metadata, keywords: [] } };
+    const result = explore([rare, neutral, { ...neutral, id: 193 }], [{ ...signal, film: { ...source.film, metadata: rare.metadata } }],
+      new Set(), "affinities", blank, "labels", discoveryDate);
+    expect(result.selected[0].reason).toContain("voyage spatial");
+  });
+
+  it("revalide les cartes enregistrées et exporte seulement le lot et les facteurs locaux", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "after-dark-discovery-diagnostic-"));
+    const { db, close } = await openDatabase(join(folder, "catalogue.sqlite"), "drizzle");
+    try {
+      const metadata = { minutes: 103, genres: ["Drame"], poster: "/cover.jpg" };
+      await db.insert(movies).values([
+        { id: 1, displayTitle: "Vu ensuite", year: 2001, metadata },
+        { id: 2, displayTitle: "Fiche enrichie", year: 2004, metadata },
+        { id: 3, displayTitle: "Film admissible", year: 1990, metadata },
+        { id: 4, displayTitle: "Film admissible", year: 1990, metadata },
+        { id: 5, displayTitle: "Historique", metadata },
+      ]);
+      await db.insert(movieEvaluations).values({ movieId: 5, kind: "historical_score", score: "8,5", source: "private-source", sourceId: "private-source-id" });
+      const row = (await generateDiscovery(db, "affinities", null, new Date(discoveryDate), "diagnostic"))!;
+      expect(row.films.map(({ id }) => id).sort()).toEqual([1, 2, 3, 4]);
+      await saveFeedback(db, { action: "seen", movieId: 1, score: null, appreciation: null });
+      await db.update(movies).set({ metadata: { ...metadata, keywords: ["live concert"] } }).where(eq(movies.id, 2));
+      const checked = await inspectDiscovery(db, row, discoveryDate);
+      expect(checked.filter(({ admissible }) => admissible).map(({ snapshot }) => snapshot.id).sort()).toEqual([3, 4]);
+      const state = async (path?: string) => path ? "cached" : "missing_path";
+      const report = await discoveryDiagnostic(db, row, state, discoveryDate);
+      expect(await discoveryDiagnostic(db, row, state, discoveryDate)).toEqual(report);
+      expect(report).toMatchObject({ schemaVersion: 1, mode: "affinities", diversity: { genres: 1, decades: 2 } });
+      expect(report.films).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 1, catalogueNow: expect.objectContaining({ seen: true, admissible: false }) }),
+        expect.objectContaining({ id: 2, catalogueNow: expect.objectContaining({ admissible: false,
+          quality: expect.objectContaining({ exclusionReasons: ["concert"] }) }) }),
+        expect.objectContaining({ id: 3, rankingAtGeneration: expect.objectContaining({
+          decision: expect.objectContaining({ adjusted: expect.any(Number) }), positive: expect.any(Array),
+        }), catalogueNow: expect.objectContaining({ sameTitleAndYear: true, posterCache: "cached" }) }),
+      ]));
+      expect(JSON.stringify(report)).not.toMatch(/private-source|8,5|Historique/);
+      expect(await currentDiscovery(db, "affinities")).toEqual(row);
+      expect(ipc.discoveryPosters.request.safeParse(["affinities", row.id, [1, 2, 3]]).success).toBe(false);
+      expect(ipc.discoveryExport.request.safeParse(["affinities", row.id]).success).toBe(true);
+    } finally {
+      close();
+      await rm(folder, { recursive: true, force: true });
+    }
   });
 
   it("préserve l’ordre et l’historique quand aucun autre candidat ne peut entrer", async () => {

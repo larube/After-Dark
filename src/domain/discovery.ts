@@ -1,15 +1,17 @@
 import { createHash } from "node:crypto";
 import type { DiscoveryFilm, DiscoveryMode } from "../shared/discovery";
 import { affinityDetails, buildAffinity, catalogueFrequency, features } from "./affinity";
+import { discoveryLabel, discoveryLabels } from "./discovery-labels";
+import { classifyContent } from "./candidate-quality";
 import { eligible, type Film, type Signal } from "./recommendation";
 
-export const discoveryProtocol = "discovery-v2";
+export const discoveryProtocol = "discovery-v3";
 export const discoverySize = 8;
 export const discoveryHistorySize = 3;
 export const discoveryHash = (data: unknown) => createHash("sha256").update(JSON.stringify(data)).digest("hex");
 
 export type Rotation = { previous: number[][]; adjacent: number[] };
-export type DiscoverySnapshot = Omit<DiscoveryFilm, "posterData"> & { poster?: string };
+export type DiscoverySnapshot = Omit<DiscoveryFilm, "posterData"> & { poster?: string; trace?: DiscoveryTrace };
 
 const criteria: Parameters<typeof eligible>[1] = {
   mood: "surprise", requiredCountries: [], requiredLanguages: [], preferredCountries: [], preferredLanguages: [],
@@ -53,7 +55,10 @@ function rankCandidates(pool: Film[], signals: Signal[], mode: DiscoveryMode, ro
     const popularity = metadata.popularity === undefined ? undefined : percentiles.get(metadata.popularity);
     const hidden = popularity === undefined ? .5 : 1 - popularity;
     const rotationTier = rotation.previous.findIndex((ids) => ids.includes(id));
-    const affinityReason = positive.length ? `Traits associés à vos appréciations positives : ${positive.slice(0, 2).map(traitLabel).join(", ")}.` : "";
+    const positiveLabels = discoveryLabels(positive.filter(({ id, key }) => key !== "keyword" || (frequency.counts.get(id) ?? 0) * 2 < pool.length));
+    const unfamiliarLabels = discoveryLabels(newTraits);
+    const affinityReason = fit > .08 && positiveLabels.length
+      ? `Traits associés à vos appréciations positives : ${positiveLabels.join(", ")}.` : "";
     const scores = {
       gems: .6 * fit + 2.2 * hidden,
       affinities: fit + .65 * evidence,
@@ -64,8 +69,8 @@ function rankCandidates(pool: Film[], signals: Signal[], mode: DiscoveryMode, ro
         ? `Popularité TMDB dans la moitié basse des films renseignés.${affinityReason ? " " + affinityReason : ""}`
         : affinityReason,
       affinities: affinityReason,
-      offbeat: newTraits.length && traits.size
-        ? `À explorer : ${newTraits.slice(0, 2).map(traitLabel).join(", ")}, des repères absents de vos retours.`
+      offbeat: unfamiliarLabels.length && traits.size
+        ? `À explorer : ${unfamiliarLabels.join(", ")}, des repères absents de vos retours.`
         : newDecade ? `Une décennie peu représentée dans vos retours : les années ${period}.` : affinityReason,
     };
     const tie = discoveryHash([seed, id]);
@@ -75,6 +80,8 @@ function rankCandidates(pool: Film[], signals: Signal[], mode: DiscoveryMode, ro
       film, fit, popularity, tier: rotationTier + 1, crossMode: Number(otherModes.has(id)),
       preferenceTier: mode === "affinities" ? Number(fit <= .08) : mode === "gems" ? Number(fit < 0) : Number(fit < -.5),
       qualityTier,
+      contributions: [...core, ...keywords].map(({ key, label, contribution }) => ({ key, label, contribution })),
+      factors: { evidence, hidden, distance, newDecade },
       score: scores[mode], jitter: parseInt(tie.slice(0, 8), 16) / 0xffffffff * .32, tie,
       reason: reasons[mode] || (mode === "gems" && popularity === undefined
         ? "Popularité TMDB inconnue. Le film reste admissible dans la sélection."
@@ -83,9 +90,6 @@ function rankCandidates(pool: Film[], signals: Signal[], mode: DiscoveryMode, ro
   });
 }
 
-const regions = new Intl.DisplayNames(["fr"], { type: "region" });
-const traitLabel = ({ key, label }: { key: string; label: string }) =>
-  key === "country" && /^[A-Z]{2}$/.test(label) ? regions.of(label) ?? label : label;
 type Ranked = ReturnType<typeof rankCandidates>[number];
 
 function similarity(candidate: Film, selected: Film) {
@@ -97,7 +101,7 @@ function similarity(candidate: Film, selected: Film) {
 }
 
 function diversify(ranked: Ranked[], mode: DiscoveryMode) {
-  const selected: Ranked[] = [];
+  const selected: (Ranked & { decision: { diversityPenalty: number; adjusted: number; bestComparable: number } })[] = [];
   const pending = ranked.map((item) => ({ item, overlap: 0 }));
   const penalty = { gems: .73, affinities: .53, offbeat: .91 }[mode];
   const noveltyAllowance = .48; // Same score budget as the existing cross-mode novelty penalty.
@@ -130,8 +134,9 @@ function diversify(ranked: Ranked[], mode: DiscoveryMode) {
       if (hasRecentCandidates && value(candidate) < bestValue - noveltyAllowance) continue;
       if (best === -1 || compare(candidate, pending[best]) < 0) best = index;
     }
-    const [{ item }] = pending.splice(best, 1);
-    selected.push(item);
+    const [choice] = pending.splice(best, 1);
+    const { item } = choice;
+    selected.push({ ...item, decision: { diversityPenalty: penalty * choice.overlap, adjusted: value(choice), bestComparable: bestValue } });
     for (const candidate of pending) candidate.overlap = Math.max(candidate.overlap, similarity(candidate.item.film, item.film));
   }
   return selected;
@@ -148,8 +153,17 @@ export function explore(catalogue: Film[], signals: Signal[], excluded: Readonly
   };
 }
 
-export function discoverySnapshot({ film, reason }: Ranked): DiscoverySnapshot {
+type Pick = ReturnType<typeof diversify>[number];
+type DiscoveryTrace = Omit<Pick, "film" | "reason" | "tie"> & { quality: ReturnType<typeof classifyContent> };
+
+export function discoverySnapshot(pick: Pick, referenceDate: string): DiscoverySnapshot {
+  const { film, reason, fit, popularity, tier, qualityTier, crossMode, preferenceTier, contributions, factors, score, jitter, decision } = pick;
   const { id, title, year, metadata } = film;
   const { minutes, genres, synopsis, poster } = metadata;
-  return { id, title, year, minutes, genres: genres.slice(0, 3), synopsis, poster, reason };
+  const quality = classifyContent(metadata, referenceDate);
+  return {
+    id, title, year, minutes, genres: genres.slice(0, 3).map((label) => discoveryLabel({ key: "genre", label }) ?? label),
+    synopsis, poster, reason, ...(quality.category === "tv_movie" ? { format: "tv_movie" } : {}),
+    trace: { fit, popularity, tier, qualityTier, crossMode, preferenceTier, contributions, factors, score, jitter, decision, quality },
+  };
 }

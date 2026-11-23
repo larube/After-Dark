@@ -16,7 +16,7 @@ const scenarioNames: Record<string, string> = {
 };
 const typeNames: Record<string, string> = {
   feature_film: "Long métrage", short_film: "Court métrage", concert: "Concert",
-  stage_performance: "Spectacle filmé", other_special: "Programme spécial", unknown: "Inconnu", future_release: "Sortie future",
+  stage_performance: "Spectacle filmé", other_special: "Programme spécial", tv_program: "Programme ou épisode TV", tv_movie: "Téléfilm", unknown: "Inconnu", future_release: "Sortie future",
 };
 const components = {
   affinity: "Affinité", mood: "Humeur", country: "Pays préféré", language: "Langue préférée",

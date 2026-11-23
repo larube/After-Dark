@@ -39,7 +39,7 @@ export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm, expectedMovi
   });
 }
 
-function normalizeMetadata(input: Record<string, unknown> | null): Metadata {
+export function normalizeMetadata(input: Record<string, unknown> | null): Metadata {
   const remote = input?.tmdb;
   const remoteData = remote && typeof remote === "object" && "data" in remote ? remote.data : undefined;
   const metadata = { ...Object(remoteData), ...input };

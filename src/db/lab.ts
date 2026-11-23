@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { affinityModels } from "../domain/affinity";
 import { assignLabFilms, labHash, labProtocol, labRecentLimit, rankLabModels } from "../domain/lab";
 import { engineVersion } from "../domain/recommendation";
 import type { LabAnswer, LabResults, LabState } from "../shared/lab";
 import type { Criteria } from "../shared/recommendation";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
+import { writeFeedback } from "./feedback";
 import { readCatalogue, readHistory } from "./recommendations";
-import { labProposals, labSessions } from "./schema";
+import { labProposals, labSessions, movieEvaluations, movies, movieStatuses } from "./schema";
 
 type Reader = CinemaDatabase | CinemaTransaction;
 type Proposal = typeof labProposals.$inferSelect;
@@ -131,6 +132,25 @@ async function completed(db: Reader) {
 const abandoned = (db: Reader) => db.select().from(labSessions).where(isNotNull(labSessions.abandonedAt))
   .orderBy(desc(labSessions.abandonedAt), desc(labSessions.id)).all();
 
+export const labSeenIds = async (db: Reader, ids: number[]) => new Set((await db.select({ id: labProposals.movieId })
+  .from(labProposals).where(and(eq(labProposals.seen, true), inArray(labProposals.movieId, ids))).all()).map(({ id }) => id));
+
+export function transferLabSeen(db: CinemaDatabase, sessionId: string, position: number, now = new Date()) {
+  return db.transaction(async (tx) => {
+    const row = await tx.select({ id: labProposals.movieId }).from(labProposals)
+      .innerJoin(labSessions, eq(labSessions.id, labProposals.sessionId))
+      .where(and(eq(labProposals.sessionId, sessionId), eq(labProposals.position, position),
+        eq(labProposals.seen, true), isNotNull(labSessions.finishedAt))).get();
+    if (!row) return { ok: false, error: "Aucune réponse « Déjà vu » dans cette séance terminée." } as const;
+    const status = await tx.select({ status: movieStatuses.status }).from(movieStatuses)
+      .where(eq(movieStatuses.movieId, row.id)).get();
+    const evaluation = await tx.select({ id: movieEvaluations.id }).from(movieEvaluations)
+      .where(eq(movieEvaluations.movieId, row.id)).get();
+    if (status?.status === "seen" || evaluation) return { ok: true, data: null } as const;
+    return writeFeedback(tx, { action: "mark_seen", movieId: row.id }, now);
+  });
+}
+
 export function labResults(db: CinemaDatabase): Promise<LabResults> {
   return db.transaction(async (tx) => {
     const sessions = await completed(tx);
@@ -148,7 +168,20 @@ export function labResults(db: CinemaDatabase): Promise<LabResults> {
         title: proposal.film.title, model: proposal.model, rank: proposal.originalRank, answer,
       });
     }
+    const pending = await tx.select({
+      sessionId: labProposals.sessionId, position: labProposals.position, movieId: labProposals.movieId,
+      title: movies.displayTitle, year: movies.year,
+    }).from(labProposals)
+      .innerJoin(labSessions, eq(labSessions.id, labProposals.sessionId))
+      .innerJoin(movies, eq(movies.id, labProposals.movieId))
+      .leftJoin(movieStatuses, and(eq(movies.id, movieStatuses.movieId), eq(movieStatuses.status, "seen")))
+      .leftJoin(movieEvaluations, eq(movies.id, movieEvaluations.movieId))
+      .where(and(eq(labProposals.seen, true), isNotNull(labSessions.finishedAt),
+        isNull(movieStatuses.movieId), isNull(movieEvaluations.movieId)))
+      .orderBy(desc(labSessions.finishedAt), desc(labSessions.id), labProposals.position).all();
+    const unique = new Map(pending.reverse().map(({ movieId, ...row }) => [movieId, row]));
     return {
+      seenForCollection: [...unique.values()].reverse(),
       complete: sessions.length, incomplete: Number(!!await active(tx)) + (await abandoned(tx)).length, models,
       latest: latest ? { covered: reviews.length, collisions: latest.collisions, repeated: latest.repeated, reviews } : null,
     };

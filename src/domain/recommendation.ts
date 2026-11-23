@@ -5,7 +5,7 @@ import { normalizeTitle } from "./ratings";
 import { affinityDetails, buildAffinity, catalogueFrequency, features, type AffinityModel } from "./affinity";
 export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
 
-export const engineVersion = "1.2.0";
+export const engineVersion = "1.3.0";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
   status?: "seen" | "unseen" | "unknown";
