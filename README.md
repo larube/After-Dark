@@ -160,3 +160,7 @@ Vitest ouvre une base temporaire et applique les migrations. `build` compile les
 Le pilote libSQL fournit des binaires précompilés Apple Silicon et Intel via les dépendances facultatives de npm. Si le chargement du binaire échoue, vérifiez `node -p process.arch` et lancez `npm ci --include=optional` avec un Node de l’architecture voulue. Si Electron n’a pas encore téléchargé son binaire, lancez `npm exec -- install-electron` avec une connexion.
 
 Pour mettre Electron à jour, utilisez `npm install -D --save-exact electron@latest`, puis relancez le lint, TypeScript, les tests, le build et les deux parcours macOS. Gardez le même dossier temporaire avant et après le changement de version afin de vérifier la compatibilité de la base.
+
+### Diagnostic du moteur
+
+La commande `npm run diagnose` produit des rapports HTML et JSON locaux sur un catalogue fictif ou une copie temporaire du profil SQLite. [Exécution, protocole et limites](docs/engine-diagnostics/README.md)
