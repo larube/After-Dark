@@ -4,10 +4,11 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@libsql/client/sqlite3";
 import { drizzle } from "drizzle-orm/libsql/sqlite3";
+import { affinityModels } from "../domain/affinity";
 import { readCatalogue, readHistory } from "../db/recommendations";
 import * as schema from "../db/schema";
 import { renderReport } from "./html";
-import { compareReports, createReport, type Input, type Report } from "./report";
+import { compareAffinityModels, compareReports, createReport, type Input, type Report } from "./report";
 
 async function signature(path: string, optional = false) {
   try {
@@ -56,12 +57,14 @@ const within = (root: string, path: string) => {
   return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\"));
 };
 
-export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean }) {
+export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean; compareAffinity?: boolean; affinity?: string }) {
   if (options.baseline && options.comparePolicy) throw new Error("Choisissez soit --baseline, soit --compare-policy.");
+  const affinityModel = affinityModels.find((model) => model === (options.affinity ?? "current"));
+  if (!affinityModel) throw new Error("Modèle inconnu : " + options.affinity);
   const input = options.sqlite ? await readLocalDatabase(options.sqlite) : await readJson(options.input!);
-  const report = createReport(input, { referenceDate: options.referenceDate });
+  const report = createReport(input, { referenceDate: options.referenceDate, affinityModel });
   const baseline = options.baseline ? await readJson(options.baseline) as Report
-    : options.comparePolicy ? createReport(input, { referenceDate: report.policy.referenceDate, mode: "legacy" }) : undefined;
+    : options.comparePolicy ? createReport(input, { referenceDate: report.policy.referenceDate, mode: "legacy", affinityModel }) : undefined;
   const comparison = baseline ? compareReports(baseline, report) : undefined;
   const output = resolve(options.output);
   const root = await realpath(process.cwd());
@@ -87,5 +90,6 @@ export async function diagnose(options: { input?: string; sqlite?: string; outpu
   await write("report.json", JSON.stringify(report, null, 2) + "\n");
   await write("report.html", renderReport(report, comparison));
   if (baseline && options.comparePolicy) await write("legacy.json", JSON.stringify(baseline, null, 2) + "\n");
+  if (options.compareAffinity) await write("affinity-comparison.json", JSON.stringify(compareAffinityModels(input, report.policy.referenceDate), null, 2) + "\n");
   if (comparison) await write("comparison.json", JSON.stringify(comparison, null, 2) + "\n");
 }

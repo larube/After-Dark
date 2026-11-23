@@ -113,6 +113,7 @@ describe("engine diagnostics", () => {
     try {
       await db.insert(movies).values({ id: 1, displayTitle: "Film fictif", metadata: { genres: ["Drama"] } });
       await db.insert(movieEvaluations).values({ movieId: 1, kind: "historical_range", rangeMin: "8", rangeMax: "9", sourceId: "fixture:range", source: "import" });
+      await db.insert(movieEvaluations).values({ movieId: 1, kind: "score", score: "0", sourceId: "manual:1", source: "manual" });
       await db.insert(favorites).values({ movieId: 1, spontaneous: true, source: "import" });
       await db.insert(moodSessions).values({ id: 1, date: "2024-01-01", criteria: { ...neutral, constraints: [], surpriseMe: true } });
       await db.insert(recommendationHistory).values({ moodSessionId: 1, movieId: 1, rank: 1, engineVersion: "1.1.0" });
@@ -121,8 +122,11 @@ describe("engine diagnostics", () => {
       expect(before.some(([name]) => name === "fixture.sqlite-wal")).toBe(true);
       const snapshot = await readLocalDatabase(path);
       expect(snapshot).toMatchObject({ catalogue: [{ id: 1, status: "seen" }], recent: [1],
-        signals: [{ id: 1, spontaneous: true, ratings: [{ numeric: 8.5 }] }] });
+        signals: [{ id: 1, spontaneous: true, ratings: [{ numeric: 8.5 }, { numeric: 0 }] }] });
       expect(await files()).toEqual(before);
+      expect((await db.select().from(movieEvaluations)).map(({ source, score, rangeMin, rangeMax }) => ({ source, score, rangeMin, rangeMax })))
+        .toEqual([{ source: "import", score: null, rangeMin: "8", rangeMax: "9" },
+          { source: "manual", score: "0", rangeMin: null, rangeMax: null }]);
     } finally {
       close();
       await rm(directory, { recursive: true, force: true });

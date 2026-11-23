@@ -76,6 +76,8 @@ export function renderReport(report: Report, comparison?: ReturnType<typeof comp
   const holdout = report.holdout;
   const comparisonSection = comparison ? `<section id="comparison"><h2>Comparaison</h2>
     <p>Moteur ${escape(comparison.engine.before)} → ${escape(comparison.engine.after)}. Empreinte des entrées identique. Date UTC ${escape(report.policy.referenceDate)}.</p>
+    ${comparison.affinityModel.before === comparison.affinityModel.after ? "" :
+      `<p>Affinité ${escape(comparison.affinityModel.before)} → ${escape(comparison.affinityModel.after)}.</p>`}
     ${table(["Scénario", "Classements ou scores modifiés", "Admissibles", "Part inconnue", "Sélection de référence", "Sélection actuelle"],
       comparison.scenarios.map((run) => [scenarioNames[run.id], String(run.changes.length),
         `${run.eligibility.before} → ${run.eligibility.after}`,
@@ -106,7 +108,7 @@ details{margin:.7rem 0;padding:.6rem;border:1px solid #604b3d}summary{cursor:poi
 .scroll,pre{overflow:auto}table{border-collapse:collapse;width:100%;text-align:left;margin:.7rem 0}th,td{padding:.55rem;border-bottom:1px solid #604b3d;vertical-align:top}
 th{background:#33251d}code{overflow-wrap:anywhere}p{line-height:1.55}.brand{text-transform:uppercase;letter-spacing:.12em}
 </style>
-<header><p class="brand">After Dark</p><h1>Diagnostic du moteur</h1><p>Format ${report.formatVersion} · moteur ${escape(report.engineVersion)} · date UTC ${escape(report.policy.referenceDate)}<br><code>${escape(report.fingerprint)}</code></p></header>
+<header><p class="brand">After Dark</p><h1>Diagnostic du moteur</h1><p>Format ${report.formatVersion} · moteur ${escape(report.engineVersion)}${report.affinityModel ? " · affinité expérimentale " + escape(report.affinityModel) : ""} · date UTC ${escape(report.policy.referenceDate)}<br><code>${escape(report.fingerprint)}</code></p></header>
 <nav aria-label="Sections"><a href="#catalogue">Catalogue</a>${report.scenarios.map(({ id }) =>
     `<a href="#s-${escape(id)}">${escape(scenarioNames[id])}</a>`).join("")}<a href="#holdout">Hors échantillon</a>${comparison ? '<a href="#comparison">Comparaison</a>' : ""}</nav>
 <main><section id="catalogue"><h2>Catalogue et métadonnées</h2><p>${report.catalogue.total} films, ${report.catalogue.signals} films sources de signaux, ${report.catalogue.popularity.known} popularités TMDB renseignées. Médiane locale ${decimal(report.catalogue.popularity.median)}.</p>

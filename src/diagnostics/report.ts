@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { calendarDate, contentTypes, todayUtc, type CandidatePolicy } from "../domain/candidate-quality";
 import { z } from "zod";
+import { affinityModels, catalogueFrequency, type AffinityModel } from "../domain/affinity";
 import { diagnoseRecommendation, engineVersion, holdoutInputs, recommend } from "../domain/recommendation";
 import { criteriaSchema, metadataSchema, moods, type Criteria } from "../shared/recommendation";
 
@@ -51,6 +52,15 @@ export function parseInput(value: unknown): Input {
   return input;
 }
 
+function prepareInput(raw: unknown) {
+  const input = parseInput(raw);
+  const { catalogue } = input;
+  const byId = new Map(catalogue.map((film) => [film.id, film]));
+  const signals = input.signals.map(({ id, ...signal }) => ({ ...signal, film: byId.get(id)! }));
+  const recent = new Set([...input.recent].sort((a, b) => a - b));
+  return { input, catalogue, signals, recent };
+}
+
 function diversity(films: ReturnType<typeof recommend>["films"]) {
   const dimensions = ["genres", "directors", "countries", "language"] as const;
   const overlapDimensions = [...dimensions, "keywords"] as const;
@@ -70,7 +80,9 @@ function diversity(films: ReturnType<typeof recommend>["films"]) {
   };
 }
 
-function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy) {
+const naiveModels = ["stable-id", "hashed-id", "popularity"] as const;
+
+function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy, model: AffinityModel | typeof naiveModels[number] = "current") {
   const targets = signals.flatMap(({ film, ratings }) => {
     const numeric = ratings.flatMap(({ numeric }) => numeric === undefined ? [] : [numeric]);
     if (!numeric.length) return [];
@@ -83,12 +95,20 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
     const heldOut = new Set(sample.map(({ id }) => id));
     const { candidates, training } = holdoutInputs(catalogue, signals, heldOut);
     const history = new Set([...recent].filter((id) => !heldOut.has(id)));
-    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy);
-    const ranks = new Map(trace.base.map(({ id, rank }) => [id, rank]));
+    const affinityModel = affinityModels.find((variant) => variant === model);
+    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy, affinityModel);
+    const popularity = new Map(candidates.map((film) => [film.id, film.metadata.popularity ?? -Infinity]));
+    const shuffled = model === "hashed-id" ? new Map(candidates.map(({ id }) => [id, hash(["naive-order-v1", id])])) : undefined;
+    const order = affinityModel ? undefined : trace.base.map(({ id }) => id)
+      .sort((a, b) => {
+        if (shuffled) return shuffled.get(a)!.localeCompare(shuffled.get(b)!, "en") || a - b;
+        return (model === "popularity" ? popularity.get(b)! - popularity.get(a)! : 0) || a - b;
+      });
+    const ranks = new Map((order ?? trace.base.map(({ id }) => id)).map((id, index) => [id, index + 1]));
     const policyExclusions = new Map(trace.exclusions.filter(({ causes }) => causes.content)
       .map(({ id, quality }) => [id, quality.exclusionReasons]));
     const eligibleTargets = sample.filter(({ id }) => ranks.has(id)).length;
-    const selected = trace.result.films.map(({ id }) => id);
+    const selected = order?.slice(0, evaluationConfig.cutoff) ?? trace.result.films.map(({ id }) => id);
     const discount = (position: number) => 1 / Math.log2(position + 2);
     const dcg = selected.reduce((sum, id, position) => sum + (heldOut.has(id) ? discount(position) : 0), 0);
     const ideal = sample.slice(0, evaluationConfig.cutoff).reduce((sum, _, position) => sum + discount(position), 0);
@@ -109,18 +129,17 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
   };
 }
 
-export function createReport(raw: unknown, { referenceDate = todayUtc(), mode = "classic" }: Partial<CandidatePolicy> = {}) {
+export function createReport(raw: unknown, {
+  referenceDate = todayUtc(), mode = "classic", affinityModel = "current",
+}: Partial<CandidatePolicy> & { affinityModel?: AffinityModel } = {}) {
   if (calendarDate(referenceDate) !== referenceDate) throw new Error("Date de référence invalide. Format attendu AAAA-MM-JJ.");
   const policy = { referenceDate, mode } as const;
-  const input = parseInput(raw);
-  const { catalogue } = input;
-  const byId = new Map(catalogue.map((film) => [film.id, film]));
-  const signals = input.signals.map(({ id, ...signal }) => ({ ...signal, film: byId.get(id)! }));
-  const recent = new Set([...input.recent].sort((a, b) => a - b));
+  const { input, catalogue, signals, recent } = prepareInput(raw);
   const popularity = catalogue.flatMap(({ metadata }) => metadata.popularity === undefined ? [] : [metadata.popularity]).sort((a, b) => a - b);
   const median = popularity.length ? (popularity[Math.floor((popularity.length - 1) / 2)] + popularity[Math.floor(popularity.length / 2)]) / 2 : null;
   return {
     formatVersion, engineVersion: mode === "legacy" ? "1.1.0" : engineVersion, policy,
+    ...(affinityModel === "current" ? {} : { affinityModel }),
     fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, referenceDate }),
     catalogue: {
       total: catalogue.length, signals: signals.length,
@@ -136,7 +155,7 @@ export function createReport(raw: unknown, { referenceDate = todayUtc(), mode = 
       },
     },
     scenarios: scenarios.map(({ id, criteria }) => {
-      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy);
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, affinityModel);
       const qualityById = new Map(trace.exclusions.map(({ id, quality }) => [id, quality]));
       const counts = { seen: 0, country: 0, language: 0, duration: 0, content: 0, recent: 0 };
       let eligible = 0;
@@ -174,7 +193,78 @@ export function createReport(raw: unknown, { referenceDate = todayUtc(), mode = 
         })),
       };
     }),
-    holdout: evaluate(catalogue, signals, recent, policy),
+    holdout: evaluate(catalogue, signals, recent, policy, affinityModel),
+  };
+}
+
+const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+
+export function compareAffinityModels(raw: unknown, referenceDate: string) {
+  if (calendarDate(referenceDate) !== referenceDate) throw new Error("Date de référence invalide.");
+  const { input, catalogue, signals, recent } = prepareInput(raw);
+  const policy = { referenceDate, mode: "classic" } as const;
+  const frequency = catalogueFrequency(catalogue);
+  const commonKeywordThreshold = 0.05;
+  const keywordPrevalence = [...frequency.counts].filter(([id]) => id.startsWith("keyword:"))
+    .map(([id, count]) => ({ id, count, share: count / frequency.total }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id, "en"));
+  const genericKeywords = keywordPrevalence.filter(({ share }) => share >= commonKeywordThreshold);
+  const generic = new Set(genericKeywords.map(({ id }) => id));
+  const models = affinityModels.map((model) => {
+    const runs = scenarios.map(({ id, criteria }) => {
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, model);
+      const scores = trace.base.map(({ affinity }) => affinity.score);
+      const rawScores = trace.base.map(({ affinity }) => affinity.raw).sort((a, b) => a - b);
+      const quantiles = [0, 0.25, 0.5, 0.75, 1];
+      const families = ["director", "genre", "country", "keyword"];
+      const sums = Object.fromEntries(families.map((family) => [family, { positive: 0, negative: 0 }]));
+      let genericMass = 0;
+      let totalMass = 0;
+      for (const { affinity } of trace.base) {
+        for (const { key, id, contribution } of affinity.matches) {
+          sums[key][contribution >= 0 ? "positive" : "negative"] += contribution;
+          totalMass += Math.abs(contribution);
+          if (generic.has(id)) genericMass += Math.abs(contribution);
+        }
+      }
+      const selected = trace.result.films.map(({ id, category }) => ({
+        id, category, affinity: trace.base.find((row) => row.id === id)!.affinity.score,
+      }));
+      return {
+        id, candidates: scores.length, positiveCap: scores.filter((score) => score === 4).length,
+        negativeCap: scores.filter((score) => score === -4).length, ties: scores.length - new Set(scores).size,
+        rawQuantiles: quantiles.map((q) => rawScores[Math.floor(q * (rawScores.length - 1))] ?? null),
+        scoreQuantiles: quantiles.map((q) => rawScores.length ? Math.max(-4, Math.min(4, rawScores[Math.floor(q * (rawScores.length - 1))])) : null),
+        familyMeans: Object.fromEntries(Object.entries(sums).map(([key, { positive, negative }]) =>
+          [key, { positive: scores.length ? positive / scores.length : null, negative: scores.length ? negative / scores.length : null }])),
+        genericKeywordShare: totalMass ? genericMass / totalMass : null,
+        selected, diversity: diversity(trace.result.films),
+        ranking: trace.base.map(({ id, rank, score, affinity }) => ({ id, rank, score, affinity })),
+      };
+    });
+    const holdout = evaluate(catalogue, signals, recent, policy, model);
+    const moods = runs.slice(0, 6);
+    const moodOverlap = moods.flatMap((left, index) => moods.slice(index + 1).map((right) => ({
+      moods: [left.id, right.id], shared: left.selected.filter(({ id }) => right.selected.some((film) => film.id === id)).length,
+    })));
+    return { model, runs, moodOverlap, meanMoodOverlap: mean(moodOverlap.map(({ shared }) => shared)), holdout };
+  });
+  return {
+    formatVersion: 1, experiment: "affinity-v2", engineVersion, policy, evaluationConfig,
+    fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, policy }),
+    catalogue: catalogue.length, signals: signals.length, commonKeywordThreshold, genericKeywords,
+    mostFrequentKeywords: keywordPrevalence.slice(0, 10),
+    models: models.map((entry) => ({
+      ...entry, overlapWithCurrent: entry.runs.map((run, index) => {
+        const current = models[0].runs[index];
+        const ranks = new Map(current.ranking.map(({ id, rank }) => [id, rank]));
+        return {
+          id: run.id, shared: run.selected.filter(({ id }) => current.selected.some((film) => film.id === id)).length,
+          meanAbsoluteRankShift: mean(run.ranking.map(({ id, rank }) => Math.abs(rank - ranks.get(id)!))),
+        };
+      }),
+    })),
+    baselines: naiveModels.map((model) => ({ model, holdout: evaluate(catalogue, signals, recent, policy, model) })),
   };
 }
 
@@ -189,6 +279,7 @@ export function compareReports(baseline: Report, current: Report) {
   return {
     engine: pair(baseline.engineVersion, current.engineVersion),
     policy: pair(baseline.policy, current.policy),
+    affinityModel: pair(baseline.affinityModel ?? "current", current.affinityModel ?? "current"),
     scenarios: current.scenarios.map((scenario) => {
       const prior = baseline.scenarios.find(({ id }) => id === scenario.id);
       if (!prior) throw new Error("Scénario absent du rapport de référence.");
