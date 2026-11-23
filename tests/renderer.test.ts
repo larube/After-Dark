@@ -8,14 +8,28 @@ import { defaultFilters, durations, readCriteria } from "../src/renderer/criteri
 import { FeedbackCollection, FilmActions, ViewingReminder } from "../src/renderer/feedback";
 import { Discovery } from "../src/renderer/discovery";
 import { Results } from "../src/renderer/results";
+import { Tonight } from "../src/renderer/tonight";
 import { AppShell } from "../src/renderer/shell";
 
 describe("Interface Neon Underground", () => {
-  it("préserve les six radios natives et leur sélection", () => {
+  it("propose les six ambiances dans un contrôle natif", () => {
     const html = renderToStaticMarkup(createElement(MoodSelector, { value: "strange", onChange() {}, busy: false }));
     for (const mood of moodOrder) expect(html).toContain(`value="${mood}"`);
-    expect(html.match(/type="radio"/g)).toHaveLength(6);
-    expect(html).toMatch(/checked="" value="strange"/);
+    expect(html).toContain('<select name="mood">');
+    expect(html).toMatch(/value="strange" selected=""/);
+  });
+
+  it("ouvre la Sélection avec un seul bouton principal et les filtres repliés", () => {
+    const html = renderToStaticMarkup(createElement(Tonight, { ready: true, onComplete() {}, filmActions: () => null }));
+    expect(html).toContain("<h1>Sélection</h1>");
+    expect(html).toContain('value="surprise" selected="">Selon mes goûts');
+    expect(html.match(/type="submit"/g)).toHaveLength(1);
+    expect(html).toMatch(/Découvrir 5 films.*<details class="selection-refine"><summary>Affiner/);
+    const shell = renderToStaticMarkup(createElement(AppShell, {
+      page: "tonight", status: "Base locale prête", navigate() {}, children: null,
+    }));
+    expect(shell).toMatch(/aria-current="page"[^>]*>.*?Sélection<\/button>/);
+    expect(shell).not.toMatch(/Découvertes|Ce soir/);
   });
 
   it("expose les trois modes de découverte en radios natives et masque l’onglet inactif", () => {
@@ -58,17 +72,16 @@ describe("Interface Neon Underground", () => {
     expect(readCriteria(selection, "laugh").data).toEqual(preferred.data);
   });
 
-  it("rend les filtres multiples, les puces amovibles et un seul bouton de recherche", () => {
-    const action = createElement("button", { type: "submit" }, "Trouve-moi un film");
+  it("rend les filtres multiples et les puces amovibles", () => {
     const html = renderToStaticMarkup(createElement(FilterPanel, {
       value: { ...defaultFilters, countries: ["FR", "ES"], countriesRequired: true, languages: ["ja", "es"] },
-      busy: false, onChange() {}, action,
+      busy: false, onChange() {},
     }));
     for (const name of ["France", "Espagne", "Japonais", "Espagnol"]) {
       expect(html).toContain(`aria-label="Retirer ${name}"`);
     }
     expect(html.match(/<input[^>]+type="checkbox"[^>]*checked=""[^>]*\/>/g)).toHaveLength(5);
-    expect(html.match(/type="submit"/g)).toHaveLength(1);
+    expect(html).not.toContain('type="submit"');
     expect(html.match(/type="search"/g)).toHaveLength(2);
     expect(html).toContain("Uniquement ces pays de production");
     expect(html).toContain("Uniquement ces langues originales");
@@ -85,9 +98,10 @@ describe("Interface Neon Underground", () => {
       }],
     });
     const html = renderToStaticMarkup(createElement(Results, { result: data, ready: true, loading: false, error: "", repeat() {}, filmActions: () => "Actions film" }));
-    for (const value of ["featured", "Cure", "Pépite", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Actions film", "Autres propositions"]) {
+    for (const value of ["featured", "Cure", "Japon", "111 min", "Indice : mystère.", "Séance longue.", "Actions film", "Autres propositions"]) {
       expect(html).toContain(value);
     }
+    expect(html).not.toMatch(/Valeur sûre|Pépite|Wildcard|data-category/);
   });
 
   it.each([1, 2, 3, 4, 5])("rend une vedette et les secondaires pour %i film(s), même sans affiche", (count) => {
@@ -144,7 +158,7 @@ describe("Interface Neon Underground", () => {
       page: "history", status: "Base locale prête", navigate() {}, children: "À venir",
     }));
     expect(html).toContain('aria-label="Navigation principale"');
-    expect(html.match(/<button type="button"/g)).toHaveLength(6);
+    expect(html.match(/<button type="button"/g)).toHaveLength(5);
     expect(html).toContain("Laboratoire");
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });

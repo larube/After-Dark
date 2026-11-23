@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Franchise } from "../shared/franchises";
 
-export function FranchisePreferences({ movieId = null, onChange }: { movieId?: number | null; onChange: () => void }) {
+export function FranchisePreferences({ movieId = null }: { movieId?: number | null }) {
   const [open, setOpen] = useState(movieId === null);
   const [groups, setGroups] = useState<Franchise[]>();
   const [pending, setPending] = useState(false);
@@ -27,7 +27,6 @@ export function FranchisePreferences({ movieId = null, onChange }: { movieId?: n
       if (!reply.ok) throw new Error(reply.error);
       setGroups((entries) => entries?.map((entry) => entry.key === group.key ? { ...entry, blocked: !group.blocked } : entry)
         .filter((entry) => movieId !== null || entry.blocked || entry.key === "harry-potter" || entry.key === "godzilla"));
-      onChange();
     } catch {
       setError("Impossible de modifier cette exclusion.");
     } finally {
