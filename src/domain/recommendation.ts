@@ -33,12 +33,18 @@ function moodEvidence(metadata: Metadata, mood: keyof typeof moodGenres) {
   return { weight: Math.min(4, genres.length * 2 + keywords.length * 3), labels: [...keywords, ...genres] };
 }
 
-export function eligible(film: Film, criteria: Criteria) {
+function eligibility(film: Film, criteria: Criteria) {
   const { countries, language, minutes } = film.metadata;
-  return film.status !== "seen"
-    && (!criteria.requiredCountries.length || countries.some((country) => criteria.requiredCountries.includes(country)))
-    && (!criteria.requiredLanguages.length || (language !== undefined && criteria.requiredLanguages.includes(language)))
-    && (criteria.maxMinutes === undefined || (minutes !== undefined && minutes <= criteria.maxMinutes));
+  return {
+    seen: film.status === "seen",
+    country: !!criteria.requiredCountries.length && !countries.some((country) => criteria.requiredCountries.includes(country)),
+    language: !!criteria.requiredLanguages.length && (language === undefined || !criteria.requiredLanguages.includes(language)),
+    duration: criteria.maxMinutes !== undefined && (minutes === undefined || !(minutes <= criteria.maxMinutes)),
+  };
+}
+
+export function eligible(film: Film, criteria: Criteria) {
+  return !Object.values(eligibility(film, criteria)).some(Boolean);
 }
 
 function features(metadata: Metadata) {
@@ -74,22 +80,28 @@ export function buildAffinity(signals: Signal[], qualitative = qualitativeWeight
   return traits;
 }
 
-export function affinityFor(film: Film, traits: ReturnType<typeof buildAffinity>) {
+function affinityDetails(film: Film, traits: ReturnType<typeof buildAffinity>) {
   const matches = [...new Map(features(film.metadata).map((feature) => [feature.id, feature])).values()]
     .flatMap((feature) => {
       const trait = traits.get(feature.id);
-      return trait ? [{ ...feature, contribution: trait.sum / (trait.count + 1) * feature.weight }] : [];
+      return trait ? [{ ...feature, signalCount: trait.count, signalSum: trait.sum, contribution: trait.sum / (trait.count + 1) * feature.weight }] : [];
     }).sort((a, b) => b.contribution - a.contribution);
+  const raw = matches.reduce((sum, feature) => sum + feature.contribution, 0);
   return {
-    score: Math.max(-4, Math.min(4, matches.reduce((sum, feature) => sum + feature.contribution, 0))),
+    raw, matches, score: Math.max(-4, Math.min(4, raw)),
     positive: matches.filter((feature) => feature.contribution > 0.08).slice(0, 3).map((feature) => feature.label),
     negative: matches.filter((feature) => feature.contribution < -0.15).slice(-2).map((feature) => feature.label),
   };
 }
 
+export function affinityFor(film: Film, traits: ReturnType<typeof buildAffinity>) {
+  const { score, positive, negative } = affinityDetails(film, traits);
+  return { score, positive, negative };
+}
+
 function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>) {
   const { metadata } = film;
-  const affinity = affinityFor(film, traits);
+  const affinity = affinityDetails(film, traits);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
   const avoided = criteria.avoid ? moodEvidence(metadata, criteria.avoid) : undefined;
   const preferredCountry = metadata.countries.some((code) => criteria.preferredCountries.includes(code));
@@ -111,10 +123,17 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
     ...(energy < 0 ? ["Séance longue pour une soirée à faible énergie."] : []),
     ...(affinity.negative.length ? [`Traits associés aussi à des appréciations négatives : ${affinity.negative.join(", ")}.`] : []),
   ];
+  const contributions = {
+    affinity: affinity.score * 1.6, mood: (mood?.weight ?? 0) * 1.4,
+    country: Number(preferredCountry) * 1.4, language: Number(preferredLanguage) * 1.2,
+    energy, avoided: -(avoided?.weight ?? 0) * 1.5,
+    exploration: exploration * (criteria.mood === "surprise" ? 1.5 : 0.5),
+  };
   return {
     film, affinity: affinity.score, exploration, reasons, warnings,
-    score: affinity.score * 1.6 + (mood?.weight ?? 0) * 1.4 + Number(preferredCountry) * 1.4
-      + Number(preferredLanguage) * 1.2 + energy - (avoided?.weight ?? 0) * 1.5 + exploration * (criteria.mood === "surprise" ? 1.5 : 0.5),
+    details: { affinity, contributions, mood, avoided },
+    score: contributions.affinity + contributions.mood + contributions.country
+      + contributions.language + energy + contributions.avoided + contributions.exploration,
     traits: new Set(features(metadata).map((feature) => feature.id)),
   };
 }
@@ -128,19 +147,36 @@ function diversityPenalty(candidate: Ranked, selected: Ranked[]) {
   }));
 }
 
-export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>) {
+type Category = Recommendation["films"][number]["category"];
+type Step = {
+  category: Category;
+  ranking: { id: number; rank: number; bonus: number; penalty: number; score: number }[];
+};
+
+function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
+  trace?: { base: Ranked[]; steps: Step[] },
+) {
   const traits = buildAffinity(signals);
   const eligibleFilms = catalogue.filter((film) => eligible(film, criteria));
-  const ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits));
+  let ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits));
+  if (trace) trace.base = [...ranked].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
   const selected: Ranked[] = [];
   const films: Recommendation["films"] = [];
   const categories = ["safe", "gem", "wildcard", "safe", "gem"] as const;
   for (const category of categories) {
-    const value = (candidate: Ranked) => candidate.score - diversityPenalty(candidate, selected)
-      + (category === "gem" ? candidate.exploration * 2 : category === "wildcard" ? -Math.max(0, candidate.affinity) * 0.6 : candidate.affinity);
-    ranked.sort((a, b) => value(b) - value(a) || a.film.id - b.film.id);
-    const candidate = ranked.shift();
-    if (!candidate) break;
+    const ranking = ranked.map((candidate) => {
+      const penalty = diversityPenalty(candidate, selected);
+      const bonus = category === "gem" ? candidate.exploration * 2
+        : category === "wildcard" ? -Math.max(0, candidate.affinity) * 0.6 : candidate.affinity;
+      return { candidate, penalty, bonus, score: candidate.score - penalty + bonus };
+    }).sort((a, b) => b.score - a.score || a.candidate.film.id - b.candidate.film.id);
+    if (trace && ranking.length) trace.steps.push({
+      category, ranking: ranking.map(({ candidate, ...value }, index) => ({ id: candidate.film.id, rank: index + 1, ...value })),
+    });
+    const winner = ranking.shift();
+    if (!winner) break;
+    const { candidate } = winner;
+    ranked = ranking.map((row) => row.candidate);
     selected.push(candidate);
     const { status: _status, ...film } = candidate.film;
     void _status;
@@ -155,13 +191,39 @@ export function recommend(catalogue: Film[], signals: Signal[], criteria: Criter
   return { films, personalized: selected.some((candidate) => candidate.affinity !== 0), status } as const;
 }
 
+export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>) {
+  return runRecommendation(catalogue, signals, criteria, recent);
+}
+
+export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>) {
+  const trace: { base: Ranked[]; steps: Step[] } = { base: [], steps: [] };
+  const result = runRecommendation(catalogue, signals, criteria, recent, trace);
+  return {
+    result, steps: trace.steps,
+    exclusions: catalogue.map((film) => {
+      const causes = eligibility(film, criteria);
+      return { id: film.id, causes: { ...causes, recent: recent.has(film.id) },
+        excluded: Object.values(causes).some(Boolean) || recent.has(film.id) };
+    }),
+    base: trace.base.map(({ film, score, details, exploration, reasons, warnings }, index) => ({
+      id: film.id, rank: index + 1, score, exploration, reasons, warnings, ...details,
+      selectedRank: result.films.findIndex(({ id }) => id === film.id) + 1 || null,
+    })),
+  };
+}
+
 /** Descriptive holdout comparison. Held-out films become candidates only inside this evaluation. */
 export function evaluateHoldout(catalogue: Film[], signals: Signal[], criteria: Criteria, heldOut: ReadonlySet<number>) {
-  const training = signals.filter(({ film }) => !heldOut.has(film.id));
-  const candidates = catalogue.map((film) => heldOut.has(film.id) ? { ...film, status: "unknown" as const } : film);
+  const { candidates, training } = holdoutInputs(catalogue, signals, heldOut);
   const result = recommend(candidates, training, criteria, new Set());
   const ranks = new Map(result.films.map(({ id }, index) => [id, index + 1]));
   return signals.filter(({ film }) => heldOut.has(film.id)).map(({ film, ratings }) => ({
     id: film.id, title: film.title, rank: ranks.get(film.id) ?? null, ratings,
   }));
+}
+
+export function holdoutInputs(catalogue: Film[], signals: Signal[], heldOut: ReadonlySet<number>) {
+  const training = signals.filter(({ film }) => !heldOut.has(film.id));
+  const candidates = catalogue.map((film) => heldOut.has(film.id) ? { ...film, status: "unknown" as const } : film);
+  return { candidates, training };
 }

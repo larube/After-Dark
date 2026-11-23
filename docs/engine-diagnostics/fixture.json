@@ -1,0 +1,32 @@
+{
+  "catalogue": [
+    {"id":1,"title":"Les Vitres de sel","year":2014,"status":"seen","metadata":{"genres":["Thriller","Crime"],"directors":["Mina Ocre"],"countries":["ES"],"language":"es","keywords":["suspense"],"minutes":98,"popularity":24}},
+    {"id":2,"title":"Lune en carton","year":2019,"status":"seen","metadata":{"genres":["Comedy","Fantasy"],"directors":["Jun Bronze"],"countries":["JP"],"language":"ja","keywords":["surrealism","satire"],"minutes":102,"popularity":4}},
+    {"id":3,"title":"Les Jours immobiles","year":2008,"status":"seen","metadata":{"genres":["Drama"],"directors":["Lina Terre"],"countries":["FR"],"language":"fr","keywords":["grief"],"minutes":114,"popularity":12}},
+    {"id":4,"title":"L'Orbite basse","year":2021,"status":"seen","metadata":{"genres":["Science Fiction","Adventure"],"directors":["Sol Cuivre"],"countries":["US"],"language":"en","keywords":["space travel"],"minutes":142,"popularity":91}},
+    {"id":5,"title":"La Pluie à rebours","year":2001,"status":"seen","metadata":{"genres":["Horror","Drama"],"directors":["Mina Ocre"],"countries":["ES","JP"],"language":"ja","keywords":["body horror"],"minutes":96,"popularity":2}},
+    {"id":6,"title":"Un jardin sans porte","year":2017,"status":"seen","metadata":{"genres":["Romance","Drama"],"directors":["Lina Terre"],"countries":["FR"],"language":"fr","keywords":["friendship"],"minutes":95}},
+    {"id":7,"title":"La Gare sans horloge","year":2023,"status":"unseen","metadata":{"genres":["Thriller","Mystery"],"directors":["Mina Ocre"],"countries":["ES","JP"],"language":"es","keywords":["paranoia","suspense"],"minutes":104,"popularity":7}},
+    {"id":8,"title":"Cinq kilos de nuages","year":2011,"metadata":{"genres":["Comedy"],"directors":["Jun Bronze"],"countries":["JP"],"language":"ja","keywords":["absurd humor","satire"],"minutes":91,"popularity":3}},
+    {"id":9,"title":"La Peau des miroirs","year":2016,"metadata":{"genres":["Horror","Fantasy"],"directors":["Jun Bronze"],"countries":["JP"],"language":"ja","keywords":["body horror","surrealism"],"minutes":108,"popularity":8}},
+    {"id":10,"title":"L'Été des lucioles","year":2020,"metadata":{"genres":["Drama","Romance"],"directors":["Lina Terre"],"countries":["FR","ES"],"language":"fr","keywords":["friendship"],"minutes":105,"popularity":11}},
+    {"id":11,"title":"Balise rouge","year":2024,"metadata":{"genres":["Adventure","Science Fiction"],"directors":["Sol Cuivre"],"countries":["US","JP"],"language":"en","keywords":["survival","space travel"],"minutes":133,"popularity":80}},
+    {"id":12,"title":"Le Couloir violet","year":1993,"metadata":{"genres":["Thriller","Drama"],"directors":["Mina Ocre"],"countries":["ES"],"language":"es","keywords":["suspense","grief"],"minutes":100,"popularity":6}},
+    {"id":13,"title":"Le Bruit du papier","year":null,"metadata":{}},
+    {"id":14,"title":"La Traversée du sable","year":2010,"metadata":{"genres":["Adventure","War"],"directors":["Isa Craie"],"countries":["MA","FR"],"language":"ar","keywords":["epic"],"minutes":146,"popularity":19}},
+    {"id":15,"title":"Un rire à crédit","year":2022,"metadata":{"genres":["Comedy","Crime"],"directors":["Isa Craie"],"countries":["ES"],"language":"es","keywords":["dark comedy"],"minutes":90,"popularity":13}},
+    {"id":16,"title":"Le Quartier des ombres","year":2018,"metadata":{"genres":["Fantasy"],"directors":["Ivo Basalte"],"countries":["JP"],"language":"ja","keywords":["absurdism"],"minutes":102}},
+    {"id":17,"title":"Le Dernier Étage","year":2009,"metadata":{"genres":["Drama"],"directors":["Anna Grès"],"countries":["ES"],"language":"es","keywords":["family relationships"],"minutes":97,"popularity":1}},
+    {"id":18,"title":"La Porte en cuivre","year":2004,"status":"seen","metadata":{"genres":["Mystery"],"directors":["Ivo Basalte"],"countries":["JP"],"language":"ja","keywords":["psychological thriller"],"minutes":88,"popularity":9}}
+  ],
+  "signals": [
+    {"id":1,"ratings":[{"numeric":9.5}],"spontaneous":true,"memorable":true,"rewatch":false},
+    {"id":2,"ratings":[{"numeric":8.5},{"qualitative":"adoré"}],"spontaneous":true,"memorable":false,"rewatch":true},
+    {"id":3,"ratings":[{"numeric":8},{"numeric":9}],"spontaneous":false,"memorable":true,"rewatch":false},
+    {"id":4,"ratings":[{"numeric":9}],"spontaneous":false,"memorable":false,"rewatch":true},
+    {"id":5,"ratings":[{"numeric":1.5},{"qualitative":"détesté"}],"spontaneous":false,"memorable":false,"rewatch":false},
+    {"id":6,"ratings":[{"qualitative":"beaucoup aimé"}],"spontaneous":false,"memorable":false,"rewatch":false},
+    {"id":18,"ratings":[{"numeric":8.5}],"spontaneous":true,"memorable":false,"rewatch":false}
+  ],
+  "recent":[2,12]
+}
