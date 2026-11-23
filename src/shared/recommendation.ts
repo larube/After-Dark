@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { tmdbCollectionSchema } from "./franchises";
+import { franchiseSchema, tmdbCollectionSchema } from "./franchises";
 
 export const moods = {
   surprise: "Surprends-moi", laugh: "Envie de rire", tension: "Suspense et tension",
@@ -53,6 +53,7 @@ export const recommendationSchema = z.strictObject({
   films: z.array(z.strictObject({
     id: z.number().int(), title: z.string(), year: z.number().int().nullable(),
     metadata: metadataSchema, posterData: posterDataSchema.optional(),
+    franchise: franchiseSchema.pick({ key: true, name: true }).optional(),
     category: z.enum(["safe", "gem", "wildcard"]),
     reasons: z.array(z.string()), warnings: z.array(z.string()),
   })).max(selectionSize),

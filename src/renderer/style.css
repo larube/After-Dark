@@ -304,15 +304,12 @@ summary:hover { color: var(--focus); }
 .featured h3 { font-size: clamp(2.45rem, 4.6vw, 4rem); letter-spacing: -.017em; line-height: .97; }
 .film-meta { color: var(--muted); margin-top: 4px; letter-spacing: .01em; }
 .synopsis { margin-top: 7px; max-width: 62ch; line-height: 1.45; }
-.film-reasons { font-size: .9rem; }
-.featured .film-reasons {
-  margin-top: 10px; padding: 2px 10px 6px; background: #1b1713; border-left: 2px solid #a5694b;
-}
-.film-reasons summary { padding-block: 5px; color: var(--focus); }
-.film-reasons ul { list-style: disc; padding-left: 18px; }
+.film-reason { margin-block-start: 7px; font-size: .9rem; }
+.featured .film-reason { padding: 5px 10px; background: #1b1713; border-left: 2px solid #a5694b; }
+.film-secondary { margin-block-start: 5px; font-size: .84rem; color: var(--muted); }
+.film-secondary summary { padding-block: 4px; overflow-wrap: anywhere; }
+.film-details ul { list-style: disc; padding-inline-start: 18px; margin-block: 5px; }
 .alternatives { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
-.alternatives .film-synopsis { font-size: .84rem; }
-.alternatives .film-synopsis summary { padding-block: 4px; }
 @media (min-width: 1050px) {
   .alternatives { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .alternatives .film-card { grid-template-columns: 76px minmax(0, 1fr); gap: 10px; }
@@ -516,7 +513,6 @@ summary:hover { color: var(--focus); }
   .discovery-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
-.film-franchise { margin-block-start: 6px; }
 .franchise-group { padding-block: 8px; border-block-start: 1px solid var(--border); }
 .franchise-group details { margin-block: 4px; }
 .franchise-group ul { padding-inline-start: 18px; }
