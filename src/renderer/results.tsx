@@ -18,10 +18,10 @@ const empty = {
   exhausted: ["Propositions récentes épuisées", "Les films compatibles ont déjà été proposés récemment."],
 } as const;
 
-function RecommendationCard({ film, featured, actions }: {
-  film: Recommendation["films"][number]; featured: boolean; actions: ReactNode;
+function RecommendationCard({ film, featured, actions, image }: {
+  film: Recommendation["films"][number]; featured: boolean; actions: ReactNode; image?: string;
 }) {
-  const { title, year, metadata, posterData, reasons, warnings } = film;
+  const { title, year, metadata, posterData = image, reasons, warnings } = film;
   return <article className="film-card">
     <div className="poster-mount">
       {posterData ? <img className="poster" src={posterData} alt="" /> :
@@ -33,7 +33,8 @@ function RecommendationCard({ film, featured, actions }: {
         year, metadata.countries.length ? metadata.countries.map((code) => regions.of(code)).join(", ") : "Pays inconnu",
         metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",
       ].filter(Boolean).join(" · ")}</p>
-      {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
+      {metadata.synopsis && (featured ? <p className="synopsis">{metadata.synopsis}</p> :
+        <details className="film-synopsis"><summary>Synopsis</summary><p className="synopsis">{metadata.synopsis}</p></details>)}
       <AllocineLink title={title} year={year} />
       <details className="film-reasons" open={featured || undefined}><summary>Pourquoi ce film ?</summary>
         <ul>{reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
@@ -44,8 +45,8 @@ function RecommendationCard({ film, featured, actions }: {
   </article>;
 }
 
-export function Results({ headingRef, result, loading, ready, error, repeat, filmActions }: {
-  headingRef?: Ref<HTMLHeadingElement>; result?: Recommendation; loading: boolean; ready: boolean; error: string; repeat: (allowRecent: boolean) => void;
+export function Results({ headingRef, result, posters, loading, ready, error, repeat, filmActions }: {
+  headingRef?: Ref<HTMLHeadingElement>; result?: Recommendation; posters?: Record<number, string>; loading: boolean; ready: boolean; error: string; repeat: (allowRecent: boolean) => void;
   filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
 }) {
   return <section className="results" aria-labelledby="results-heading">
@@ -62,11 +63,11 @@ export function Results({ headingRef, result, loading, ready, error, repeat, fil
       {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3><p>{empty[result.status][1]}</p></div>}
       {result.films.length > 0 && <div className="film-list">
         <div className="featured">
-          <RecommendationCard key={result.films[0].id} film={result.films[0]} actions={filmActions(result.films[0], loading)} featured />
+          <RecommendationCard key={result.films[0].id} film={result.films[0]} image={posters?.[result.films[0].id]} actions={filmActions(result.films[0], loading)} featured />
         </div>
         {result.films.length > 1 && <ol className="alternatives" start={2} aria-label="Propositions suivantes">
           {result.films.slice(1).map((film) => <li key={film.id}>
-            <RecommendationCard film={film} actions={filmActions(film, loading)} featured={false} />
+            <RecommendationCard film={film} image={posters?.[film.id]} actions={filmActions(film, loading)} featured={false} />
           </li>)}
         </ol>}
       </div>}

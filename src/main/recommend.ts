@@ -7,7 +7,7 @@ import { cacheFilm, readCatalogue, readHistory, saveRecommendation } from "../db
 import type { TonightPreferences } from "../domain/tonight-preferences";
 import { tonightDiagnostic, type TonightDiagnostic, type Acquisition } from "../diagnostics/tonight";
 import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
-import type { Criteria, Recommendation } from "../shared/recommendation";
+import { recentSelectionLimit, selectionSize, type Criteria, type Recommendation } from "../shared/recommendation";
 import { TmdbClient, TmdbError } from "./tmdb";
 
 const config = z.strictObject({ tmdbReadToken: z.string().trim().min(1).max(4096) });
@@ -42,7 +42,7 @@ export async function findTonight(
   preferences?: TonightPreferences, onDiagnostic?: (report: TonightDiagnostic) => Promise<void>,
 ): Promise<Recommendation> {
   let state = await readCatalogue(db);
-  const history = await readHistory(db);
+  const history = await readHistory(db, recentSelectionLimit);
   const hydrationBudget = 18;
   const before = state.catalogue.length;
   const sources: Acquisition["sources"] = [];
@@ -87,14 +87,14 @@ export async function findTonight(
   const blocked = await franchiseExclusions(db, state.movies);
   const date = now.toISOString();
   const args = [state.catalogue, state.signals, criteria, allowRecent ? new Set<number>() : history.recent,
-    { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, preferences] as const;
+    { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, preferences, selectionSize] as const;
   const trace = onDiagnostic ? diagnoseRecommendation(...args) : undefined;
   const result = { ...(trace?.result ?? recommend(...args)), connection };
   await saveRecommendation(db, criteria, result, date);
   if (trace && onDiagnostic) {
     try {
       await onDiagnostic(tonightDiagnostic({
-        date, criteria, allowRecent, preferences, catalogue: state.catalogue, movies: state.movies, trace,
+        date, criteria, allowRecent, preferences, size: selectionSize, recentLimit: recentSelectionLimit, catalogue: state.catalogue, movies: state.movies, trace,
         acquisition: { round: history.round, before, after: state.catalogue.length, connection,
           sources: [...sources], discovered, lookups: discovered.map((tmdbId) => ({ tmdbId, result: lookups.get(tmdbId)! })) },
       }));

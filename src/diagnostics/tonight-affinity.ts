@@ -5,13 +5,15 @@ import { readCatalogue } from "../db/recommendations";
 import { moodSessions, recommendationHistory } from "../db/schema";
 import { affinityModels, catalogueFrequency, type TonightAffinityModel } from "../domain/affinity";
 import { diagnoseRecommendation, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
-import { criteriaSchema } from "../shared/recommendation";
+import { criteriaSchema, recentSelectionLimit, selectionSize } from "../shared/recommendation";
 import { withLocalSnapshot } from "./cli";
 
 const captureSchema = z.object({
   format: z.literal("after-dark-tonight-v1"), date: z.iso.datetime(), criteria: criteriaSchema,
   allowRecent: z.boolean(), acquisition: z.object({ after: z.number().int().nonnegative() }),
-  selected: z.array(z.object({ id: z.number().int(), title: z.string() })).max(5),
+  selected: z.array(z.object({ id: z.number().int(), title: z.string() })).max(selectionSize),
+  size: z.number().int().min(1).max(selectionSize).default(5),
+  recentLimit: z.number().int().min(1).max(recentSelectionLimit).default(15),
   preferences: z.object({
     period: z.object({
       fromYear: z.number().int(), penalty: z.number(), maxExceptions: z.number().int(),
@@ -27,7 +29,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
     if (!session) throw Error("Séance absente de cette base.");
     const history = capture.allowRecent ? [] : await db.select({ id: recommendationHistory.movieId }).from(recommendationHistory)
       .where(lt(recommendationHistory.moodSessionId, session.id))
-      .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(15);
+      .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(capture.recentLimit);
     const { catalogue, signals, movies } = await readCatalogue(db);
     const excludedIds = await franchiseExclusions(db, movies);
     const policy = { referenceDate: capture.date.slice(0, 10), excludedIds };
@@ -71,7 +73,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
       catalogueWithVotes: catalogue.filter(({ id }) => hasVotes(id)).length, trainingSignals: signals.length,
       capturedTitles: capture.selected.map(({ title }) => title),
       variants: variants.map(({ model, ranking }) => {
-        const run = (pool: typeof catalogue) => diagnoseRecommendation(pool, signals, capture.criteria, recent, policy, model, ranking, capture.preferences);
+        const run = (pool: typeof catalogue) => diagnoseRecommendation(pool, signals, capture.criteria, recent, policy, model, ranking, capture.preferences, capture.size);
         const trace = run(catalogue);
         const withoutVotes = run(masked);
         const top = trace.base.slice(0, 35);

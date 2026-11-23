@@ -3,7 +3,7 @@ import { franchiseKey, franchiseSchema } from "./franchises";
 import { allocineFilmSchema } from "./allocine";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
-import { criteriaSchema, recommendationSchema } from "./recommendation";
+import { criteriaSchema, posterDataSchema, recommendationSchema } from "./recommendation";
 import { discoveryIdSchema, discoveryModeSchema, discoveryPosterSchema, discoveryViewSchema } from "./discovery";
 
 const count = z.number().int().nonnegative();
@@ -69,6 +69,7 @@ export const ipc = {
   enrichment: { channel: "profile:enrichment", request: z.tuple([]), response: reply(enrichmentSchema) },
   summary: { channel: "profile:summary", request: z.tuple([]), response: reply(summarySchema) },
   importProfile: { channel: "profile:import", request: z.tuple([]), response: reply(importResultSchema) },
+  recommendationPoster: { channel: "cinema:recommendation-poster", request: z.tuple([z.number().int().positive()]), response: reply(posterDataSchema.nullable()) },
   recommend: { channel: "cinema:recommend", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(recommendationSchema) },
 } as const;
 

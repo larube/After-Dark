@@ -23,6 +23,7 @@ const api: DesktopApi = {
   saveFeedback: async (...args) => ipc.saveFeedback.response.parse(await ipcRenderer.invoke(
     ipc.saveFeedback.channel, ...ipc.saveFeedback.request.parse(args),
   )),
+  recommendationPoster: invoke(ipc.recommendationPoster),
   recommend: async (...args) => ipc.recommend.response.parse(await ipcRenderer.invoke(
     ipc.recommend.channel, ...ipc.recommend.request.parse(args),
   )),

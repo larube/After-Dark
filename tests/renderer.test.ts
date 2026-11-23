@@ -24,7 +24,7 @@ describe("Interface Neon Underground", () => {
     expect(html).toContain("<h1>Sélection</h1>");
     expect(html).toMatch(/checked="" value="surprise"\/><span>Surprends-moi<\/span>/);
     expect(html.match(/type="submit"/g)).toHaveLength(1);
-    expect(html).toMatch(/<fieldset class="mood-fieldset".*<\/fieldset><button[^>]*type="submit"[^>]*>.*Découvrir 5 films.*<details class="selection-refine"><summary>Affiner/);
+    expect(html).toMatch(/<fieldset class="mood-fieldset".*<\/fieldset><button[^>]*type="submit"[^>]*>.*Découvrir 10 films.*<details class="selection-refine"><summary>Affiner/);
     const shell = renderToStaticMarkup(createElement(AppShell, {
       page: "tonight", status: "Base locale prête", navigate() {}, children: null,
     }));
@@ -104,7 +104,7 @@ describe("Interface Neon Underground", () => {
     expect(html).not.toMatch(/Valeur sûre|Pépite|Wildcard|data-category/);
   });
 
-  it.each([1, 2, 3, 4, 5])("rend une vedette et les secondaires pour %i film(s), même sans affiche", (count) => {
+  it.each([1, 2, 3, 4, 5, 10])("rend une vedette et les secondaires pour %i film(s), même sans affiche", (count) => {
     const result = recommendationSchema.parse({
       connection: "cached", personalized: true, status: "ready",
       films: Array.from({ length: count }, (_, index) => ({

@@ -311,6 +311,12 @@ summary:hover { color: var(--focus); }
 .film-reasons summary { padding-block: 5px; color: var(--focus); }
 .film-reasons ul { list-style: disc; padding-left: 18px; }
 .alternatives { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
+.alternatives .film-synopsis { font-size: .84rem; }
+.alternatives .film-synopsis summary { padding-block: 4px; }
+@media (min-width: 1050px) {
+  .alternatives { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .alternatives .film-card { grid-template-columns: 76px minmax(0, 1fr); gap: 10px; }
+}
 .alternatives > li { min-width: 0; padding: 10px 1px 14px; border-top: 1px solid var(--border); }
 .alternatives h3 { font-size: clamp(1.35rem, 2.1vw, 1.85rem); line-height: 1; }
 .alternatives :is(.film-meta, .synopsis, .warning) { font-size: .84rem; line-height: 1.4; }

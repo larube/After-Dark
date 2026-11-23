@@ -41,7 +41,7 @@ function summarize(films: Film[]) {
 }
 
 export function tonightDiagnostic(input: {
-  date: string; criteria: Criteria; allowRecent: boolean; preferences?: TonightPreferences;
+  date: string; criteria: Criteria; allowRecent: boolean; preferences?: TonightPreferences; size?: number; recentLimit?: number;
   acquisition: Acquisition; catalogue: Film[]; movies: Movie[]; trace: Trace;
 }) {
   const { trace, acquisition } = input;
@@ -94,7 +94,7 @@ export function tonightDiagnostic(input: {
   const selection = trace.result.films.map(({ id }) => describe(base.get(id)!));
   return {
     format: "after-dark-tonight-v1", engineVersion, affinityModel: tonightAffinityModel, ranking: tonightRanking, date: input.date, criteria: input.criteria,
-    allowRecent: input.allowRecent, preferences: input.preferences ?? tonightDefaults,
+    allowRecent: input.allowRecent, size: input.size, recentLimit: input.recentLimit, preferences: input.preferences ?? tonightDefaults,
     acquisition,
     pool: {
       afterAcquisition: summarize(input.catalogue),
