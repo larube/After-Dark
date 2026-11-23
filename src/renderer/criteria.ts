@@ -1,8 +1,8 @@
 import { criteriaSchema, type Criteria } from "../shared/recommendation";
 
 export const durations = [
-  [90, "1 h 30 maximum"], [105, "1 h 45 maximum"], [120, "2 h maximum"],
-  [150, "2 h 30 maximum"], [180, "3 h maximum"],
+  [90, "1 h 30"], [105, "1 h 45"], [120, "2 h"],
+  [150, "2 h 30"], [180, "3 h"],
 ] as const;
 
 export type SessionFilters = {

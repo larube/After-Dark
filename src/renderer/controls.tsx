@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { moods, type Criteria } from "../shared/recommendation";
 
 import { defaultFilters, durations, type SessionFilters } from "./criteria";
@@ -31,85 +31,135 @@ const languages: Record<string, string> = {
   pl: "Polonais", pt: "Portugais", ru: "Russe", sv: "Suédois", tr: "Turc",
 };
 
-function FilterChoices({ label, all, requiredLabel, preferenceHelp, options, selected, required, onSelect, onRequire, busy }: {
-  label: string; all: string; requiredLabel: string; preferenceHelp: string; options: Record<string, string>;
+function normalize(value: string) {
+  return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+function FilterChoices({ label, all, requiredLabel, options, selected, required, onSelect, onRequire, busy }: {
+  label: string; all: string; requiredLabel: string; options: Record<string, string>;
   selected: string[]; required: boolean; onSelect: (selected: string[]) => void;
   onRequire: (required: boolean) => void; busy: boolean;
 }) {
-  return <fieldset className="filter-choices" disabled={busy}>
-    <legend>{label}</legend>
-    <details className="filter-picker" name="session-geography">
-      <summary>{selected.length === 0 ? all : `${selected.length} ${selected.length === 1 ? "choix retenu" : "choix retenus"}`}
-        <span>Choisir</span>
+  const [query, setQuery] = useState("");
+  const id = useId();
+  const details = useRef<HTMLDetailsElement>(null);
+  const trigger = useRef<HTMLElement>(null);
+  const available = Object.entries(options).filter(([, name]) => normalize(name).includes(normalize(query.trim())));
+
+  return <div className="ticket-slot">
+    <span className="ticket-label" id={id}>{label}</span>
+    <details className="ticket-picker" name="session-filters" ref={details}
+      onToggle={() => { if (!details.current?.open) setQuery(""); }}
+      onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && details.current?.open) {
+          event.preventDefault();
+          details.current.open = false;
+          trigger.current?.focus();
+        }
+      }}>
+      <summary ref={trigger} aria-labelledby={`${id} ${id}-current`}>
+        <span id={`${id}-current`}>{selected.length ? required ? "Obligatoire" : "Préférence" : all}</span>
       </summary>
-      <div className="filter-options">
-        {Object.entries(options).map(([code, name]) => <label key={code}>
-          <input type="checkbox" checked={selected.includes(code)} onChange={(event) => {
-            onSelect(event.target.checked ? [...selected, code] : selected.filter((item) => item !== code));
-          }} />
-          {name}
-        </label>)}
-      </div>
+      <fieldset className="ticket-options" disabled={busy}>
+        <legend className="visually-hidden">{label}</legend>
+        <input type="search" aria-label={`Rechercher · ${label}`} placeholder="Rechercher…" value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+        <div className="ticket-list">
+          {available.map(([code, name]) => <label key={code}>
+            <input type="checkbox" checked={selected.includes(code)} onChange={(event) => {
+              onSelect(event.target.checked ? [...selected, code] : selected.filter((item) => item !== code));
+            }} /> {name}
+          </label>)}
+          {!available.length && <p role="status">Aucun résultat.</p>}
+        </div>
+        <label className="ticket-strict">
+          <input type="checkbox" checked={required} disabled={!selected.length} aria-describedby={`${id}-help`}
+            onChange={(event) => onRequire(event.target.checked)} /> {requiredLabel}
+        </label>
+        <small id={`${id}-help`}>En mode strict, au moins un choix doit correspondre. Sinon, d’autres choix restent possibles.</small>
+      </fieldset>
     </details>
-    <label className="filter-required">
-      <input type="checkbox" checked={required} disabled={!selected.length} onChange={(event) => onRequire(event.target.checked)} />
-      {requiredLabel}
-    </label>
-    {!!selected.length && !required && <small className="filter-help">{preferenceHelp}</small>}
-  </fieldset>;
+    {!!selected.length && <ul className="ticket-chips" aria-label={label}>
+      {selected.map((code) => <li key={code}><button type="button" disabled={busy} aria-label={`Retirer ${options[code]}`}
+        onClick={(event) => {
+          const next = event.currentTarget.closest("li")?.nextElementSibling?.querySelector("button");
+          const previous = event.currentTarget.closest("li")?.previousElementSibling?.querySelector("button");
+          (next ?? previous ?? trigger.current)?.focus();
+          onSelect(selected.filter((item) => item !== code));
+        }}>{options[code]} <span aria-hidden="true">×</span></button></li>)}
+    </ul>}
+  </div>;
+}
+
+const durationOptions = [["", "Peu importe"], ...durations.map(([minutes, label]) => [String(minutes), label] as const)] as const;
+const avoidOptions = [["", "Aucune"], ...moodOrder.filter((key) => key !== "surprise")
+  .map((key) => [key, key === "immersion" ? "Immersif" : moods[key]] as const)] as const;
+
+function SingleFilter({ label, options, value, busy, help, onChange }: {
+  label: string; options: readonly (readonly [string, string])[]; value: string; busy: boolean;
+  help?: string; onChange: (value: string) => void;
+}) {
+  const id = useId();
+  const details = useRef<HTMLDetailsElement>(null);
+  const trigger = useRef<HTMLElement>(null);
+
+  function close() {
+    if (details.current) details.current.open = false;
+    trigger.current?.focus();
+  }
+
+  return <div className="ticket-slot">
+    <span className="ticket-label" id={id}>{label}</span>
+    <details className="ticket-picker" name="session-filters" ref={details}
+      onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" || (event.key === "Enter" && event.target instanceof HTMLInputElement)) {
+          event.preventDefault();
+          close();
+        }
+      }}>
+      <summary ref={trigger} aria-labelledby={`${id} ${id}-current`}>
+        <span id={`${id}-current`}>{options.find(([code]) => code === value)?.[1]}</span>
+      </summary>
+      <fieldset className="ticket-options" disabled={busy} aria-describedby={help ? `${id}-help` : undefined}>
+        <legend className="visually-hidden">{label}</legend>
+        <div className="ticket-list ticket-single-list">
+          {options.map(([code, name]) => <label key={code}>
+            <input type="radio" name={id} value={code} checked={value === code} onChange={() => onChange(code)}
+              onClick={(event) => { if (event.detail > 0) close(); }} /> {name}
+          </label>)}
+        </div>
+        {help && <small id={`${id}-help`}>{help}</small>}
+      </fieldset>
+    </details>
+  </div>;
 }
 
 export function FilterPanel({ busy, value, onChange, action }: {
   busy: boolean; value: SessionFilters; onChange: (value: SessionFilters) => void; action?: ReactNode;
 }) {
   const { duration, avoid, countries: selectedCountries, languages: selectedLanguages, countriesRequired, languagesRequired } = value;
-  const active = Number(selectedCountries.length > 0) + Number(selectedLanguages.length > 0);
+  const dirty = !!(duration || avoid || selectedCountries.length || selectedLanguages.length);
 
-  return <>
-    <fieldset className="session-ticket" disabled={busy} aria-label="Réglages rapides">
-      <label>Durée maximale
-        <select value={duration} onChange={(event) => onChange({ ...value, duration: event.target.value })}>
-          <option value="">Peu importe</option>
-          {durations.map(([minutes, label]) => <option key={minutes} value={minutes}>{label}</option>)}
-        </select>
-      </label>
-      <label>Éviter plutôt…
-        <select value={avoid} onChange={(event) => onChange({ ...value, avoid: event.target.value })} aria-describedby="avoid-help">
-          <option value="">Aucune ambiance</option>
-          {moodOrder.filter((key) => key !== "surprise").map((key) => <option key={key} value={key}>
-            {key === "immersion" ? "Immersif" : moods[key]}
-          </option>)}
-        </select>
-        <small id="avoid-help">Préférence souple</small>
-      </label>
-    </fieldset>
-    {action}
-    <details className="filters">
-      <summary>
-        Affiner ma séance{active > 0 && <span className="filter-count"> · {active} {active === 1 ? "critère actif" : "critères actifs"}</span>}
-        {selectedCountries.length > 0 && <span className="filter-summary">{countriesRequired ? "Pays obligatoires" : "Pays préférés"} · {selectedCountries.map((code) => countries[code]).join(", ")}</span>}
-        {selectedLanguages.length > 0 && <span className="filter-summary">{languagesRequired ? "Langues obligatoires" : "Langues préférées"} · {selectedLanguages.map((code) => languages[code]).join(", ")}</span>}
-      </summary>
-      <div className="filter-body">
-        <p>Les pays désignent les pays de production. Vos choix sont des préférences par défaut. S’ils sont obligatoires, un seul choix par champ doit correspondre.</p>
-        <div className="geography">
-          <FilterChoices label="Pays du cinéma" all="Tous les pays" requiredLabel="Uniquement les pays sélectionnés"
-            preferenceHelp="D’autres pays restent possibles." options={countries}
-            selected={selectedCountries} required={countriesRequired} busy={busy}
-            onSelect={(selected) => onChange({ ...value, countries: selected, countriesRequired: !!selected.length && countriesRequired })}
-            onRequire={(required) => onChange({ ...value, countriesRequired: required })} />
-          <FilterChoices label="Langue originale" all="Toutes les langues" requiredLabel="Uniquement les langues sélectionnées"
-            preferenceHelp="D’autres langues restent possibles." options={languages}
-            selected={selectedLanguages} required={languagesRequired} busy={busy}
-            onSelect={(selected) => onChange({ ...value, languages: selected, languagesRequired: !!selected.length && languagesRequired })}
-            onRequire={(required) => onChange({ ...value, languagesRequired: required })} />
-        </div>
-        <div className="filter-footer">
-          <button type="button" className="button button-quiet filter-reset" disabled={busy}
-            onClick={() => onChange(defaultFilters)}>Réinitialiser les critères</button>
-          {action}
-        </div>
-      </div>
-    </details>
-  </>;
+  return <div className="cinema-controls" role="group" aria-label="Filtres de séance">
+    <FilterChoices label="Pays du cinéma" all="Tous les pays" requiredLabel="Uniquement ces pays de production" options={countries}
+      selected={selectedCountries} required={countriesRequired} busy={busy}
+      onSelect={(selected) => onChange({ ...value, countries: selected, countriesRequired: !!selected.length && countriesRequired })}
+      onRequire={(required) => onChange({ ...value, countriesRequired: required })} />
+    <FilterChoices label="Langue originale" all="Toutes les langues" requiredLabel="Uniquement ces langues originales" options={languages}
+      selected={selectedLanguages} required={languagesRequired} busy={busy}
+      onSelect={(selected) => onChange({ ...value, languages: selected, languagesRequired: !!selected.length && languagesRequired })}
+      onRequire={(required) => onChange({ ...value, languagesRequired: required })} />
+    <SingleFilter label="Durée maximale" options={durationOptions} value={duration} busy={busy}
+      onChange={(duration) => onChange({ ...value, duration })} />
+    <SingleFilter label="Ambiance à éviter" options={avoidOptions} value={avoid} busy={busy}
+      help="Préférence souple" onChange={(avoid) => onChange({ ...value, avoid })} />
+    <div className="ticket-submit">
+      {action}
+      <button type="button" className="text-action" aria-disabled={busy || !dirty}
+        onClick={() => { if (!busy && dirty) onChange(defaultFilters); }}>Réinitialiser les critères</button>
+    </div>
+  </div>;
 }

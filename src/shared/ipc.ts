@@ -41,6 +41,7 @@ export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
 export const ipc = {
   collection: { channel: "cinema:collection", request: z.tuple([]), response: reply(z.array(feedbackEntrySchema)) },
+  deferViewing: { channel: "cinema:defer-viewing", request: z.tuple([z.number().int().positive()]), response: reply(z.null()) },
   saveFeedback: { channel: "cinema:feedback", request: z.tuple([feedbackRequestSchema]), response: reply(feedbackEntrySchema.nullable()) },
   enrichment: { channel: "profile:enrichment", request: z.tuple([]), response: reply(enrichmentSchema) },
   summary: { channel: "profile:summary", request: z.tuple([]), response: reply(summarySchema) },

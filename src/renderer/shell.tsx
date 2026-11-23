@@ -13,8 +13,8 @@ function Credits({ className }: { className: string }) {
   </footer>;
 }
 
-export function AppShell({ page, navigate, status, children }: {
-  page: Page; navigate: (page: Page) => void; status: string; children: ReactNode;
+export function AppShell({ page, navigate, status, ratingCount = 0, children }: {
+  page: Page; navigate: (page: Page) => void; status: string; ratingCount?: number; children: ReactNode;
 }) {
   return <div className="shell">
     <aside className="sidebar">
@@ -23,6 +23,7 @@ export function AppShell({ page, navigate, status, children }: {
         {pages.map(([id, name, icon]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined}
           onClick={() => navigate(id)}>
           <span aria-hidden="true">{icon}</span>{name}
+          {id === "collection" && ratingCount > 0 && <small className="rating-count" aria-label={`${ratingCount} à noter`}>{ratingCount}</small>}
         </button>)}
       </nav>
       <div className="sidebar-footer">

@@ -3,6 +3,9 @@ import { ipc, type DesktopApi } from "../shared/ipc";
 
 const api: DesktopApi = {
   collection: async () => ipc.collection.response.parse(await ipcRenderer.invoke(ipc.collection.channel)),
+  deferViewing: async (...args) => ipc.deferViewing.response.parse(await ipcRenderer.invoke(
+    ipc.deferViewing.channel, ...ipc.deferViewing.request.parse(args),
+  )),
   saveFeedback: async (...args) => ipc.saveFeedback.response.parse(await ipcRenderer.invoke(
     ipc.saveFeedback.channel, ...ipc.saveFeedback.request.parse(args),
   )),
