@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ipc } from "../src/shared/ipc";
 import { recommendationSchema } from "../src/shared/recommendation";
-import { MoodSelector, moodOrder } from "../src/renderer/controls";
-import { readCriteria } from "../src/renderer/criteria";
+import { FilterPanel, MoodSelector, moodOrder } from "../src/renderer/controls";
+import { defaultFilters, durations, readCriteria } from "../src/renderer/criteria";
 import { FilmActions } from "../src/renderer/feedback";
 import { Results } from "../src/renderer/results";
 import { AppShell } from "../src/renderer/shell";
@@ -17,23 +17,59 @@ describe("Interface Neon Underground", () => {
     expect(html).toMatch(/checked="" value="strange"/);
   });
 
-  it("valide et sérialise les filtres de préférence et les contraintes séparément", () => {
-    const form = new FormData();
-    for (const [key, value] of Object.entries({
-      preferredCountries: "fr, FR", requiredCountries: "es", preferredLanguages: "EN, ja",
-      requiredLanguages: "FR", duration: "110", energy: "low", avoid: "tension",
-    })) form.set(key, value);
-    const parsed = readCriteria(form, "laugh");
-    expect(parsed).toMatchObject({ success: true, data: {
-      mood: "laugh", preferredCountries: ["FR"], requiredCountries: ["ES"],
-      preferredLanguages: ["en", "ja"], requiredLanguages: ["fr"], maxMinutes: 110, energy: "low", avoid: "tension",
-    } });
-    expect(ipc.recommend.request.safeParse([parsed.data, false]).success).toBe(true);
-    form.set("requiredCountries", "Espagne");
-    expect(readCriteria(form, "laugh").success).toBe(false);
-    expect(readCriteria(new FormData(), "surprise")).toMatchObject({ success: true, data: {
-      requiredCountries: [], requiredLanguages: [], maxMinutes: undefined,
-    } });
+  it.each(durations)("convertit la durée %i vers un plafond en minutes", (minutes, label) => {
+    const html = renderToStaticMarkup(createElement(FilterPanel, { value: defaultFilters, busy: false, onChange() {} }));
+    expect(html).toContain(`value="${minutes}">${label}`);
+    expect(readCriteria({ ...defaultFilters, duration: String(minutes) }, "laugh").data?.maxMinutes).toBe(minutes);
+  });
+
+  it("laisse la séance sans restriction par défaut et ne transmet pas d’énergie", () => {
+    expect(readCriteria(defaultFilters, "surprise").data).toEqual({
+      mood: "surprise", maxMinutes: undefined, avoid: undefined,
+      preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
+    });
+    expect(readCriteria({ ...defaultFilters, duration: "110" }, "surprise").success).toBe(false);
+  });
+
+  it("sérialise plusieurs pays et langues dans leurs champs respectifs et garde les choix entre recherches", () => {
+    const selection = { ...defaultFilters, countries: ["FR", "ES"], languages: ["en", "ja"], duration: "120", avoid: "tension" };
+    const preferred = readCriteria(selection, "laugh");
+    expect(preferred.data).toMatchObject({
+      preferredCountries: ["FR", "ES"], requiredCountries: [],
+      preferredLanguages: ["en", "ja"], requiredLanguages: [], maxMinutes: 120, avoid: "tension",
+    });
+    const required = readCriteria({ ...selection, countriesRequired: true, languagesRequired: true }, "laugh");
+    expect(required.data).toMatchObject({
+      preferredCountries: [], requiredCountries: ["FR", "ES"],
+      preferredLanguages: [], requiredLanguages: ["en", "ja"],
+    });
+    expect(ipc.recommend.request.safeParse([required.data, false]).success).toBe(true);
+    expect(readCriteria(selection, "laugh").data).toEqual(preferred.data);
+  });
+
+  it("intègre France et Espagne à la sélection unique et affiche le résumé des critères", () => {
+    const html = renderToStaticMarkup(createElement(FilterPanel, {
+      value: { ...defaultFilters, countries: ["FR", "ES"], countriesRequired: true }, busy: false, onChange() {},
+    }));
+    expect(html).toContain("1 critère actif");
+    expect(html).toContain("Pays obligatoires · France, Espagne");
+    expect(html.match(/<input[^>]+checked=""\/>/g)).toHaveLength(3);
+    expect(html.match(/>France<\/label>/g)).toHaveLength(1);
+    expect(html.match(/>Espagne<\/label>/g)).toHaveLength(1);
+    expect(html).toContain("Réinitialiser les critères");
+    expect(html).not.toContain("Énergie disponible");
+  });
+
+  it("indique que choisir l’Argentine comme préférence laisse les autres pays possibles", () => {
+    const html = renderToStaticMarkup(createElement(FilterPanel, {
+      value: { ...defaultFilters, countries: ["AR"] }, busy: false, onChange() {},
+    }));
+    expect(html).toContain("Pays préférés · Argentine");
+    expect(html).toContain("Uniquement les pays sélectionnés");
+    expect(html).toContain("D’autres pays restent possibles.");
+    expect(readCriteria({ ...defaultFilters, countries: ["AR"] }, "laugh").data).toMatchObject({
+      preferredCountries: ["AR"], requiredCountries: [],
+    });
   });
 
   it("affiche les résultats avec les raisons et avertissements du moteur", () => {
