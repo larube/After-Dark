@@ -235,14 +235,31 @@ describe("intégration TMDB et SQLite", () => {
     expect(await findTonight(database.db, criteria, async () => unauthorized, now)).toMatchObject({ connection: "unauthorized", status: "empty" });
   });
 
+  it("plafonne à deux les résultats du flux pré-1970, sans réduire le nombre de candidats modernes", async () => {
+    const client = new TmdbClient("test-token", vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      const end = url.searchParams.get("primary_release_date.lte");
+      const offset = end === "1949-12-31" ? 100 : end === "1979-12-31" ? 200
+        : url.searchParams.has("vote_count.lte") ? 300 : 400;
+      return mockResponse({ results: Array.from({ length: 20 }, (_, index) => ({ id: offset + index, title: "Film" })) });
+    }), () => now);
+    const ids = await client.discover(criteria, 0);
+    expect(ids.filter((id) => id < 200)).toEqual([100, 101]);
+    expect(ids.filter((id) => id >= 200)).toHaveLength(60);
+    expect(ids.slice(0, 18).filter((id) => id < 200)).toHaveLength(2);
+  });
+
   it("varie les ères et distingue paramètres d’origine et de langue pour la recherche", () => {
     const queries = discoveryQueries({ ...criteria, requiredCountries: ["ES"], requiredLanguages: ["ja"] }, 4, 2026);
-    expect(queries[0]).toMatchObject({ page: "2", with_original_language: "ja" });
-    expect(queries[1]).toMatchObject({ "primary_release_date.gte": "2005-01-01" });
-    expect(queries[3]).toMatchObject({ "primary_release_date.gte": "1900-01-01", "primary_release_date.lte": "1949-12-31",
+    expect(queries[0]).toMatchObject({ page: "1", with_original_language: "ja", "primary_release_date.gte": "1970-01-01" });
+    expect(queries[1]).toMatchObject({ "primary_release_date.gte": "2010-01-01" });
+    expect(queries[3]).toMatchObject({ "primary_release_date.gte": "1950-01-01", "primary_release_date.lte": "1959-12-31",
       "vote_count.gte": "35", with_original_language: "ja" });
-    expect([1, 2, 3].map((round) => discoveryQueries(criteria, round, 2026)[3]["primary_release_date.gte"]))
-      .toEqual(["1950-01-01", "1960-01-01", "1970-01-01"]);
+    expect([0, 4, 8].map((round) => discoveryQueries(criteria, round, 2026)[3]["primary_release_date.gte"]))
+      .toEqual(["1900-01-01", "1950-01-01", "1960-01-01"]);
+    expect([0, 1, 2, 3, 4, 5].map((round) => discoveryQueries(criteria, round, 2026)[1]["primary_release_date.gte"]))
+      .toEqual(["1970-01-01", "1980-01-01", "1990-01-01", "2000-01-01", "2010-01-01", "2020-01-01"]);
+    expect(discoveryQueries(criteria, 1, 2026)).toHaveLength(3);
     expect(queries[2]).toMatchObject({ with_origin_country: "ES", with_original_language: "ja" });
   });
 });

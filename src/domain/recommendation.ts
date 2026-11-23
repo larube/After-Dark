@@ -1,5 +1,6 @@
 import type { Criteria, Metadata, Recommendation } from "../shared/recommendation";
 import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
+import { decadeOf, tonightDefaults, type TonightPreferences } from "./tonight-preferences";
 import { normalizeTitle } from "./ratings";
 
 import { affinityDetails, buildAffinity, catalogueFrequency, features, type AffinityModel } from "./affinity";
@@ -7,7 +8,7 @@ export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
 
 export const legacyEngineVersion = "1.3.0";
 export const engineVersion = "1.4.0";
-export type RankingPolicy = "legacy" | "relevance";
+export type RankingPolicy = "legacy" | "relevance-initial" | "relevance";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
   dismissed?: boolean;
@@ -68,7 +69,7 @@ function reputationContribution(reputation: Metadata["reputation"]) {
   return Math.max(-3, Math.min(3, 1.5 * adjusted));
 }
 
-function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: AffinityModel, ranking: RankingPolicy, frequency?: ReturnType<typeof catalogueFrequency>) {
+function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: AffinityModel, ranking: RankingPolicy, preferences: TonightPreferences, frequency?: ReturnType<typeof catalogueFrequency>) {
   const { metadata } = film;
   const affinity = affinityDetails(film, traits, model, frequency);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
@@ -78,7 +79,14 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   const duration = metadata.minutes;
   const energy = criteria.energy === "low" && duration !== undefined ? duration <= 100 ? 0.7 : duration > 135 ? -0.7 : 0 : 0;
   const exploration = metadata.popularity === undefined ? 0 : 1 / (1 + metadata.popularity / 10);
-  const reputation = ranking === "relevance" ? reputationContribution(metadata.reputation) : 0;
+  const reputation = ranking === "legacy" ? 0 : reputationContribution(metadata.reputation);
+  const period = ranking === "relevance" ? preferences.period : null;
+  const older = !!period && film.year !== null && film.year > 0 && film.year < period.fromYear;
+  const periodMismatch = older && affinity.score < period.minimumAffinity &&
+    !((mood?.weight ?? 0) >= 2 && reputation >= period.minimumReputationWithMood);
+  const animation = ranking === "relevance" && metadata.genres.some((genre) => normalizeTitle(genre) === "animation");
+  // Keep the evidence gate on the original scale. Soft adjustments affect ordering.
+  const reputationWeight = ranking === "relevance" && reputation > 0 ? 0.65 : 1;
   const reasons = [
     ...(metadata.reputation && reputation >= 1.5 ? [`Avis TMDB favorables, pondérés par le nombre de votes (${metadata.reputation.count}).`] : []),
     ...(ranking === "legacy" && criteria.mood === "surprise" && exploration >= 0.5 ? ["Popularité TMDB modérée, favorisée en mode Surprends-moi."] : []),
@@ -94,18 +102,24 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
     ...(energy < 0 ? ["Séance longue pour une soirée à faible énergie."] : []),
     ...(affinity.negative.length ? [`Traits associés aussi à des appréciations négatives : ${affinity.negative.join(", ")}.`] : []),
   ];
-  const contributions = {
+  const evidence = {
     affinity: affinity.score * 1.6, mood: (mood?.weight ?? 0) * 1.4,
     country: Number(preferredCountry) * 1.4, language: Number(preferredLanguage) * 1.2,
     energy, avoided: -(avoided?.weight ?? 0) * 1.5,
     exploration: ranking === "legacy" ? exploration * (criteria.mood === "surprise" ? 1.5 : 0.5) : 0,
     reputation,
   };
+  const evidenceScore = Object.values(evidence).reduce((total, value) => total + value, 0);
+  const contributions = {
+    ...evidence, reputation: reputation * reputationWeight,
+    period: older ? -period.penalty : 0,
+    animation: animation && preferences.animationPenalty ? -preferences.animationPenalty : 0,
+  };
   const score = Object.values(contributions).reduce((total, value) => total + value, 0);
   const convincing = ranking === "legacy" ||
-    (score >= 1.5 && (affinity.score >= 1 || (mood?.weight ?? 0) >= 2 || reputation >= 1.5));
+    (evidenceScore >= 1.5 && (affinity.score >= 1 || (mood?.weight ?? 0) >= 2 || reputation >= 1.5));
   return {
-    convincing,
+    convincing, older, periodMismatch, decade: decadeOf(film.year),
     film, affinity: affinity.score, exploration, reasons, warnings,
     details: { affinity, contributions, mood, avoided },
     score,
@@ -123,38 +137,53 @@ function diversityPenalty(candidate: Ranked, selected: Ranked[]) {
 }
 
 type Category = Recommendation["films"][number]["category"];
+type Trace = {
+  base: Ranked[];
+  weak: Set<number>;
+  periodMismatch: Set<number>;
+  periodLimit: Set<number>;
+  steps: Step[];
+  candidates: ReturnType<typeof candidateEligibility>[];
+};
 type Step = {
   category: Category;
-  ranking: { id: number; rank: number; bonus: number; penalty: number; score: number }[];
+  ranking: { id: number; rank: number; bonus: number; penalty: number; decadePenalty: number; score: number }[];
 };
 
 function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy,
   model: AffinityModel,
   rankingPolicy: RankingPolicy,
-  trace?: { base: Ranked[]; weak: Set<number>; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] },
+  preferences: TonightPreferences,
+  trace?: Trace,
 ) {
   const traits = buildAffinity(signals, undefined, model !== "current");
   const frequency = model === "rarity" || model === "hybrid" ? catalogueFrequency(catalogue) : undefined;
   const candidates = catalogue.map((film) => candidateEligibility(film, criteria, policy));
   if (trace) trace.candidates = candidates;
   const eligibleFilms = catalogue.filter((film, index) => !Object.values(candidates[index].causes).some(Boolean));
-  const scored = eligibleFilms.map((film) => scoreFilm(film, criteria, traits, model, rankingPolicy, frequency));
+  const scored = eligibleFilms.map((film) => scoreFilm(film, criteria, traits, model, rankingPolicy, preferences, frequency));
+  const selectable = scored.filter(({ convincing, periodMismatch }) => convincing && !periodMismatch);
   const available = scored.filter(({ film }) => !recent.has(film.id));
-  let ranked = available.filter(({ convincing }) => convincing);
+  let ranked = selectable.filter(({ film }) => !recent.has(film.id));
   if (trace) {
     trace.base = [...available].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
+    trace.periodMismatch = new Set(scored.filter(({ periodMismatch }) => periodMismatch).map(({ film }) => film.id));
     trace.weak = new Set(scored.filter(({ convincing }) => !convincing).map(({ film }) => film.id));
   }
   const selected: Ranked[] = [];
   const films: Recommendation["films"] = [];
   const categories = ["safe", "gem", "wildcard", "safe", "gem"] as const;
+  const olderLimit = rankingPolicy === "relevance" ? preferences.period?.maxExceptions ?? Infinity : Infinity;
+  let olderSelected = 0;
   for (const category of categories) {
-    const ranking = ranked.map((candidate) => {
+    const ranking = ranked.filter(({ older }) => !older || olderSelected < olderLimit).map((candidate) => {
+      const decadePenalty = rankingPolicy === "relevance" && candidate.decade !== null &&
+        selected.some(({ decade }) => decade === candidate.decade) ? preferences.repeatedDecadePenalty : 0;
       const penalty = diversityPenalty(candidate, selected) * (rankingPolicy === "legacy" ? 1 : 0.2);
-      const bonus = rankingPolicy === "relevance" ? 0 : category === "gem" ? candidate.exploration * 2
+      const bonus = rankingPolicy !== "legacy" ? 0 : category === "gem" ? candidate.exploration * 2
         : category === "wildcard" ? -Math.max(0, candidate.affinity) * 0.6 : candidate.affinity;
-      return { candidate, penalty, bonus, score: candidate.score - penalty + bonus };
+      return { candidate, penalty: penalty + decadePenalty, decadePenalty, bonus, score: candidate.score - (penalty + decadePenalty) + bonus };
     }).sort((a, b) => b.score - a.score || a.candidate.film.id - b.candidate.film.id);
     if (trace && ranking.length) trace.steps.push({
       category, ranking: ranking.map(({ candidate, ...value }, index) => ({ id: candidate.film.id, rank: index + 1, ...value })),
@@ -164,6 +193,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
     const { candidate } = winner;
     ranked = ranking.map((row) => row.candidate);
     selected.push(candidate);
+    olderSelected += Number(candidate.older);
     const { status: _status, dismissed: _dismissed, ...film } = candidate.film;
     void _status;
     void _dismissed;
@@ -173,25 +203,33 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
     if (!reasons.length) reasons.push("Film disponible dans le catalogue et compatible avec les filtres obligatoires.");
     films.push({ ...film, category, reasons, warnings: candidate.warnings });
   }
+  if (trace && olderSelected >= olderLimit) {
+    const selectedIds = new Set(selected.map(({ film }) => film.id));
+    trace.periodLimit = new Set(selectable.filter(({ older, film }) => older && !recent.has(film.id) && !selectedIds.has(film.id))
+      .map(({ film }) => film.id));
+  }
   const status = films.length ? "ready" : !catalogue.some((film) => film.status !== "seen")
-    ? "empty" : scored.some(({ convincing }) => convincing) ? "exhausted" : "no-match";
+    ? "empty" : selectable.some(({ older }) => !older || olderLimit > 0) ? "exhausted" : "no-match";
   return { films, personalized: selected.some((candidate) => candidate.affinity !== 0), status } as const;
 }
 
 export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance") {
-  return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking);
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance",
+  preferences: TonightPreferences = tonightDefaults) {
+  return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences);
 }
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance") {
-  const trace: { base: Ranked[]; weak: Set<number>; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] } = { base: [], weak: new Set(), steps: [], candidates: [] };
-  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, trace);
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance",
+  preferences: TonightPreferences = tonightDefaults) {
+  const trace: Trace = { base: [], weak: new Set(), periodMismatch: new Set(), periodLimit: new Set(), steps: [], candidates: [] };
+  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, trace);
   return {
     result, steps: trace.steps,
     exclusions: catalogue.map((film, index) => {
       const { causes, quality } = trace.candidates[index];
-      const allCauses = { ...causes, recent: recent.has(film.id), weakEvidence: trace.weak.has(film.id) };
+      const allCauses = { ...causes, recent: recent.has(film.id), weakEvidence: trace.weak.has(film.id),
+        periodMismatch: trace.periodMismatch.has(film.id), periodLimit: trace.periodLimit.has(film.id) };
       return { id: film.id, quality, causes: allCauses, excluded: Object.values(allCauses).some(Boolean) };
     }),
     base: trace.base.map(({ film, score, details, exploration, reasons, warnings }, index) => ({

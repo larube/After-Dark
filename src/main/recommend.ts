@@ -4,6 +4,7 @@ import { z } from "zod";
 import { franchiseExclusions } from "../db/franchises";
 import type { CinemaDatabase } from "../db/client";
 import { cacheFilm, readCatalogue, readHistory, saveRecommendation } from "../db/recommendations";
+import type { TonightPreferences } from "../domain/tonight-preferences";
 import { recommend } from "../domain/recommendation";
 import type { Criteria, Recommendation } from "../shared/recommendation";
 import { TmdbClient, TmdbError } from "./tmdb";
@@ -37,6 +38,7 @@ function isFresh(metadata: Record<string, unknown> | null, now: Date) {
 
 export async function findTonight(
   db: CinemaDatabase, criteria: Criteria, getClient: () => Promise<TmdbClient | undefined>, now = new Date(), allowRecent = false,
+  preferences?: TonightPreferences,
 ): Promise<Recommendation> {
   let state = await readCatalogue(db);
   const history = await readHistory(db);
@@ -70,7 +72,7 @@ export async function findTonight(
   state = await readCatalogue(db);
   const blocked = await franchiseExclusions(db, state.movies);
   const result = { ...recommend(state.catalogue, state.signals, criteria, allowRecent ? new Set() : history.recent,
-    { referenceDate: now.toISOString().slice(0, 10), excludedIds: blocked }), connection };
+    { referenceDate: now.toISOString().slice(0, 10), excludedIds: blocked }, "current", "relevance", preferences), connection };
   await saveRecommendation(db, criteria, result, now.toISOString());
   return result;
 }

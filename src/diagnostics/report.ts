@@ -1,3 +1,4 @@
+import { decadeOf, tonightDefaults, type TonightPreferences } from "../domain/tonight-preferences";
 import { createHash } from "node:crypto";
 import { calendarDate, contentTypes, todayUtc, type CandidatePolicy } from "../domain/candidate-quality";
 import { z } from "zod";
@@ -82,7 +83,7 @@ function diversity(films: ReturnType<typeof recommend>["films"]) {
 
 const naiveModels = ["stable-id", "hashed-id", "popularity"] as const;
 
-function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy, model: AffinityModel | typeof naiveModels[number] = "current", ranking: RankingPolicy = "relevance") {
+function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy, model: AffinityModel | typeof naiveModels[number] = "current", ranking: RankingPolicy = "relevance", preferences: TonightPreferences = tonightDefaults) {
   const targets = signals.flatMap(({ film, ratings }) => {
     const numeric = ratings.flatMap(({ numeric }) => numeric === undefined ? [] : [numeric]);
     if (!numeric.length) return [];
@@ -96,7 +97,7 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
     const { candidates, training } = holdoutInputs(catalogue, signals, heldOut);
     const history = new Set([...recent].filter((id) => !heldOut.has(id)));
     const affinityModel = affinityModels.find((variant) => variant === model);
-    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy, affinityModel, ranking);
+    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy, affinityModel, ranking, preferences);
     const popularity = new Map(candidates.map((film) => [film.id, film.metadata.popularity ?? -Infinity]));
     const shuffled = model === "hashed-id" ? new Map(candidates.map(({ id }) => [id, hash(["naive-order-v1", id])])) : undefined;
     const order = affinityModel ? undefined : trace.base.map(({ id }) => id)
@@ -129,16 +130,27 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
   };
 }
 
+function decadeDistribution(films: { year: number | null }[]) {
+  const counts: Record<string, number> = {};
+  for (const { year } of films) {
+    const bucket = String(decadeOf(year) ?? "unknown");
+    counts[bucket] = (counts[bucket] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export function createReport(raw: unknown, {
-  referenceDate = todayUtc(), mode = "classic", affinityModel = "current", ranking = mode === "legacy" ? "legacy" : "relevance",
-}: Partial<CandidatePolicy> & { affinityModel?: AffinityModel; ranking?: RankingPolicy } = {}) {
+  referenceDate = todayUtc(), mode = "classic", affinityModel = "current", ranking = mode === "legacy" ? "legacy" : "relevance", preferences = tonightDefaults,
+}: Partial<CandidatePolicy> & { affinityModel?: AffinityModel; ranking?: RankingPolicy; preferences?: TonightPreferences } = {}) {
   if (calendarDate(referenceDate) !== referenceDate) throw new Error("Date de référence invalide. Format attendu AAAA-MM-JJ.");
   const policy = { referenceDate, mode } as const;
   const { input, catalogue, signals, recent } = prepareInput(raw);
+  const filmsById = new Map(catalogue.map((film) => [film.id, film]));
   const popularity = catalogue.flatMap(({ metadata }) => metadata.popularity === undefined ? [] : [metadata.popularity]).sort((a, b) => a - b);
   const median = popularity.length ? (popularity[Math.floor((popularity.length - 1) / 2)] + popularity[Math.floor(popularity.length / 2)]) / 2 : null;
   return {
-    formatVersion, engineVersion: ranking === "legacy" ? (mode === "legacy" ? "1.1.0" : legacyEngineVersion) : engineVersion, policy,
+    formatVersion, engineVersion: ranking === "legacy" ? (mode === "legacy" ? "1.1.0" : legacyEngineVersion) : ranking === "relevance-initial" ? "1.4.0-pr21-initial" : engineVersion, policy,
+    ...(ranking === "relevance" ? { preferences } : {}),
     ...(affinityModel === "current" ? {} : { affinityModel }),
     fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, referenceDate }),
     catalogue: {
@@ -155,7 +167,7 @@ export function createReport(raw: unknown, {
       },
     },
     scenarios: scenarios.map(({ id, criteria }) => {
-      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, affinityModel, ranking);
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, affinityModel, ranking, preferences);
       const qualityById = new Map(trace.exclusions.map(({ id, quality }) => [id, quality]));
       const counts = { dismissed: 0, blocked: 0, weakEvidence: 0, seen: 0, country: 0, language: 0, duration: 0, content: 0, recent: 0 };
       let eligible = 0;
@@ -189,6 +201,11 @@ export function createReport(raw: unknown, {
         content: { distribution, uncertain: distribution.unknown, exclusionsByType, exclusionsByReason, retainedUnknown,
           unknownShare: eligible ? retainedUnknown.length / eligible : null },
         removedByRecent: eligible - trace.base.length,
+        decades: {
+          candidates: decadeDistribution(trace.base.map(({ id }) => filmsById.get(id)!)),
+          selectable: decadeDistribution(trace.exclusions.filter(({ causes }) => !Object.entries(causes).some(([cause, value]) => cause !== "periodLimit" && value)).map(({ id }) => filmsById.get(id)!)),
+          selected: decadeDistribution(trace.result.films),
+        },
         ...trace, diversity: diversity(trace.result.films),
         discovery: trace.result.films.map(({ id, metadata }) => ({
           id, type: qualityById.get(id)!.category, popularity: metadata.popularity ?? null,
@@ -196,7 +213,7 @@ export function createReport(raw: unknown, {
         })),
       };
     }),
-    holdout: evaluate(catalogue, signals, recent, policy, affinityModel, ranking),
+    holdout: evaluate(catalogue, signals, recent, policy, affinityModel, ranking, preferences),
   };
 }
 
@@ -306,6 +323,7 @@ export function compareReports(baseline: Report, current: Report) {
           const diff = pair(describe(before, id), describe(after, id));
           return changed(diff) ? [{ id, ...diff }] : [];
         }),
+        decades: pair(prior.decades, scenario.decades),
         diversity: pair(prior.diversity, scenario.diversity),
         discovery: pair(prior.discovery, scenario.discovery),
         content: pair(prior.content, scenario.content),

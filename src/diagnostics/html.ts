@@ -9,7 +9,7 @@ const details = (label: string, content: string) => `<details><summary>${escape(
 const json = (data: unknown) => `<pre>${escape(JSON.stringify(data, null, 2))}</pre>`;
 
 const categoryNames = { safe: "Valeur sûre", gem: "Pépite", wildcard: "Wildcard" };
-const causeNames = { seen: "Déjà vu", dismissed: "Refus explicite", blocked: "Exclusion du profil", weakEvidence: "Indices insuffisants", country: "Pays", language: "Langue", duration: "Durée", content: "Politique de séance", recent: "Historique récent" };
+const causeNames = { seen: "Déjà vu", dismissed: "Refus explicite", blocked: "Exclusion du profil", weakEvidence: "Indices insuffisants", periodMismatch: "Exception de période insuffisamment étayée", periodLimit: "Limite d’exceptions de période", country: "Pays", language: "Langue", duration: "Durée", content: "Politique de séance", recent: "Historique récent" };
 const scenarioNames: Record<string, string> = {
   ...moods, duration: "Durée maximale", country: "Pays de production", language: "Langue originale",
   avoid: "Ambiance à éviter", combined: "Contraintes combinées",
@@ -20,7 +20,7 @@ const typeNames: Record<string, string> = {
 };
 const components = {
   affinity: "Affinité", mood: "Humeur", country: "Pays préféré", language: "Langue préférée",
-  energy: "Énergie", avoided: "Ambiance évitée", exploration: "Exploration", reputation: "Réputation TMDB",
+  energy: "Énergie", avoided: "Ambiance évitée", exploration: "Exploration", reputation: "Réputation TMDB", period: "Période", animation: "Animation",
 } as const;
 
 export function renderReport(report: Report, comparison?: ReturnType<typeof compareReports>) {
@@ -46,6 +46,11 @@ export function renderReport(report: Report, comparison?: ReturnType<typeof comp
     return `<section id="s-${escape(scenario.id)}"><h2>${escape(scenarioNames[scenario.id])}</h2>
       <p>${report.catalogue.total} films · ${scenario.eligibleBeforePolicy} admissibles avant la politique · ${scenario.eligible} après la politique et avant l’historique · ${scenario.removedByRecent} écartés à cette étape · ${selected.length} proposés</p>
       ${details("Critères", json(scenario.criteria))}
+      ${table(["Décennie", "Candidats après historique", "Admissibles avant composition", "Proposés"],
+        Object.entries(scenario.decades.candidates).map(([decade, count]) => [
+          decade === "unknown" ? "Inconnue" : decade, String(count),
+          String(scenario.decades.selectable[decade] ?? 0), String(scenario.decades.selected[decade] ?? 0),
+        ]))}
       ${table(["Choix", "Film", "Catégorie", "Bonus", "Pénalité", "Score final", "Type de contenu", "Justifications de production"], selected)}
       ${details("Décomposition des scores avant diversité", table(["Rang", "Film", "Base", ...Object.values(components)], base))}
       ${details("Qualité des candidats",

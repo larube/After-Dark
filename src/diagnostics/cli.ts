@@ -60,18 +60,18 @@ const within = (root: string, path: string) => {
   return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\"));
 };
 
-export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean; compareRanking?: boolean; compareAffinity?: boolean; affinity?: string }) {
-  if ([options.baseline, options.comparePolicy, options.compareRanking].filter(Boolean).length > 1) {
-    throw new Error("Choisissez une seule comparaison : --baseline, --compare-policy ou --compare-ranking.");
+export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean; compareRanking?: boolean; comparePr21?: boolean; compareAffinity?: boolean; affinity?: string }) {
+  if ([options.baseline, options.comparePolicy, options.compareRanking, options.comparePr21].filter(Boolean).length > 1) {
+    throw new Error("Choisissez une seule comparaison : --baseline, --compare-policy --compare-ranking ou --compare-pr21.");
   }
   const affinityModel = affinityModels.find((model) => model === (options.affinity ?? "current"));
   if (!affinityModel) throw new Error("Modèle inconnu : " + options.affinity);
   const input = options.sqlite ? await readLocalDatabase(options.sqlite) : await readJson(options.input!);
   const report = createReport(input, { referenceDate: options.referenceDate, affinityModel, ranking: options.comparePolicy ? "legacy" : "relevance" });
   const baseline = options.baseline ? await readJson(options.baseline) as Report
-    : options.comparePolicy || options.compareRanking ? createReport(input, {
+    : options.comparePolicy || options.compareRanking || options.comparePr21 ? createReport(input, {
       referenceDate: report.policy.referenceDate, mode: options.comparePolicy ? "legacy" : "classic",
-      affinityModel, ranking: "legacy",
+      affinityModel, ranking: options.comparePr21 ? "relevance-initial" : "legacy",
     }) : undefined;
   const comparison = baseline ? compareReports(baseline, report) : undefined;
   const output = resolve(options.output);
@@ -97,7 +97,7 @@ export async function diagnose(options: { input?: string; sqlite?: string; outpu
   const write = (name: string, data: string) => writeFile(join(directory, name), data, { mode: 0o600, flag: "wx" });
   await write("report.json", JSON.stringify(report, null, 2) + "\n");
   await write("report.html", renderReport(report, comparison));
-  if (baseline && (options.comparePolicy || options.compareRanking)) await write("legacy.json", JSON.stringify(baseline, null, 2) + "\n");
+  if (baseline && (options.comparePolicy || options.compareRanking || options.comparePr21)) await write("legacy.json", JSON.stringify(baseline, null, 2) + "\n");
   if (options.compareAffinity) await write("affinity-comparison.json", JSON.stringify(compareAffinityModels(input, report.policy.referenceDate), null, 2) + "\n");
   if (comparison) await write("comparison.json", JSON.stringify(comparison, null, 2) + "\n");
 }

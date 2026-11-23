@@ -48,23 +48,25 @@ export function discoveryQueries(criteria: Criteria, round: number, year: number
     ...(criteria.maxMinutes ? { "with_runtime.lte": String(criteria.maxMinutes) } : {}),
     include_adult: "false",
   };
-  const page = String(1 + Math.floor(round / 3) % 4);
+  const eras = [1970, 1980, 1990, 2000, 2010, 2020];
+  const start = eras[round % eras.length];
+  const page = String(1 + Math.floor(round / eras.length) % 4);
   const moodGenres: Record<string, string> = criteria.mood === "surprise" ? {} : { with_genres: discoveryGenres[criteria.mood] };
-  const era = [[1980, 2004], [2005, 2015], [2016, year]][round % 3];
+
   const base = { ...bounds, ...moodGenres, page, "vote_count.gte": "35" };
   const regions = [...new Set([...criteria.requiredCountries, ...criteria.preferredCountries])];
   const languages = [...new Set([...criteria.requiredLanguages, ...criteria.preferredLanguages])];
-  // Interleaved with modern results within the existing detail-fetch budget.
-  const classicEra = [[1900, 1949], [1950, 1959], [1960, 1969], [1970, 1979]][round % 4];
+  const modernFloor = { "primary_release_date.gte": "1970-01-01" };
+  const classicEra = [[1900, 1949], [1950, 1959], [1960, 1969]][Math.floor(round / 4) % 3];
   return [
-    { ...base, sort_by: "popularity.desc" },
-    { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": era[0] + "-01-01", "primary_release_date.lte": era[1] + "-12-31" },
-    { ...bounds, page, sort_by: "vote_average.desc", "vote_count.gte": "25", "vote_count.lte": "1500",
+    { ...base, ...modernFloor, sort_by: "popularity.desc" },
+    { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": start + "-01-01", "primary_release_date.lte": (start === 2020 ? year : start + 9) + "-12-31" },
+    { ...bounds, ...modernFloor, page, sort_by: "vote_average.desc", "vote_count.gte": "25", "vote_count.lte": "1500",
       ...(regions.length ? { with_origin_country: regions[round % regions.length] } : {}),
       ...(languages.length ? { with_original_language: languages[round % languages.length] } : {}),
     },
-    { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": classicEra[0] + "-01-01",
-      "primary_release_date.lte": classicEra[1] + "-12-31" },
+    ...(round % 4 === 0 ? [{ ...base, page: String(1 + Math.floor(round / 12) % 4), sort_by: "vote_average.desc",
+      "primary_release_date.gte": classicEra[0] + "-01-01", "primary_release_date.lte": classicEra[1] + "-12-31" }] : []),
   ];
 }
 
@@ -132,7 +134,10 @@ export class TmdbClient {
 
   async discover(criteria: Criteria, round: number) {
     const batches = await Promise.all(discoveryQueries(criteria, round, this.now().getUTCFullYear())
-      .map((parameters) => this.list("discover/movie", parameters)));
+      .map(async (parameters, index) => {
+        const films = await this.list("discover/movie", parameters);
+        return index === 3 ? films.slice(0, 2) : films;
+      }));
     const ids = new Set<number>();
     for (let i = 0; i < 20; i++) for (const batch of batches) {
       if (batch[i]) ids.add(batch[i].id);
