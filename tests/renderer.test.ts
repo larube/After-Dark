@@ -104,6 +104,31 @@ describe("Interface Neon Underground", () => {
     expect(html).not.toMatch(/Valeur sûre|Pépite|Wildcard|data-category/);
   });
 
+  it.each([false, true])("place les actions avant les détails avec ou sans franchise (%s)", (withFranchise) => {
+    const film = { id: 1, title: "Cure", year: 1997, category: "safe", metadata: { synopsis: "Le synopsis.", minutes: 111 },
+      reasons: ["Premier indice.", "Deuxième indice."], warnings: [] };
+    const result = recommendationSchema.parse({ connection: "cached", personalized: true, status: "ready", films: [
+      { ...film, ...(withFranchise ? { franchise: { key: "collection:123", name: "Une saga" } } : {}) },
+      { ...film, id: 2, title: "Tesis" },
+    ] });
+    const html = renderToStaticMarkup(createElement(Results, {
+      result, ready: true, loading: false, error: "", repeat() {},
+      filmActions: () => createElement("button", { type: "button" }, "Pas pour moi"),
+    }));
+    const cards = html.match(/<article[\s\S]+?<\/article>/g)!;
+    expect(cards).toHaveLength(2);
+    for (const card of cards) {
+      expect(card).toMatch(/Premier indice.*Pas pour moi.*Pas ce soir.*Détails du film.*Le synopsis.*Deuxième indice/);
+      expect(card).not.toMatch(/<details[^>]* open|Aucune franchise|Pays inconnu/);
+    }
+    expect(cards[0].includes("Franchise · Une saga")).toBe(withFranchise);
+    expect(cards[0].includes("Vérifier la saga sur TMDB")).toBe(!withFranchise);
+    expect(cards[1]).toMatch(/<details class="film-details">.*Vérifier la saga sur TMDB.*<\/details>/);
+    expect(cards[1]).not.toContain("Impossible de vérifier");
+    expect(cards[1]).not.toContain("Franchise");
+    if (withFranchise) expect(cards[0]).toMatch(/Pas ce soir.*Franchise · Une saga/);
+  });
+
   it.each([1, 2, 3, 4, 5, 10])("rend une vedette et les secondaires pour %i film(s), même sans affiche", (count) => {
     const result = recommendationSchema.parse({
       connection: "cached", personalized: true, status: "ready",

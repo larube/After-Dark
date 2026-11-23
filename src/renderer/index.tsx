@@ -149,9 +149,9 @@ function App() {
     </section>}
     <div hidden={page !== "tonight"}>
       <Tonight ready={!!summary && !importing && !saving} onComplete={() => void refreshSummary()}
-        filmActions={(film, loading) => <><FilmActions movieId={film.id} title={film.title}
+        filmActions={(film, loading) => <FilmActions movieId={film.id} title={film.title}
           entry={collection?.find((entry) => entry.movieId === film.id)}
-          disabled={!collection || !!collectionError || importing || saving || loading} save={save} /><FranchisePreferences movieId={film.id} /></>} />
+          disabled={!collection || !!collectionError || importing || saving || loading} save={save} />} />
       <Enrichment progress={enrichment} />
     </div>
     {page === "collection" && <>

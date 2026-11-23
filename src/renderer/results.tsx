@@ -1,5 +1,6 @@
-import { useState, type ReactNode, type Ref } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 import type { Recommendation } from "../shared/recommendation";
+import { FilmFranchise } from "./franchises";
 import { AllocineLink } from "./allocine";
 
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
@@ -18,11 +19,31 @@ const empty = {
   exhausted: ["Propositions récentes épuisées", "Les films compatibles ont déjà été proposés récemment."],
 } as const;
 
-function RecommendationCard({ film, featured, actions, image }: {
-  film: Recommendation["films"][number]; featured: boolean; actions: ReactNode; image?: string;
+function RecommendationCard({ film, actions, image }: {
+  film: Recommendation["films"][number]; actions: ReactNode; image?: string;
 }) {
-  const { title, year, metadata, posterData = image, reasons, warnings } = film;
+  const { title, year, metadata, posterData = image, reasons: [reason, ...otherReasons], warnings } = film;
   const [skipped, setSkipped] = useState(false);
+  const [franchise, setFranchise] = useState(film.franchise);
+  const [verification, setVerification] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const detailsSummary = useRef<HTMLElement>(null);
+  const verifyButton = useRef<HTMLButtonElement>(null);
+
+  async function verifyFranchise() {
+    setVerification("pending");
+    try {
+      const reply = await window.afterDark.franchises(film.id, true);
+      if (!reply.ok) {
+        setVerification("error");
+        return;
+      }
+      if (document.activeElement === verifyButton.current) detailsSummary.current?.focus();
+      setFranchise(reply.data[0]);
+      setVerification("done");
+    } catch {
+      setVerification("error");
+    }
+  }
   return <article className={skipped ? "film-card film-card-skipped" : "film-card"}>
     <div className="poster-mount">
       {posterData ? <img className="poster" src={posterData} alt="" /> :
@@ -31,16 +52,9 @@ function RecommendationCard({ film, featured, actions, image }: {
     <div className="film-copy">
       <div hidden={skipped}>
         <h3>{title}</h3>
-        <p className="film-meta">{[
-          year, metadata.countries.length ? metadata.countries.map((code) => regions.of(code)).join(", ") : "Pays inconnu",
-          metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",
-        ].filter(Boolean).join(" · ")}</p>
-        {metadata.synopsis && (featured ? <p className="synopsis">{metadata.synopsis}</p> :
-          <details className="film-synopsis"><summary>Synopsis</summary><p className="synopsis">{metadata.synopsis}</p></details>)}
-        <AllocineLink title={title} year={year} />
-        <details className="film-reasons" open={featured || undefined}><summary>Pourquoi ce film ?</summary>
-          <ul>{reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
-        </details>
+        {(year || metadata.minutes) && <p className="film-meta">{[year,
+          metadata.minutes ? `${metadata.minutes} min` : undefined].filter(Boolean).join(" · ")}</p>}
+        {reason && <p className="film-reason">{reason}</p>}
         {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
         {actions}
       </div>
@@ -50,6 +64,23 @@ function RecommendationCard({ film, featured, actions, image }: {
         onClick={() => setSkipped(!skipped)}>
         <span aria-hidden="true">{skipped ? "↶" : "–"}</span> {skipped ? "Annuler « Pas ce soir »" : "Pas ce soir"}
       </button>
+      <div hidden={skipped} className="film-secondary">
+        <details className="film-details">
+          <summary ref={detailsSummary}>Détails du film</summary>
+          {metadata.countries.length > 0 && <p className="film-meta">{metadata.countries.map((code) => regions.of(code)).join(", ")}</p>}
+          {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
+          {otherReasons.length > 0 && <ul>{otherReasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
+          <AllocineLink title={title} year={year} />
+          {!franchise && verification !== "done" && <div>
+            <button ref={verifyButton} className="text-action" type="button" aria-disabled={verification === "pending"}
+              onClick={() => { if (verification !== "pending") void verifyFranchise(); }}>
+              {verification === "pending" ? "Vérification en cours…" : "Vérifier la saga sur TMDB"}
+            </button>
+            {verification === "error" && <p role="alert" className="warning">Impossible de vérifier la saga sur TMDB. Réessayer est possible.</p>}
+          </div>}
+        </details>
+        {franchise && <FilmFranchise movieId={film.id} franchise={franchise} />}
+      </div>
     </div>
   </article>;
 }
@@ -72,11 +103,11 @@ export function Results({ headingRef, result, posters, selectionNumber, loading,
       {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3><p>{empty[result.status][1]}</p></div>}
       {result.films.length > 0 && <div className="film-list" key={selectionNumber}>
         <div className="featured">
-          <RecommendationCard key={result.films[0].id} film={result.films[0]} image={posters?.[result.films[0].id]} actions={filmActions(result.films[0], loading)} featured />
+          <RecommendationCard key={result.films[0].id} film={result.films[0]} image={posters?.[result.films[0].id]} actions={filmActions(result.films[0], loading)} />
         </div>
         {result.films.length > 1 && <ol className="alternatives" start={2} aria-label="Propositions suivantes">
           {result.films.slice(1).map((film) => <li key={film.id}>
-            <RecommendationCard film={film} image={posters?.[film.id]} actions={filmActions(film, loading)} featured={false} />
+            <RecommendationCard film={film} image={posters?.[film.id]} actions={filmActions(film, loading)} />
           </li>)}
         </ol>}
       </div>}

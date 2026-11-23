@@ -4,6 +4,7 @@ import { z } from "zod";
 import { franchiseExclusions } from "../db/franchises";
 import type { CinemaDatabase } from "../db/client";
 import { cacheFilm, readCatalogue, readHistory, saveRecommendation } from "../db/recommendations";
+import { filmFranchise } from "../domain/franchises";
 import type { TonightPreferences } from "../domain/tonight-preferences";
 import { tonightDiagnostic, type TonightDiagnostic, type Acquisition } from "../diagnostics/tonight";
 import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
@@ -102,5 +103,10 @@ export async function findTonight(
       console.error("Impossible d’écrire le diagnostic Ce soir.");
     }
   }
-  return result;
+  const movies = new Map(state.movies.map((movie) => [movie.id, movie]));
+  return { ...result, films: result.films.map((film) => {
+    const movie = movies.get(film.id);
+    const franchise = movie && filmFranchise(movie);
+    return franchise ? { ...film, franchise: { key: franchise.key, name: franchise.name } } : film;
+  }) };
 }

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { openDatabase } from "../src/db/client";
 import { discoveryExclusions, generateDiscovery, inspectDiscovery } from "../src/db/discovery";
 import { startLab } from "../src/db/lab";
@@ -12,6 +12,7 @@ import { labProposals, movies } from "../src/db/schema";
 import { compareCalibration, planBlindCalibration } from "../src/diagnostics/calibration";
 import { rankLabModels } from "../src/domain/lab";
 import { filmFranchise } from "../src/domain/franchises";
+import { readFilmFranchises } from "../src/main/franchises";
 import { findTonight } from "../src/main/recommend";
 import { TmdbClient } from "../src/main/tmdb";
 import { metadataSchema, type Criteria } from "../src/shared/recommendation";
@@ -139,6 +140,37 @@ it("conserve les identifiants TMDB de collection et la version intégrale de l�
     expect(filmFranchise((await readCatalogue(db)).movies[0])).toBeUndefined();
   } finally {
     connection.close();
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+it.each(["collection", "none", "error"] as const)("vérifie un film via le canal franchise (%s)", async (outcome) => {
+  const folder = await mkdtemp(join(tmpdir(), "after-dark-verify-franchise-"));
+  const { db, close } = await openDatabase(join(folder, "catalogue.sqlite"), "drizzle");
+  try {
+    const movie = await db.insert(movies).values({ displayTitle: "Film à vérifier", year: 2020, tmdbId: 123 })
+      .returning({ id: movies.id }).get();
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      if (outcome === "error") return new Response(null, { status: 503 });
+      return Response.json({ id: 123, title: "Film à vérifier", release_date: "2020-01-01",
+        belongs_to_collection: outcome === "collection" ? { id: 987, name: "Saga vérifiée" } : null });
+    });
+    const getClient = async () => new TmdbClient("test-token", fetcher);
+    expect(await readFilmFranchises(db, movie.id, false, getClient)).toEqual({ ok: true, data: [] });
+    expect(fetcher).not.toHaveBeenCalled();
+    const result = await readFilmFranchises(db, movie.id, true, getClient);
+    expect(fetcher).toHaveBeenCalledOnce();
+    if (outcome === "error") {
+      expect(result).toEqual({ ok: false, error: "Impossible de vérifier cette collection auprès de TMDB." });
+    } else {
+      expect(result).toEqual({ ok: true, data: outcome === "none" ? [] : [{
+        key: "collection:987", name: "Saga vérifiée", blocked: false, films: [{ title: "Film à vérifier", year: 2020 }],
+      }] });
+      expect(await readFilmFranchises(db, movie.id, true, getClient)).toEqual(result);
+      expect(fetcher).toHaveBeenCalledOnce();
+    }
+  } finally {
+    close();
     await rm(folder, { recursive: true, force: true });
   }
 });

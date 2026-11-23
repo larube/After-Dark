@@ -282,6 +282,8 @@ describe("intégration TMDB et SQLite", () => {
     expect(report.acquisition).toMatchObject({ before: 41, after: 42, discovered: [357],
       lookups: [{ tmdbId: 357, result: "cached" }] });
     expect(report.acquisition.sources).toHaveLength(4);
+    expect(result.films[0].franchise).toEqual({ key: "godzilla", name: "Godzilla" });
+    expect(result.films.slice(1).every(({ franchise }) => franchise === undefined)).toBe(true);
     expect(report.selected.map(({ id }) => id)).toEqual(result.films.map(({ id }) => id));
     expect(report.selected[0]).toMatchObject({ title: "Film acquis", reputation: { average: 9, count: 1500 },
       review: { metadataKeywords: ["sequel"], franchise: { name: "Godzilla" } }, steps: [{ rank: 1, position: 1 }] });
