@@ -7,14 +7,14 @@ export const moodOrder = ["surprise", "tension", "strange", "laugh", "emotion", 
 export function MoodSelector({ value, onChange, busy }: {
   value: Criteria["mood"]; onChange: (value: Criteria["mood"]) => void; busy: boolean;
 }) {
-  return <label className="mood-select">
-    <span>Ambiance</span>
-    <select name="mood" value={value} disabled={busy} onChange={(event) => onChange(event.currentTarget.value as Criteria["mood"])}>
-      {moodOrder.map((mood) => <option key={mood} value={mood}>
-        {mood === "surprise" ? "Selon mes goûts" : moods[mood]}
-      </option>)}
-    </select>
-  </label>;
+  return <fieldset className="mood-fieldset" disabled={busy}>
+    <legend>Votre humeur</legend>
+    <div className="mood-grid">{moodOrder.map((mood) => <label className="mood" data-mood={mood} key={mood}>
+      <input name="mood" type="radio" value={mood} checked={value === mood} onChange={() => onChange(mood)} />
+      <span>{mood === "immersion" ? "Immersif" : moods[mood]}</span>
+      <span className="mood-check" aria-hidden="true">✓</span>
+    </label>)}</div>
+  </fieldset>;
 }
 
 const countries: Record<string, string> = {

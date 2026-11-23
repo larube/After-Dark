@@ -59,12 +59,10 @@ export function Tonight({ ready, onComplete, filmActions }: {
       <header className="hero">
         <h1>Sélection</h1>
       </header>
-      <div className="selection-controls">
-        <button className="button button-primary" type="submit" disabled={loading || !ready}>
-          <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Découvrir 5 films"}
-        </button>
-        <MoodSelector value={mood} onChange={setMood} busy={loading} />
-      </div>
+      <MoodSelector value={mood} onChange={setMood} busy={loading} />
+      <button className="button button-primary" type="submit" disabled={loading || !ready}>
+        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Découvrir 5 films"}
+      </button>
       <details className="selection-refine">
         <summary>Affiner</summary>
         <FilterPanel busy={loading} value={filters} onChange={setFilters} />

@@ -12,19 +12,19 @@ import { Tonight } from "../src/renderer/tonight";
 import { AppShell } from "../src/renderer/shell";
 
 describe("Interface Neon Underground", () => {
-  it("propose les six ambiances dans un contrôle natif", () => {
+  it("préserve les six radios natives et leur sélection", () => {
     const html = renderToStaticMarkup(createElement(MoodSelector, { value: "strange", onChange() {}, busy: false }));
     for (const mood of moodOrder) expect(html).toContain(`value="${mood}"`);
-    expect(html).toContain('<select name="mood">');
-    expect(html).toMatch(/value="strange" selected=""/);
+    expect(html.match(/type="radio"/g)).toHaveLength(6);
+    expect(html).toMatch(/checked="" value="strange"/);
   });
 
   it("ouvre la Sélection avec un seul bouton principal et les filtres repliés", () => {
     const html = renderToStaticMarkup(createElement(Tonight, { ready: true, onComplete() {}, filmActions: () => null }));
     expect(html).toContain("<h1>Sélection</h1>");
-    expect(html).toContain('value="surprise" selected="">Selon mes goûts');
+    expect(html).toMatch(/checked="" value="surprise"\/><span>Surprends-moi<\/span>/);
     expect(html.match(/type="submit"/g)).toHaveLength(1);
-    expect(html).toMatch(/Découvrir 5 films.*<details class="selection-refine"><summary>Affiner/);
+    expect(html).toMatch(/<fieldset class="mood-fieldset".*<\/fieldset><button[^>]*type="submit"[^>]*>.*Découvrir 5 films.*<details class="selection-refine"><summary>Affiner/);
     const shell = renderToStaticMarkup(createElement(AppShell, {
       page: "tonight", status: "Base locale prête", navigate() {}, children: null,
     }));
