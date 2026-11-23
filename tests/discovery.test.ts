@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
 import { importProfile } from "../src/import/profile";
 import { attachPosters } from "../src/main/posters";
+import { writeTonightDiagnostic, type TonightDiagnostic } from "../src/diagnostics/tonight";
 import { findTonight } from "../src/main/recommend";
 import { discoveryQueries, TmdbClient, type TmdbFilm } from "../src/main/tmdb";
 import { criteriaSchema, metadataSchema } from "../src/shared/recommendation";
@@ -223,6 +224,44 @@ describe("intégration TMDB et SQLite", () => {
     });
     expect(await findTonight(database.db, criteria, async () => client, now, true)).toMatchObject({ connection: "cached" });
     expect(fetcher.mock.calls.filter(([url]) => String(url).includes("/movie/329865"))).toHaveLength(1);
+  });
+
+  it("capture le vrai vivier après acquisition et les 30 alternatives uniquement sur demande", async () => {
+    const { db } = database;
+    await importProfile(db, { version: 1, entries: Array.from({ length: 36 }, (_, index) => ({
+      movie: { canonicalId: `test:${index}`, displayTitle: `Film ${index}`, year: 1980 + index,
+        metadata: { genres: ["Thriller"], reputation: { source: "TMDB", average: 8.2, count: 100 } } },
+    })) });
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("discover/movie")) return mockResponse({ results: [{ id: 357, title: "Film acquis" }] });
+      return mockResponse({ id: 357, title: "Film acquis", release_date: "2025-01-01", runtime: 100,
+        vote_average: 9, vote_count: 1500, genres: [{ name: "Thriller" }], keywords: { keywords: [{ name: "sequel" }] },
+        belongs_to_collection: { id: 535790, name: "Collection" } });
+    });
+    const client = new TmdbClient("PRIVATE_TEST_TOKEN", fetcher, () => now);
+    const output = join(folder, "capture");
+    const capture = vi.fn((report: TonightDiagnostic) => writeTonightDiagnostic(output, report));
+    const result = await findTonight(db, criteria, async () => client, now, true, undefined, capture);
+    expect(capture).toHaveBeenCalledOnce();
+    const report = capture.mock.calls[0][0];
+    expect(report.acquisition).toMatchObject({ before: 36, after: 37, discovered: [357],
+      lookups: [{ tmdbId: 357, result: "cached" }] });
+    expect(report.acquisition.sources).toHaveLength(4);
+    expect(report.selected.map(({ id }) => id)).toEqual(result.films.map(({ id }) => id));
+    expect(report.selected[0]).toMatchObject({ title: "Film acquis", reputation: { average: 9, count: 1500 },
+      review: { metadataKeywords: ["sequel"], franchise: { name: "Godzilla" } }, steps: [{ rank: 1, position: 1 }] });
+    expect(report.alternatives).toHaveLength(30);
+    expect(report.alternatives.every(({ steps, decision }) => decision.kind === "outranked" && steps.every(({ rank }) => rank > 1))).toBe(true);
+    expect(await readFile(join(output, "tonight.md"), "utf8")).toContain("Avis utilisateur");
+    const json = await readFile(join(output, "tonight.json"), "utf8");
+    expect(JSON.parse(json)).toEqual(JSON.parse(JSON.stringify(report)));
+    expect(json).not.toContain("PRIVATE_TEST_TOKEN");
+    expect((await stat(join(output, "tonight.json"))).mode & 0o777).toBe(0o600);
+    await expect(writeTonightDiagnostic(output, report)).rejects.toMatchObject({ code: "EEXIST" });
+    const repeat = await findTonight(db, criteria, async () => client, now, true);
+    expect(repeat.films).toEqual(result.films);
+    expect(capture).toHaveBeenCalledOnce();
   });
 
   it("respecte Retry-After sur 429 et distingue une authentification refusée", async () => {

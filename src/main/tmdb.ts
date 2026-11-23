@@ -132,11 +132,14 @@ export class TmdbClient {
     });
   }
 
-  async discover(criteria: Criteria, round: number) {
+  async discover(criteria: Criteria, round: number,
+    onSource?: (source: { parameters: Record<string, string>; listed: number; forwarded: number }) => void) {
     const batches = await Promise.all(discoveryQueries(criteria, round, this.now().getUTCFullYear())
       .map(async (parameters, index) => {
         const films = await this.list("discover/movie", parameters);
-        return index === 3 ? films.slice(0, 2) : films;
+        const forwarded = index === 3 ? films.slice(0, 2) : films;
+        onSource?.({ parameters, listed: films.length, forwarded: forwarded.length });
+        return forwarded;
       }));
     const ids = new Set<number>();
     for (let i = 0; i < 20; i++) for (const batch of batches) {

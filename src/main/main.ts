@@ -21,6 +21,7 @@ import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-p
 import { openAllocine } from "./allocine";
 import { exportDiscoveryDiagnostic } from "./discovery-export";
 import { startEnrichment } from "./enrichment";
+import { writeTonightDiagnostic, type TonightDiagnostic } from "../diagnostics/tonight";
 import { findTonight, localTmdb } from "./recommend";
 import { attachPosters, posterCacheState, posterData } from "./posters";
 
@@ -184,13 +185,20 @@ void app.whenReady().then(async () => {
       enrichment?.wake();
     }
   });
+  const diagnosticDirectory = process.env.AFTER_DARK_TONIGHT_DIAGNOSTIC_DIR;
+  let captureTonight = diagnosticDirectory && isAbsolute(diagnosticDirectory)
+    ? (report: TonightDiagnostic) => writeTonightDiagnostic(diagnosticDirectory, report)
+    : undefined;
+  if (diagnosticDirectory && !captureTonight) console.error("Le diagnostic Ce soir exige un chemin absolu.");
   register(ipc.recommend, async (db, _owner, [criteria, allowRecent]): ReturnType<DesktopApi["recommend"]> => {
     if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
     recommending = true;
     try {
       await enrichment?.settleWrite();
       const directory = app.getPath("userData");
-      const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent);
+      const capture = captureTonight;
+      captureTonight = undefined;
+      const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent, undefined, capture);
       await attachPosters(result, directory);
       return { ok: true, data: result };
     } finally {
