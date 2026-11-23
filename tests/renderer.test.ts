@@ -98,6 +98,23 @@ describe("Interface Neon Underground", () => {
     }
   });
 
+  it.each([1, 2, 3, 4, 5])("rend une vedette et les secondaires pour %i film(s), même sans affiche", (count) => {
+    const result = recommendationSchema.parse({
+      connection: "cached", personalized: true, status: "ready",
+      films: Array.from({ length: count }, (_, index) => ({
+        id: index + 1, title: index === 0 ? "Cure" : "Tesis", year: 1997,
+        category: index === 0 ? "safe" : "gem", metadata: {}, reasons: [], warnings: [],
+      })),
+    });
+    const html = renderToStaticMarkup(createElement(Results, {
+      result, ready: true, loading: false, error: "", repeat() {}, filmActions: () => null,
+    }));
+    expect(html.match(/class="featured"/g)).toHaveLength(1);
+    expect(html.match(/class="film-card"/g)).toHaveLength(count);
+    expect(html.match(/Affiche indisponible/g)).toHaveLength(count);
+    expect(html.includes('class="alternatives"')).toBe(count > 1);
+  });
+
   it("annonce chargement, erreurs, absence de résultat et mode dégradé", () => {
     const props = { ready: true, loading: true, error: "Requête refusée.", repeat() {}, filmActions: () => null };
     expect(renderToStaticMarkup(createElement(Results, props))).toContain('role="alert"');

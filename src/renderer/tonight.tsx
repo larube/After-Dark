@@ -54,12 +54,12 @@ export function Tonight({ ready, onComplete, filmActions }: {
   }
 
   return <>
-    <header className="hero">
-      <div className="projection" aria-hidden="true" />
-      <h1>Ce soir ?</h1>
-      <p>Une envie, une ambiance.<br /> Le reste attendra.</p>
-    </header>
     <form className="programme" onSubmit={submit}>
+      <div className="projection" aria-hidden="true" />
+      <header className="hero">
+        <h1>Ce soir ?</h1>
+        <p>Une envie, une ambiance.<br /> Le reste attendra.</p>
+      </header>
       <MoodSelector value={mood} onChange={setMood} busy={loading} />
       <FilterPanel busy={loading} value={filters} onChange={setFilters} action={
         <button className="button button-primary" type="submit" disabled={loading || !ready}>
