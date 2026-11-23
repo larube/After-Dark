@@ -1,13 +1,14 @@
 import { useRef, useState, type ReactNode, type FormEvent } from "react";
 import type { Criteria, Recommendation } from "../shared/recommendation";
 import { FilterPanel, MoodSelector } from "./controls";
-import { readCriteria } from "./criteria";
+import { defaultFilters, readCriteria } from "./criteria";
 import { Results } from "./results";
 
 export function Tonight({ ready, onComplete, filmActions }: {
   ready: boolean; onComplete: () => void; filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
 }) {
   const [mood, setMood] = useState<Criteria["mood"]>("surprise");
+  const [filters, setFilters] = useState(defaultFilters);
   const [result, setResult] = useState<Recommendation>();
   const [submitted, setSubmitted] = useState<Criteria>();
   const [loading, setLoading] = useState(false);
@@ -44,9 +45,9 @@ export function Tonight({ ready, onComplete, filmActions }: {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = readCriteria(new FormData(event.currentTarget), mood);
+    const parsed = readCriteria(filters, mood);
     if (!parsed.success) {
-      setError("Vérifiez la durée (1 à 600 min) et les codes pays ou langue (deux lettres, séparés par des virgules).");
+      setError("Les critères de séance sont invalides. Essayez de les réinitialiser.");
       return;
     }
     void request(parsed.data);
@@ -60,10 +61,11 @@ export function Tonight({ ready, onComplete, filmActions }: {
     </header>
     <form className="programme" onSubmit={submit}>
       <MoodSelector value={mood} onChange={setMood} busy={loading} />
-      <FilterPanel busy={loading} />
-      <button className="button button-primary" type="submit" disabled={loading || !ready}>
-        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Trouve-moi un film"}
-      </button>
+      <FilterPanel busy={loading} value={filters} onChange={setFilters} action={
+        <button className="button button-primary" type="submit" disabled={loading || !ready}>
+          <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Trouve-moi un film"}
+        </button>
+      } />
     </form>
     <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);

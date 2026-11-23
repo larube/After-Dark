@@ -1,15 +1,33 @@
 import { criteriaSchema, type Criteria } from "../shared/recommendation";
 
-export function readCriteria(form: FormData, mood: Criteria["mood"]) {
-  const text = (name: string) => String(form.get(name) ?? "").trim();
-  const codes = (name: string, normalize: (value: string) => string) =>
-    [...new Set(text(name).split(/[\s,]+/).filter(Boolean).map(normalize))];
-  const upper = (value: string) => value.toUpperCase();
-  const lower = (value: string) => value.toLowerCase();
+export const durations = [
+  [90, "1 h 30 maximum"], [105, "1 h 45 maximum"], [120, "2 h maximum"],
+  [150, "2 h 30 maximum"], [180, "3 h maximum"],
+] as const;
+
+export type SessionFilters = {
+  duration: string;
+  avoid: string;
+  countries: string[];
+  languages: string[];
+  countriesRequired: boolean;
+  languagesRequired: boolean;
+};
+
+export const defaultFilters: SessionFilters = {
+  duration: "", avoid: "", countries: [], languages: [],
+  countriesRequired: false, languagesRequired: false,
+};
+
+export function readCriteria(filters: SessionFilters, mood: Criteria["mood"]) {
+  const { duration, avoid, countries, languages, countriesRequired, languagesRequired } = filters;
   return criteriaSchema.safeParse({
-    mood, maxMinutes: text("duration") ? Number(text("duration")) : undefined,
-    energy: text("energy") || undefined, avoid: text("avoid") || undefined,
-    preferredCountries: codes("preferredCountries", upper), requiredCountries: codes("requiredCountries", upper),
-    preferredLanguages: codes("preferredLanguages", lower), requiredLanguages: codes("requiredLanguages", lower),
+    mood,
+    maxMinutes: duration ? durations.find(([minutes]) => String(minutes) === duration)?.[0] ?? NaN : undefined,
+    avoid: avoid || undefined,
+    preferredCountries: countriesRequired ? [] : countries,
+    requiredCountries: countriesRequired ? countries : [],
+    preferredLanguages: languagesRequired ? [] : languages,
+    requiredLanguages: languagesRequired ? languages : [],
   });
 }
