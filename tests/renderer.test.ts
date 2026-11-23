@@ -19,7 +19,7 @@ describe("Interface Neon Underground", () => {
 
   it.each(durations)("convertit la durée %i vers un plafond en minutes", (minutes, label) => {
     const html = renderToStaticMarkup(createElement(FilterPanel, { value: defaultFilters, busy: false, onChange() {} }));
-    expect(html).toContain(`value="${minutes}">${label}`);
+    expect(html).toMatch(new RegExp(`type="radio"[^>]*value="${minutes}"[^>]*>[^<]*${label}`));
     expect(readCriteria({ ...defaultFilters, duration: String(minutes) }, "laugh").data?.maxMinutes).toBe(minutes);
   });
 
@@ -56,7 +56,7 @@ describe("Interface Neon Underground", () => {
     for (const name of ["France", "Espagne", "Japonais", "Espagnol"]) {
       expect(html).toContain(`aria-label="Retirer ${name}"`);
     }
-    expect(html.match(/<input[^>]+checked=""[^>]*\/>/g)).toHaveLength(5);
+    expect(html.match(/<input[^>]+type="checkbox"[^>]*checked=""[^>]*\/>/g)).toHaveLength(5);
     expect(html.match(/type="submit"/g)).toHaveLength(1);
     expect(html.match(/type="search"/g)).toHaveLength(2);
     expect(html).toContain("Uniquement ces pays de production");

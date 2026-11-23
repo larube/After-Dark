@@ -48,7 +48,7 @@ function FilterChoices({ label, all, requiredLabel, options, selected, required,
 
   return <div className="ticket-slot">
     <span className="ticket-label" id={id}>{label}</span>
-    <details className="ticket-picker" name="session-geography" ref={details}
+    <details className="ticket-picker" name="session-filters" ref={details}
       onToggle={() => { if (!details.current?.open) setQuery(""); }}
       onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
       onKeyDown={(event) => {
@@ -93,6 +93,50 @@ function FilterChoices({ label, all, requiredLabel, options, selected, required,
   </div>;
 }
 
+const durationOptions = [["", "Peu importe"], ...durations.map(([minutes, label]) => [String(minutes), label] as const)] as const;
+const avoidOptions = [["", "Aucune"], ...moodOrder.filter((key) => key !== "surprise")
+  .map((key) => [key, key === "immersion" ? "Immersif" : moods[key]] as const)] as const;
+
+function SingleFilter({ label, options, value, busy, help, onChange }: {
+  label: string; options: readonly (readonly [string, string])[]; value: string; busy: boolean;
+  help?: string; onChange: (value: string) => void;
+}) {
+  const id = useId();
+  const details = useRef<HTMLDetailsElement>(null);
+  const trigger = useRef<HTMLElement>(null);
+
+  function close() {
+    if (details.current) details.current.open = false;
+    trigger.current?.focus();
+  }
+
+  return <div className="ticket-slot">
+    <span className="ticket-label" id={id}>{label}</span>
+    <details className="ticket-picker" name="session-filters" ref={details}
+      onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" || (event.key === "Enter" && event.target instanceof HTMLInputElement)) {
+          event.preventDefault();
+          close();
+        }
+      }}>
+      <summary ref={trigger} aria-labelledby={`${id} ${id}-current`}>
+        <span id={`${id}-current`}>{options.find(([code]) => code === value)?.[1]}</span>
+      </summary>
+      <fieldset className="ticket-options" disabled={busy} aria-describedby={help ? `${id}-help` : undefined}>
+        <legend className="visually-hidden">{label}</legend>
+        <div className="ticket-list ticket-single-list">
+          {options.map(([code, name]) => <label key={code}>
+            <input type="radio" name={id} value={code} checked={value === code} onChange={() => onChange(code)}
+              onClick={(event) => { if (event.detail > 0) close(); }} /> {name}
+          </label>)}
+        </div>
+        {help && <small id={`${id}-help`}>{help}</small>}
+      </fieldset>
+    </details>
+  </div>;
+}
+
 export function FilterPanel({ busy, value, onChange, action }: {
   busy: boolean; value: SessionFilters; onChange: (value: SessionFilters) => void; action?: ReactNode;
 }) {
@@ -108,21 +152,10 @@ export function FilterPanel({ busy, value, onChange, action }: {
       selected={selectedLanguages} required={languagesRequired} busy={busy}
       onSelect={(selected) => onChange({ ...value, languages: selected, languagesRequired: !!selected.length && languagesRequired })}
       onRequire={(required) => onChange({ ...value, languagesRequired: required })} />
-    <label className="ticket-slot"><span className="ticket-label">Durée maximale</span>
-      <select disabled={busy} value={duration} onChange={(event) => onChange({ ...value, duration: event.target.value })}>
-        <option value="">Peu importe</option>
-        {durations.map(([minutes, label]) => <option key={minutes} value={minutes}>{label}</option>)}
-      </select>
-    </label>
-    <label className="ticket-slot"><span className="ticket-label">Ambiance à éviter</span>
-      <select disabled={busy} value={avoid} aria-describedby="avoid-help" onChange={(event) => onChange({ ...value, avoid: event.target.value })}>
-        <option value="">Aucune</option>
-        {moodOrder.filter((key) => key !== "surprise").map((key) => <option key={key} value={key}>
-          {key === "immersion" ? "Immersif" : moods[key]}
-        </option>)}
-      </select>
-      <span className="visually-hidden" id="avoid-help">Préférence souple</span>
-    </label>
+    <SingleFilter label="Durée maximale" options={durationOptions} value={duration} busy={busy}
+      onChange={(duration) => onChange({ ...value, duration })} />
+    <SingleFilter label="Ambiance à éviter" options={avoidOptions} value={avoid} busy={busy}
+      help="Préférence souple" onChange={(avoid) => onChange({ ...value, avoid })} />
     <div className="ticket-submit">
       {action}
       <button type="button" className="text-action" aria-disabled={busy || !dirty}

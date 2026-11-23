@@ -200,7 +200,7 @@ summary:hover { color: var(--focus); }
 .ticket-label {
   color: var(--focus); font: 900 1rem/1.1 var(--display); letter-spacing: .06em; text-transform: uppercase;
 }
-.ticket-slot select, .ticket-picker > summary, .ticket-options input[type=search] {
+.ticket-picker > summary, .ticket-options input[type=search] {
   box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px; padding: 6px 7px;
   border: 1px solid #775b46; border-radius: 2px; background: var(--canvas); color: var(--paper);
   font: .86rem var(--text);
@@ -211,10 +211,14 @@ summary:hover { color: var(--focus); }
   position: absolute; z-index: 3; top: 56px; inset-inline-start: 0; width: max(100%, 218px);
   padding: 9px; border: 1px solid #775b46; background: var(--surface); box-shadow: 0 8px 18px #000a;
 }
+.ticket-slot:nth-child(4) .ticket-options { inset-inline: auto 0; }
 .ticket-list { max-height: 10rem; overflow: auto; margin: 6px 0; }
 .ticket-list label, .ticket-strict { display: flex; align-items: center; min-height: 33px; gap: 6px; font-size: .86rem; }
+.ticket-single-list { max-height: none; margin: 0; overflow: visible; }
+.ticket-single-list label { padding-inline: 3px; cursor: pointer; }
+.ticket-single-list label:has(input:checked) { color: var(--focus); background: #2b211a; }
 .ticket-strict { border-top: 1px dashed var(--border); padding-top: 4px; }
-.ticket-options input[type=checkbox] { accent-color: var(--accent); }
+.ticket-options :is(input[type=checkbox], input[type=radio]) { accent-color: var(--accent); }
 .ticket-options small { display: block; color: var(--muted); }
 .ticket-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .ticket-chips button {
@@ -231,7 +235,7 @@ summary:hover { color: var(--focus); }
 }
 @media (max-width: 650px) {
   .cinema-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ticket-slot:nth-child(2) .ticket-options { inset-inline: auto 0; }
+  .ticket-slot:nth-child(even) .ticket-options { inset-inline: auto 0; }
   .ticket-submit { justify-self: stretch; grid-auto-flow: row; }
   .programme .ticket-submit .button-primary { justify-self: stretch; justify-content: center; }
 }
