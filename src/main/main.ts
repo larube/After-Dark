@@ -1,3 +1,4 @@
+import { currentDiscovery, generateDiscovery } from "../db/discovery";
 import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { mkdirSync } from "node:fs";
@@ -86,6 +87,14 @@ function createWindow() {
   });
 }
 
+async function discoveryView(row: Awaited<ReturnType<typeof currentDiscovery>>): ReturnType<DesktopApi["discoveryCurrent"]> {
+  if (!row) return { ok: true, data: null };
+  const films = await Promise.all(row.films.map(async ({ poster, ...film }) => ({
+    ...film, posterData: await posterData(poster, app.getPath("userData")),
+  })));
+  return { ok: true, data: { id: row.id, films, eligible: row.eligible, renewed: row.renewed } };
+}
+
 async function labView({ public: view, poster }: Awaited<ReturnType<typeof currentLab>>): ReturnType<DesktopApi["labCurrent"]> {
   if (view.status === "voting") view.film.posterData = await posterData(poster, app.getPath("userData"));
   return { ok: true, data: view };
@@ -169,6 +178,8 @@ void app.whenReady().then(async () => {
       recommending = false;
     }
   });
+  register(ipc.discoveryCurrent, async (db, _owner, [mode]) => discoveryView(await currentDiscovery(db, mode)));
+  register(ipc.discoveryGenerate, async (db, _owner, [mode, previous]) => discoveryView(await generateDiscovery(db, mode, previous)));
   register(ipc.labCurrent, async (db) => labView(await currentLab(db)));
   register(ipc.labStart, async (db, _owner, [criteria, repeats]) => labView(await startLab(db, criteria, repeats)));
   register(ipc.labPause, async (db, _owner, [id, paused]) => labView(await pauseLab(db, id, paused)));

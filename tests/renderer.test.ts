@@ -6,6 +6,7 @@ import { recommendationSchema } from "../src/shared/recommendation";
 import { FilterPanel, MoodSelector, moodOrder } from "../src/renderer/controls";
 import { defaultFilters, durations, readCriteria } from "../src/renderer/criteria";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "../src/renderer/feedback";
+import { Discovery } from "../src/renderer/discovery";
 import { Results } from "../src/renderer/results";
 import { AppShell } from "../src/renderer/shell";
 
@@ -15,6 +16,16 @@ describe("Interface Neon Underground", () => {
     for (const mood of moodOrder) expect(html).toContain(`value="${mood}"`);
     expect(html.match(/type="radio"/g)).toHaveLength(6);
     expect(html).toMatch(/checked="" value="strange"/);
+  });
+
+  it("expose les trois modes de découverte en radios natives et masque l’onglet inactif", () => {
+    const props = { active: true, disabled: false, actions: () => null };
+    const html = renderToStaticMarkup(createElement(Discovery, props));
+    expect(html.match(/type="radio"/g)).toHaveLength(3);
+    expect(html).toMatch(/checked="" value="gems"/);
+    for (const label of ["Les pépites", "Vos affinités", "Hors piste"]) expect(html).toContain(label);
+    const hidden = renderToStaticMarkup(createElement(Discovery, { ...props, active: false }));
+    expect(hidden).toMatch(/^<section hidden=""/);
   });
 
   it.each(durations)("convertit la durée %i vers un plafond en minutes", (minutes, label) => {

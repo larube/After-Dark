@@ -50,6 +50,13 @@
       "when": 1795432894803,
       "tag": "0006_blind_lab",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1795437532870,
+      "tag": "0007_discovery_explorer",
+      "breakpoints": true
     }
   ]
 }

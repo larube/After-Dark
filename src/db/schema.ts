@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
+import type { DiscoverySnapshot, Rotation } from "../domain/discovery";
+import { discoveryModes } from "../shared/discovery";
 import { intentions } from "../shared/feedback";
 import type { LabSelections } from "../domain/lab";
 import type { LabFilmSnapshot } from "../shared/lab";
@@ -174,4 +176,21 @@ export const labProposals = sqliteTable("lab_proposals", {
     OR (${table.answeredAt} IS NOT NULL AND
       ((${table.seen} IS 1 AND ${table.interest} IS NULL) OR
        (${table.seen} IS 0 AND ${table.interest} IS NOT NULL AND ${table.interest} IN ('eager', 'maybe', 'pass'))))`),
+]);
+
+export const discoveryExplorations = sqliteTable("discovery_explorations", {
+  id: integer().primaryKey({ autoIncrement: true }),
+  mode: text({ enum: discoveryModes }).notNull(),
+  createdAt: text("created_at").notNull(),
+  seed: text().notNull(),
+  protocol: text().notNull(),
+  engine: text().notNull(),
+  fingerprint: text().notNull(),
+  rotation: text({ mode: "json" }).$type<Rotation>().notNull(),
+  films: text({ mode: "json" }).$type<DiscoverySnapshot[]>().notNull(),
+  eligible: integer().notNull(),
+  renewed: integer(),
+}, (table) => [
+  index("discovery_mode_history").on(table.mode, table.id),
+  check("discovery_mode", sql`${table.mode} IN ('gems', 'affinities', 'offbeat')`),
 ]);

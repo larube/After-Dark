@@ -5,6 +5,7 @@ import { AppShell, type Page } from "./shell";
 import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
 import { needsRating, type FeedbackEntry, type FeedbackRequest } from "../shared/feedback";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "./feedback";
+import { Discovery } from "./discovery";
 import { Laboratory } from "./lab";
 import { Tonight } from "./tonight";
 import "./style.css";
@@ -160,11 +161,10 @@ function App() {
       <CatalogueSummary summary={summary} />
       <button className="button" onClick={() => navigate("profile")}>Importer un profil</button>
     </>}
-    {page === "discover" && <>
-      <header className="page-heading"><h1>Découvertes</h1><p>Retrouvez les propositions de votre séance dans « Ce soir ».</p></header>
-      <p className="notice">À venir · Une vue dédiée aux découvertes.</p>
-      <button className="button button-primary" onClick={() => navigate("tonight")}>Retour à Ce soir</button>
-    </>}
+    <Discovery active={page === "discover"} disabled={!summary || importing || saving}
+      actions={(film) => <FilmActions movieId={film.id} title={film.title}
+        entry={collection?.find((entry) => entry.movieId === film.id)}
+        disabled={!collection || !!collectionError || importing || saving} save={save} />} />
     {page === "lab" && <Laboratory />}
     {page === "history" && <>
       <header className="page-heading"><h1>Historique</h1></header>

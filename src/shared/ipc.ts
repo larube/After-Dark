@@ -2,6 +2,7 @@ import { z } from "zod";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
 import { criteriaSchema, recommendationSchema } from "./recommendation";
+import { discoveryIdSchema, discoveryModeSchema, discoveryViewSchema } from "./discovery";
 
 const count = z.number().int().nonnegative();
 const issue = z.strictObject({ entry: z.number().int().positive().optional(), path: z.string().optional(), message: z.string() });
@@ -41,6 +42,8 @@ const enrichmentSchema = z.strictObject({
 export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
 export const ipc = {
+  discoveryCurrent: { channel: "discovery:current", request: z.tuple([discoveryModeSchema]), response: reply(discoveryViewSchema.nullable()) },
+  discoveryGenerate: { channel: "discovery:generate", request: z.tuple([discoveryModeSchema, discoveryIdSchema.nullable()]), response: reply(discoveryViewSchema.nullable()) },
   labCurrent: { channel: "lab:current", request: z.tuple([]), response: reply(labStateSchema) },
   labStart: { channel: "lab:start", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(labStateSchema) },
   labPause: { channel: "lab:pause", request: z.tuple([labSessionId, z.boolean()]), response: reply(labStateSchema) },

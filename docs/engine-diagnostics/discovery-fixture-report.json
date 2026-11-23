@@ -1,0 +1,315 @@
+{
+  "protocol": "discovery-v2",
+  "date": "2026-11-23",
+  "firstSeed": "fixture-v1",
+  "secondSeed": "second",
+  "catalogue": 42,
+  "eligible": 36,
+  "excluded": [
+    3,
+    38,
+    39,
+    40,
+    41,
+    42
+  ],
+  "coverage": {
+    "first": 20,
+    "firstAndNext": 28
+  },
+  "overlap": [
+    {
+      "modes": [
+        "gems",
+        "affinities"
+      ],
+      "shared": 2,
+      "sharedAfterRenewal": 3
+    },
+    {
+      "modes": [
+        "gems",
+        "offbeat"
+      ],
+      "shared": 1,
+      "sharedAfterRenewal": 1
+    },
+    {
+      "modes": [
+        "affinities",
+        "offbeat"
+      ],
+      "shared": 1,
+      "sharedAfterRenewal": 0
+    }
+  ],
+  "trials": [
+    {
+      "mode": "gems",
+      "ids": [
+        11,
+        2,
+        10,
+        28,
+        12,
+        14,
+        19,
+        1
+      ],
+      "next": [
+        11,
+        5,
+        13,
+        30,
+        4,
+        20,
+        12,
+        15
+      ],
+      "renewed": 6,
+      "diversity": {
+        "genres": 4,
+        "countries": 4,
+        "directors": 6,
+        "decades": 4
+      },
+      "popularity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 3,
+        "median": 6,
+        "max": 21
+      },
+      "discoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 2.292,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 2.292,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "picks": [
+        {
+          "title": "Les phares du nord 2",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+        },
+        {
+          "title": "Archives de brume 2",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Les phares du nord 1",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+        },
+        {
+          "title": "Les cartes sans bord 1",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés."
+        },
+        {
+          "title": "Les phares du nord 3",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+        },
+        {
+          "title": "Les phares du nord 5",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés. Traits associés à vos appréciations positives : love, friendship."
+        },
+        {
+          "title": "Jardins de sel 1",
+          "reason": "Popularité TMDB dans la moitié basse des films renseignés."
+        },
+        {
+          "title": "Archives de brume 1",
+          "reason": "Traits associés à vos appréciations positives : family, love."
+        }
+      ]
+    },
+    {
+      "mode": "affinities",
+      "ids": [
+        9,
+        8,
+        6,
+        5,
+        2,
+        4,
+        17,
+        1
+      ],
+      "next": [
+        2,
+        7,
+        5,
+        6,
+        8,
+        9,
+        11,
+        4
+      ],
+      "renewed": 2,
+      "diversity": {
+        "genres": 2,
+        "countries": 2,
+        "directors": 3,
+        "decades": 2
+      },
+      "popularity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 10,
+        "median": 23.5,
+        "max": 28
+      },
+      "discoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 2.292,
+        "median": 4,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 2.292,
+        "median": 4,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "picks": [
+        {
+          "title": "Archives de brume 9",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Archives de brume 8",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Archives de brume 6",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Archives de brume 5",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Archives de brume 2",
+          "reason": "Traits associés à vos appréciations positives : Ariane Or, family."
+        },
+        {
+          "title": "Archives de brume 4",
+          "reason": "Traits associés à vos appréciations positives : family, love."
+        },
+        {
+          "title": "Les phares du nord 8",
+          "reason": "Traits associés à vos appréciations positives : love, friendship."
+        },
+        {
+          "title": "Archives de brume 1",
+          "reason": "Traits associés à vos appréciations positives : family, love."
+        }
+      ]
+    },
+    {
+      "mode": "offbeat",
+      "ids": [
+        28,
+        27,
+        16,
+        4,
+        29,
+        22,
+        20,
+        21
+      ],
+      "next": [
+        34,
+        19,
+        1,
+        10,
+        30,
+        24,
+        35,
+        26
+      ],
+      "renewed": 8,
+      "diversity": {
+        "genres": 4,
+        "countries": 4,
+        "directors": 6,
+        "decades": 4
+      },
+      "popularity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 4,
+        "median": 9,
+        "max": 23
+      },
+      "discoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 0,
+        "max": 3.171,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 0,
+        "max": 3.171,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "picks": [
+        {
+          "title": "Les cartes sans bord 1",
+          "reason": "À explorer : Luz Mer II, Animation, des repères absents de vos retours."
+        },
+        {
+          "title": "Jardins de sel 9",
+          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+        },
+        {
+          "title": "Les phares du nord 7",
+          "reason": "À explorer : Jules Nuit II, des repères absents de vos retours."
+        },
+        {
+          "title": "Archives de brume 4",
+          "reason": "À explorer : Ariane Or II, des repères absents de vos retours."
+        },
+        {
+          "title": "Les cartes sans bord 2",
+          "reason": "À explorer : Luz Mer, Animation, des repères absents de vos retours."
+        },
+        {
+          "title": "Jardins de sel 4",
+          "reason": "À explorer : Saki Aube II, Documentary, des repères absents de vos retours."
+        },
+        {
+          "title": "Jardins de sel 2",
+          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+        },
+        {
+          "title": "Jardins de sel 3",
+          "reason": "À explorer : Saki Aube, Documentary, des repères absents de vos retours."
+        }
+      ]
+    }
+  ]
+}

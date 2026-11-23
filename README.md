@@ -85,7 +85,8 @@ Les premières captures documentent la PR 6. Les [captures de l’expérience de
 - **Ce soir** réunit les humeurs et quatre filtres sur une barre. Ouvrez un sélecteur de pays de production ou de langues originales, recherchez un nom et cochez autant de valeurs que nécessaire. Les puces retirent directement les choix. Chaque sélecteur peut imposer qu’au moins une des valeurs cochées corresponde. La durée maximale est un plafond. L’ambiance à éviter reste une préférence souple. **Réinitialiser les critères** conserve l’humeur.
 - **Ma collection** réunit les films à noter, les séances en attente, les intentions, les retours, les compteurs et les favoris.
 - **Profil** réunit l’import JSON, le rapport et la progression de l’enrichissement.
-- **Découvertes** et **Historique** indiquent les vues à venir. Découvertes donne accès à la sélection courante dans Ce soir.
+- **Découvertes** propose Les pépites, Vos affinités et Hors piste à partir du catalogue local. Chaque piste conserve sa sélection et se renouvelle sur demande. [Politiques et comparaison](docs/engine-diagnostics/discovery-explorer.md) · [Captures Electron](docs/screenshots/discovery-explorer/README.md)
+- **Historique** indique une vue à venir.
 
 Pour vérifier l’ergonomie, réduisez la fenêtre à sa largeur minimale puis agrandissez-la. Utilisez Tab pour atteindre les commandes et les flèches pour changer d’humeur. Activez « Réduire les animations » dans les réglages d’accessibilité de macOS, puis vérifiez la recherche. Les critères saisis restent disponibles entre deux vues tant que la fenêtre est ouverte.
 
