@@ -6,6 +6,7 @@ import { createClient } from "@libsql/client/sqlite3";
 import { drizzle } from "drizzle-orm/libsql/sqlite3";
 import { affinityModels } from "../domain/affinity";
 import { readCatalogue, readHistory } from "../db/recommendations";
+import type { CinemaDatabase } from "../db/client";
 import * as schema from "../db/schema";
 import { renderReport } from "./html";
 import { compareAffinityModels, compareReports, createReport, type Input, type Report } from "./report";
@@ -21,7 +22,7 @@ async function signature(path: string, optional = false) {
   }
 }
 
-export async function readLocalDatabase(filename: string): Promise<Input> {
+export async function withLocalSnapshot<T>(filename: string, read: (db: CinemaDatabase) => Promise<T>): Promise<T> {
   const source = await realpath(filename);
   const snapshot = await mkdtemp(join(tmpdir(), "after-dark-diagnostic-"));
   try {
@@ -37,12 +38,7 @@ export async function readLocalDatabase(filename: string): Promise<Input> {
     const client = createClient({ url: pathToFileURL(dbPath).href });
     try {
       await client.execute("PRAGMA query_only = ON");
-      const db = drizzle(client, { schema });
-      const { catalogue, signals } = await readCatalogue(db);
-      const { recent } = await readHistory(db);
-      return {
-        catalogue, signals: signals.map(({ film, ...signal }) => ({ id: film.id, ...signal })), recent: [...recent],
-      };
+      return await read(drizzle(client, { schema }));
     } finally {
       client.close();
     }
@@ -51,6 +47,13 @@ export async function readLocalDatabase(filename: string): Promise<Input> {
   }
 }
 
+export function readLocalDatabase(filename: string): Promise<Input> {
+  return withLocalSnapshot(filename, async (db) => {
+    const { catalogue, signals } = await readCatalogue(db);
+    const { recent } = await readHistory(db);
+    return { catalogue, signals: signals.map(({ film, ...signal }) => ({ id: film.id, ...signal })), recent: [...recent] };
+  });
+}
 const readJson = async (path: string): Promise<unknown> => JSON.parse(await readFile(path, "utf8"));
 const within = (root: string, path: string) => {
   const rel = relative(root, path);

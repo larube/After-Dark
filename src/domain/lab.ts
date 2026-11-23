@@ -7,7 +7,7 @@ export const labProtocol = "blind-v1";
 export const labRecentLimit = 3;
 type Pick = { movieId: number; rank: number };
 export type LabSelections = Record<AffinityModel, Pick[]>;
-type Assignment = Pick & { model: AffinityModel };
+type Assignment<Model> = Pick & { model: Model };
 export const labHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const seeded = (seed: string, purpose: string, value: unknown) => labHash([seed, purpose, value]);
 
@@ -19,12 +19,17 @@ export function rankLabModels(catalogue: Film[], signals: Signal[], criteria: Cr
 }
 
 export function assignLabFilms(selections: LabSelections, recent: ReadonlySet<number>, seed: string) {
-  let best: { entries: Assignment[]; repeats: number; sum: number; key: string } | undefined;
+  return assignBlindFilms(affinityModels, selections, recent, seed);
+}
+
+export function assignBlindFilms<Model extends string>(models: readonly Model[], selections: Record<Model, Pick[]>,
+  recent: ReadonlySet<number>, seed: string) {
+  let best: { entries: Assignment<Model>[]; repeats: number; sum: number; key: string } | undefined;
   const used = new Set<number>();
-  const entries: Assignment[] = [];
-  // At most six branches per model (five films or skip). Exhaustive matching finds the optimal coverage.
+  const entries: Assignment<Model>[] = [];
+  // Exhaustive matching finds maximum coverage before minimizing repeats and rank.
   function visit(index: number, repeats: number, sum: number) {
-    const model = affinityModels[index];
+    const model = models[index];
     if (model === undefined) {
       if (best && (entries.length < best.entries.length ||
         (entries.length === best.entries.length && (repeats > best.repeats || (repeats === best.repeats && sum > best.sum))))) return;
@@ -46,7 +51,9 @@ export function assignLabFilms(selections: LabSelections, recent: ReadonlySet<nu
   }
   visit(0, 0, 0);
   const counts = new Map<number, number>();
-  for (const pick of Object.values(selections).flat()) counts.set(pick.movieId, (counts.get(pick.movieId) ?? 0) + 1);
+  for (const model of models) {
+    for (const pick of selections[model]) counts.set(pick.movieId, (counts.get(pick.movieId) ?? 0) + 1);
+  }
   const assignment = best?.entries ?? [];
   return {
     entries: assignment.sort((a, b) => seeded(seed, "display", a.movieId).localeCompare(seeded(seed, "display", b.movieId), "en")),
