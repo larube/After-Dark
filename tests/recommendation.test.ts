@@ -8,10 +8,11 @@ const criteria = (overrides: Partial<Criteria> = {}): Criteria => ({ mood: "surp
 const movie = (id: number, title: string, metadata: Partial<Metadata>, status?: Film["status"]): Film => ({
   id, title, year: null, status, metadata: metadataSchema.parse(metadata),
 });
-const spain = movie(1, "Tesis", { countries: ["ES"], language: "es", minutes: 125, genres: ["Thriller"], directors: ["Alejandro Amenábar"] }, "unseen");
-const argentina = movie(2, "Relatos salvajes", { countries: ["AR"], language: "es", minutes: 122, genres: ["Comédie", "Thriller"], keywords: ["dark comedy"] });
-const usa = movie(3, "The Others", { countries: ["US", "ES"], language: "en", minutes: 104, genres: ["Horreur"], directors: ["Alejandro Amenábar"] });
-const seen = movie(4, "Abre los ojos", { countries: ["ES"], language: "es", directors: ["Alejandro Amenábar"], genres: ["Thriller"] }, "seen");
+const reputation = { source: "TMDB", average: 8.3, count: 500 } as const;
+const spain = movie(1, "Tesis", { reputation, countries: ["ES"], language: "es", minutes: 125, genres: ["Thriller"], directors: ["Alejandro Amenábar"] }, "unseen");
+const argentina = movie(2, "Relatos salvajes", { reputation, countries: ["AR"], language: "es", minutes: 122, genres: ["Comédie", "Thriller"], keywords: ["dark comedy"] });
+const usa = movie(3, "The Others", { reputation, countries: ["US", "ES"], language: "en", minutes: 104, genres: ["Horreur"], directors: ["Alejandro Amenábar"] });
+const seen = movie(4, "Abre los ojos", { reputation, countries: ["ES"], language: "es", directors: ["Alejandro Amenábar"], genres: ["Thriller"] }, "seen");
 const favorite: Signal = { film: seen, ratings: [{ qualitative: "Adoré" }], spontaneous: true, memorable: true, rewatch: true };
 const catalogue = [spain, argentina, usa, seen];
 const run = (input: Partial<Criteria> = {}, signals: Signal[] = [], recent: number[] = []) =>
@@ -51,7 +52,7 @@ describe("moteur de recommandation", () => {
     expect(run({ mood: "tension" }, [favorite]).films[0].reasons.join(" ")).toContain("Alejandro Amenábar");
     expect(run({}, [favorite]).personalized).toBe(true);
     expect(run().personalized).toBe(false);
-    expect(ids(run({ avoid: "laugh" }))).toContain(2);
+    expect(ids(run({ avoid: "laugh" }))).not.toContain(2);
     expect(run({ mood: "laugh", requiredCountries: ["US"] }).films[0].warnings).toHaveLength(1);
   });
 
@@ -60,9 +61,9 @@ describe("moteur de recommandation", () => {
     expect(ids(run(preferred))[0]).toBe(2);
     const soft = run({ ...preferred, avoid: "laugh" });
     expect(ids(soft)[0]).not.toBe(2);
-    expect(soft.films.find(({ id }) => id === 2)?.warnings.join(" ")).toContain("dark comedy");
+    expect(ids(soft)).not.toContain(2);
     const strict = run({ avoid: "laugh", requiredCountries: ["AR"] });
-    expect(ids(strict)).toEqual([2]);
+    expect(ids(strict)).toEqual([]);
     expect(run({ avoid: "laugh", requiredCountries: ["AR"], requiredLanguages: ["en"] }).status).toBe("no-match");
   });
 

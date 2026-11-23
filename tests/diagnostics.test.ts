@@ -19,9 +19,9 @@ describe("engine diagnostics", () => {
   it("matches the pre-instrumentation engine for all scenarios, including every slot's scores and order", () => {
     const referenceDate = "2026-11-23";
     const report = createReport(input, { referenceDate, mode: "legacy" });
-    const classic = createReport(input, { referenceDate });
+    const classic = createReport(input, { referenceDate, ranking: "legacy" });
     for (const run of report.scenarios) {
-      const production = recommend(input.catalogue, signals, run.criteria, new Set(input.recent));
+      const production = recommend(input.catalogue, signals, run.criteria, new Set(input.recent), { referenceDate, mode: "legacy" }, "current", "legacy");
       expect(run.result).toEqual(production);
       expect(classic.scenarios.find(({ id }) => id === run.id)?.steps).toEqual(run.steps);
       const { films, ...rest } = production;
@@ -49,14 +49,14 @@ describe("engine diagnostics", () => {
   it("reports overlapping exclusions, missing metadata, empty history and stable ties", () => {
     const trace = diagnoseRecommendation(input.catalogue, [], { ...neutral, requiredCountries: ["ES", "JP"],
       requiredLanguages: ["es", "ja"], maxMinutes: 105 }, new Set([2, 7]));
-    expect(trace.exclusions.find(({ id }) => id === 2)?.causes).toEqual({ seen: true, country: false, language: false, duration: false, content: false, recent: true });
-    expect(trace.exclusions.find(({ id }) => id === 13)?.causes).toEqual({ seen: false, country: true, language: true, duration: true, content: false, recent: false });
+    expect(trace.exclusions.find(({ id }) => id === 2)?.causes).toMatchObject({ seen: true, country: false, language: false, duration: false, content: false, recent: true });
+    expect(trace.exclusions.find(({ id }) => id === 13)?.causes).toMatchObject({ seen: false, country: true, language: true, duration: true, content: false, recent: false });
     expect(trace.base.map(({ id }) => id)).toEqual(expect.arrayContaining([8, 15, 16, 17]));
     const films = [13, 16].map((id) => ({ ...input.catalogue.find((film) => film.id === id)!, metadata: { genres: [], directors: [], countries: [], keywords: [] } })).reverse();
     const noSignals = diagnoseRecommendation(films, [], neutral, new Set());
     expect(noSignals.base.map(({ id, score }) => [id, score])).toEqual([[13, 0], [16, 0]]);
-    expect(noSignals.result.films.map(({ id }) => id)).toEqual([13, 16]);
-    expect(diagnoseRecommendation(films, [], neutral, new Set([13, 16])).result.status).toBe("exhausted");
+    expect(noSignals.result.films).toEqual([]);
+    expect(diagnoseRecommendation(films, [], neutral, new Set([13, 16])).result.status).toBe("no-match");
     expect(diagnoseRecommendation(films, [], { ...neutral, requiredCountries: ["JP"], requiredLanguages: ["es"] }, new Set()).result.status).toBe("no-match");
     expect(diagnoseRecommendation(films.map((film) => ({ ...film, status: "seen" })), [], neutral, new Set()).result.status).toBe("empty");
   });
@@ -76,7 +76,7 @@ describe("engine diagnostics", () => {
 
   it("computes binary Recall@5 and NDCG@5 at the actual selection position", () => {
     const report = createReport({
-      catalogue: [1, 2].map((id) => ({ id, title: String(id), year: null, metadata: {}, status: id === 2 ? "seen" : "unknown" })),
+      catalogue: [1, 2].map((id) => ({ id, title: String(id), year: null, metadata: { reputation: { source: "TMDB", average: 8, count: 500 } }, status: id === 2 ? "seen" : "unknown" })),
       signals: [{ id: 2, ratings: [{ numeric: 8.5 }], spontaneous: true, memorable: false, rewatch: false }],
       recent: [2],
     });

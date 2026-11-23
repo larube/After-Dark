@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
-import type { Criteria, Metadata } from "../shared/recommendation";
+import { tmdbReputationSchema, type Criteria, type Metadata } from "../shared/recommendation";
 import { tmdbCollectionSchema } from "../shared/franchises";
 import { normalizeTitle } from "../domain/ratings";
 
@@ -22,6 +22,7 @@ const details = listing.extend({
     release_dates: z.array(z.object({ release_date: z.string(), type: z.number().int() })),
   })) }).optional(),
   imdb_id: z.string().nullish(), overview: z.string().nullish(), poster_path: z.string().nullish(),
+  vote_average: z.unknown().optional(), vote_count: z.unknown().optional(),
   popularity: z.number().nonnegative().optional(),
   belongs_to_collection: z.unknown().optional(),
 });
@@ -53,6 +54,8 @@ export function discoveryQueries(criteria: Criteria, round: number, year: number
   const base = { ...bounds, ...moodGenres, page, "vote_count.gte": "35" };
   const regions = [...new Set([...criteria.requiredCountries, ...criteria.preferredCountries])];
   const languages = [...new Set([...criteria.requiredLanguages, ...criteria.preferredLanguages])];
+  // Interleaved with modern results within the existing detail-fetch budget.
+  const classicEra = [[1900, 1949], [1950, 1959], [1960, 1969], [1970, 1979]][round % 4];
   return [
     { ...base, sort_by: "popularity.desc" },
     { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": era[0] + "-01-01", "primary_release_date.lte": era[1] + "-12-31" },
@@ -60,6 +63,8 @@ export function discoveryQueries(criteria: Criteria, round: number, year: number
       ...(regions.length ? { with_origin_country: regions[round % regions.length] } : {}),
       ...(languages.length ? { with_original_language: languages[round % languages.length] } : {}),
     },
+    { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": classicEra[0] + "-01-01",
+      "primary_release_date.lte": classicEra[1] + "-12-31" },
   ];
 }
 
@@ -203,6 +208,9 @@ export class TmdbClient {
         fullSynopsis: movie.overview?.trim() || undefined,
         collection: movie.belongs_to_collection === null ? null : tmdbCollectionSchema.safeParse(movie.belongs_to_collection).data,
         popularity: movie.popularity,
+        reputation: tmdbReputationSchema.safeParse({
+          source: "TMDB", average: movie.vote_average, count: movie.vote_count,
+        }).data,
         release: {
           source: "TMDB", primaryDate: movie.release_date, status: movie.status, runtime: movie.runtime,
           genres: movie.genres, keywords: movie.keywords?.keywords,

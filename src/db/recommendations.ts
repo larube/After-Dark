@@ -6,7 +6,7 @@ import { importEntry, AmbiguousMovie } from "../import/profile";
 import type { TmdbFilm } from "../main/tmdb";
 import { metadataSchema, type Criteria, type Metadata, type Recommendation } from "../shared/recommendation";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
-import { favorites, moodSessions, movieEvaluations, movieIdentifiers, movies, movieStatuses, recommendationHistory } from "./schema";
+import { favorites, moodSessions, movieEvaluations, movieFeedback, movieIdentifiers, movies, movieStatuses, recommendationHistory } from "./schema";
 
 const decimal = (value: string | null) => value === null ? undefined : Number(value.replace(",", "."));
 const defined = (metadata: Metadata) => Object.fromEntries(Object.entries(metadata).filter(([, value]) => value !== undefined));
@@ -55,7 +55,7 @@ export function normalizeMetadata(input: Record<string, unknown> | null): Metada
     genres: unique(read("genres")), directors: unique(read("directors")), keywords: unique(read("keywords")),
     countries: unique(read("countries")), minutes: read("minutes"), language: read("language"),
     fullSynopsis: read("fullSynopsis"),
-    synopsis: read("synopsis")?.trim().slice(0, 280), poster: read("poster"), popularity: read("popularity"), release: read("release"),
+    synopsis: read("synopsis")?.trim().slice(0, 280), poster: read("poster"), reputation: read("reputation"), popularity: read("popularity"), release: read("release"),
   };
 }
 
@@ -63,15 +63,18 @@ export async function readCatalogue(db: CinemaDatabase | CinemaTransaction) {
   const demo = await db.select({ movieId: movieIdentifiers.movieId }).from(movieIdentifiers)
     .where(and(eq(movieIdentifiers.namespace, "canonical"), like(movieIdentifiers.value, "demo:fictif-%")));
   const fictional = new Set(demo.map(({ movieId }) => movieId));
-  const saved = await db.select({ movie: movies, status: movieStatuses.status })
-    .from(movies).leftJoin(movieStatuses, eq(movies.id, movieStatuses.movieId)).orderBy(movies.id).all();
+  const saved = await db.select({ movie: movies, status: movieStatuses.status, intention: movieFeedback.intention, seenAt: movieFeedback.seenAt })
+    .from(movies).leftJoin(movieStatuses, eq(movies.id, movieStatuses.movieId))
+    .leftJoin(movieFeedback, eq(movies.id, movieFeedback.movieId)).orderBy(movies.id).all();
   const rows = saved.filter(({ movie }) => !fictional.has(movie.id));
   const ratings = await db.select().from(movieEvaluations).all();
   const preferences = await db.select().from(favorites).all();
   const rated = new Set(ratings.map(({ movieId }) => movieId));
-  const catalogue: Film[] = rows.map(({ movie, status }) => ({
+  const catalogue: Film[] = rows.map(({ movie, status, intention, seenAt }) => ({
     id: movie.id, title: movie.displayTitle, year: movie.year,
-    status: rated.has(movie.id) ? "seen" : status ?? "unknown", metadata: normalizeMetadata(movie.metadata),
+    status: rated.has(movie.id) || seenAt ? "seen" : status ?? "unknown",
+    ...(intention === "not_interested" ? { dismissed: true } : {}),
+    metadata: normalizeMetadata(movie.metadata),
   }));
   const signals = new Map(catalogue.filter(({ status }) => status !== "unseen").map((film) => [film.id, {
     film, ratings: [], spontaneous: false, memorable: false, rewatch: false,

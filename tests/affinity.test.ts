@@ -76,7 +76,7 @@ describe("affinity experiments", () => {
   it("replays all scenarios on the same candidates and holdout folds, with exact baseline scores", () => {
     const comparison = compareAffinityModels(fixture, date);
     expect(compareAffinityModels(fixture, date)).toEqual(comparison);
-    const current = createReport(fixture, { referenceDate: date });
+    const current = createReport(fixture, { referenceDate: date, ranking: "legacy" });
     expect(comparison.models[0].holdout).toEqual(current.holdout);
     expect(comparison.models[0].runs.map(({ ranking }) => ranking.map(({ id, score }) => [id, score])))
       .toEqual(current.scenarios.map(({ base }) => base.map(({ id, score }) => [id, score])));
@@ -84,7 +84,7 @@ describe("affinity experiments", () => {
       expect(variant.holdout.folds.map(({ targets }) => targets.map(({ id, numeric }) => [id, numeric])))
         .toEqual(current.holdout.folds.map(({ targets }) => targets.map(({ id, numeric }) => [id, numeric])));
     }
-    const hybrid = createReport(fixture, { referenceDate: date, affinityModel: "hybrid" });
+    const hybrid = createReport(fixture, { referenceDate: date, affinityModel: "hybrid", ranking: "legacy" });
     expect(hybrid.fingerprint).toBe(current.fingerprint);
     expect(hybrid.scenarios.map(({ exclusions }) => exclusions)).toEqual(current.scenarios.map(({ exclusions }) => exclusions));
     expect(hybrid.holdout).toEqual(comparison.models[3].holdout);

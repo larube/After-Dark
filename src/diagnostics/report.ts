@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { calendarDate, contentTypes, todayUtc, type CandidatePolicy } from "../domain/candidate-quality";
 import { z } from "zod";
 import { affinityModels, catalogueFrequency, type AffinityModel } from "../domain/affinity";
-import { diagnoseRecommendation, engineVersion, holdoutInputs, recommend } from "../domain/recommendation";
+import { diagnoseRecommendation, engineVersion, legacyEngineVersion, holdoutInputs, recommend, type RankingPolicy } from "../domain/recommendation";
 import { criteriaSchema, metadataSchema, moods, type Criteria } from "../shared/recommendation";
 
 const filmSchema = z.strictObject({
   id: z.number().int(), title: z.string(), year: z.number().int().nullable(),
-  status: z.enum(["seen", "unseen", "unknown"]).optional(), metadata: metadataSchema.strict(),
+  dismissed: z.boolean().optional(), status: z.enum(["seen", "unseen", "unknown"]).optional(), metadata: metadataSchema.strict(),
 });
 const inputSchema = z.strictObject({
   catalogue: z.array(filmSchema),
@@ -82,7 +82,7 @@ function diversity(films: ReturnType<typeof recommend>["films"]) {
 
 const naiveModels = ["stable-id", "hashed-id", "popularity"] as const;
 
-function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy, model: AffinityModel | typeof naiveModels[number] = "current") {
+function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy, model: AffinityModel | typeof naiveModels[number] = "current", ranking: RankingPolicy = "relevance") {
   const targets = signals.flatMap(({ film, ratings }) => {
     const numeric = ratings.flatMap(({ numeric }) => numeric === undefined ? [] : [numeric]);
     if (!numeric.length) return [];
@@ -96,7 +96,7 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
     const { candidates, training } = holdoutInputs(catalogue, signals, heldOut);
     const history = new Set([...recent].filter((id) => !heldOut.has(id)));
     const affinityModel = affinityModels.find((variant) => variant === model);
-    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy, affinityModel);
+    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy, affinityModel, ranking);
     const popularity = new Map(candidates.map((film) => [film.id, film.metadata.popularity ?? -Infinity]));
     const shuffled = model === "hashed-id" ? new Map(candidates.map(({ id }) => [id, hash(["naive-order-v1", id])])) : undefined;
     const order = affinityModel ? undefined : trace.base.map(({ id }) => id)
@@ -130,15 +130,15 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
 }
 
 export function createReport(raw: unknown, {
-  referenceDate = todayUtc(), mode = "classic", affinityModel = "current",
-}: Partial<CandidatePolicy> & { affinityModel?: AffinityModel } = {}) {
+  referenceDate = todayUtc(), mode = "classic", affinityModel = "current", ranking = mode === "legacy" ? "legacy" : "relevance",
+}: Partial<CandidatePolicy> & { affinityModel?: AffinityModel; ranking?: RankingPolicy } = {}) {
   if (calendarDate(referenceDate) !== referenceDate) throw new Error("Date de référence invalide. Format attendu AAAA-MM-JJ.");
   const policy = { referenceDate, mode } as const;
   const { input, catalogue, signals, recent } = prepareInput(raw);
   const popularity = catalogue.flatMap(({ metadata }) => metadata.popularity === undefined ? [] : [metadata.popularity]).sort((a, b) => a - b);
   const median = popularity.length ? (popularity[Math.floor((popularity.length - 1) / 2)] + popularity[Math.floor(popularity.length / 2)]) / 2 : null;
   return {
-    formatVersion, engineVersion: mode === "legacy" ? "1.1.0" : engineVersion, policy,
+    formatVersion, engineVersion: ranking === "legacy" ? (mode === "legacy" ? "1.1.0" : legacyEngineVersion) : engineVersion, policy,
     ...(affinityModel === "current" ? {} : { affinityModel }),
     fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, referenceDate }),
     catalogue: {
@@ -155,9 +155,9 @@ export function createReport(raw: unknown, {
       },
     },
     scenarios: scenarios.map(({ id, criteria }) => {
-      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, affinityModel);
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, affinityModel, ranking);
       const qualityById = new Map(trace.exclusions.map(({ id, quality }) => [id, quality]));
-      const counts = { seen: 0, country: 0, language: 0, duration: 0, content: 0, recent: 0 };
+      const counts = { dismissed: 0, blocked: 0, weakEvidence: 0, seen: 0, country: 0, language: 0, duration: 0, content: 0, recent: 0 };
       let eligible = 0;
       let eligibleBeforePolicy = 0;
       const distribution = Object.fromEntries(contentTypes.map((type) => [type, 0]));
@@ -165,6 +165,9 @@ export function createReport(raw: unknown, {
       const exclusionsByReason: Record<string, number> = {};
       const retainedUnknown: number[] = [];
       for (const { id, causes, quality } of trace.exclusions) {
+        counts.dismissed += Number(causes.dismissed);
+        counts.blocked += Number(causes.blocked);
+        counts.weakEvidence += Number(causes.weakEvidence);
         counts.seen += Number(causes.seen);
         counts.country += Number(causes.country);
         counts.language += Number(causes.language);
@@ -172,7 +175,7 @@ export function createReport(raw: unknown, {
         counts.recent += Number(causes.recent);
         counts.content += Number(causes.content);
         distribution[quality.category]++;
-        const otherwiseEligible = !causes.seen && !causes.country && !causes.language && !causes.duration;
+        const otherwiseEligible = !causes.seen && !causes.dismissed && !causes.blocked && !causes.country && !causes.language && !causes.duration;
         eligibleBeforePolicy += Number(otherwiseEligible);
         eligible += Number(otherwiseEligible && !causes.content);
         if (otherwiseEligible && causes.content) {
@@ -193,7 +196,7 @@ export function createReport(raw: unknown, {
         })),
       };
     }),
-    holdout: evaluate(catalogue, signals, recent, policy, affinityModel),
+    holdout: evaluate(catalogue, signals, recent, policy, affinityModel, ranking),
   };
 }
 
@@ -212,7 +215,7 @@ export function compareAffinityModels(raw: unknown, referenceDate: string) {
   const generic = new Set(genericKeywords.map(({ id }) => id));
   const models = affinityModels.map((model) => {
     const runs = scenarios.map(({ id, criteria }) => {
-      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, model);
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy, model, "legacy");
       const scores = trace.base.map(({ affinity }) => affinity.score);
       const rawScores = trace.base.map(({ affinity }) => affinity.raw).sort((a, b) => a - b);
       const quantiles = [0, 0.25, 0.5, 0.75, 1];
@@ -242,7 +245,7 @@ export function compareAffinityModels(raw: unknown, referenceDate: string) {
         ranking: trace.base.map(({ id, rank, score, affinity }) => ({ id, rank, score, affinity })),
       };
     });
-    const holdout = evaluate(catalogue, signals, recent, policy, model);
+    const holdout = evaluate(catalogue, signals, recent, policy, model, "legacy");
     const moods = runs.slice(0, 6);
     const moodOverlap = moods.flatMap((left, index) => moods.slice(index + 1).map((right) => ({
       moods: [left.id, right.id], shared: left.selected.filter(({ id }) => right.selected.some((film) => film.id === id)).length,
@@ -250,7 +253,7 @@ export function compareAffinityModels(raw: unknown, referenceDate: string) {
     return { model, runs, moodOverlap, meanMoodOverlap: mean(moodOverlap.map(({ shared }) => shared)), holdout };
   });
   return {
-    formatVersion: 1, experiment: "affinity-v2", engineVersion, policy, evaluationConfig,
+    formatVersion: 1, experiment: "affinity-v2", engineVersion: legacyEngineVersion, policy, evaluationConfig,
     fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, policy }),
     catalogue: catalogue.length, signals: signals.length, commonKeywordThreshold, genericKeywords,
     mostFrequentKeywords: keywordPrevalence.slice(0, 10),

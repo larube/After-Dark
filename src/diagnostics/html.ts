@@ -9,7 +9,7 @@ const details = (label: string, content: string) => `<details><summary>${escape(
 const json = (data: unknown) => `<pre>${escape(JSON.stringify(data, null, 2))}</pre>`;
 
 const categoryNames = { safe: "Valeur sûre", gem: "Pépite", wildcard: "Wildcard" };
-const causeNames = { seen: "Déjà vu", country: "Pays", language: "Langue", duration: "Durée", content: "Politique de séance", recent: "Historique récent" };
+const causeNames = { seen: "Déjà vu", dismissed: "Refus explicite", blocked: "Exclusion du profil", weakEvidence: "Indices insuffisants", country: "Pays", language: "Langue", duration: "Durée", content: "Politique de séance", recent: "Historique récent" };
 const scenarioNames: Record<string, string> = {
   ...moods, duration: "Durée maximale", country: "Pays de production", language: "Langue originale",
   avoid: "Ambiance à éviter", combined: "Contraintes combinées",
@@ -20,7 +20,7 @@ const typeNames: Record<string, string> = {
 };
 const components = {
   affinity: "Affinité", mood: "Humeur", country: "Pays préféré", language: "Langue préférée",
-  energy: "Énergie", avoided: "Ambiance évitée", exploration: "Exploration",
+  energy: "Énergie", avoided: "Ambiance évitée", exploration: "Exploration", reputation: "Réputation TMDB",
 } as const;
 
 export function renderReport(report: Report, comparison?: ReturnType<typeof compareReports>) {

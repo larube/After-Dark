@@ -18,6 +18,10 @@ export const criteriaSchema = z.strictObject({
 });
 export type Criteria = z.infer<typeof criteriaSchema>;
 
+export const tmdbReputationSchema = z.object({
+  source: z.literal("TMDB"), average: z.number().min(0).max(10), count: z.number().int().nonnegative(),
+});
+
 export const metadataSchema = z.object({
   minutes: z.number().int().positive().optional(),
   countries: codes.default([]), language: z.string().regex(/^[a-z]{2}$/).optional(),
@@ -25,6 +29,7 @@ export const metadataSchema = z.object({
   keywords: z.array(z.string()).default([]),
   fullSynopsis: z.string().optional(), collection: tmdbCollectionSchema.nullable().optional(),
   synopsis: z.string().optional(), poster: z.string().regex(/^\/[a-zA-Z0-9_-]+\.jpg$/).optional(),
+  reputation: tmdbReputationSchema.optional(),
   popularity: z.number().nonnegative().optional(),
   release: z.strictObject({
     source: z.literal("TMDB"),

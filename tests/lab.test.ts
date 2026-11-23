@@ -86,7 +86,7 @@ describe("procédure du Laboratoire", () => {
       const expected = rankLabModels(before.catalogue, before.signals, criteria, history.recent, "2026-11-23");
       for (const model of affinityModels) {
         expect(expected[model].map(({ movieId }) => movieId)).toEqual(recommend(
-          before.catalogue, before.signals, criteria, history.recent, { referenceDate: "2026-11-23" }, model,
+          before.catalogue, before.signals, criteria, history.recent, { referenceDate: "2026-11-23" }, model, "legacy",
         ).films.map(({ id }) => id));
         expect(expected[model].some(({ movieId }) => movieId === 6)).toBe(false);
       }

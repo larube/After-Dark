@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { affinityModels } from "../domain/affinity";
 import { assignLabFilms, labHash, labProtocol, labRecentLimit, rankLabModels } from "../domain/lab";
-import { engineVersion } from "../domain/recommendation";
+import { legacyEngineVersion as engineVersion } from "../domain/recommendation";
 import type { LabAnswer, LabResults, LabState } from "../shared/lab";
 import type { Criteria } from "../shared/recommendation";
 import type { CinemaDatabase, CinemaTransaction } from "./client";

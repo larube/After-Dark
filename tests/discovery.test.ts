@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase } from "../src/db/client";
 import { enrichmentQueue } from "../src/db/enrichment";
 import { enrichNext } from "../src/main/enrichment";
+import { saveFeedback } from "../src/db/feedback";
 import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
 import { importProfile } from "../src/import/profile";
@@ -21,7 +22,8 @@ const now = new Date("2026-07-13T00:00:00Z");
 const remote: TmdbFilm = {
   title: "Premier Contact", originalTitle: "Arrival", year: 2016, aliases: ["Arrival"], tmdbId: 329865,
   imdbId: "tt2543164", releaseYears: [2016], fetchedAt: now.toISOString(),
-  metadata: metadataSchema.parse({ countries: ["US"], minutes: 116, language: "en", directors: ["Denis Villeneuve"] }),
+  metadata: metadataSchema.parse({ countries: ["US"], minutes: 116, language: "en", directors: ["Denis Villeneuve"],
+    reputation: { source: "TMDB", average: 8, count: 500 } }),
 };
 const mockResponse = (value: unknown) => Response.json(value);
 let folder: string;
@@ -118,7 +120,7 @@ describe("intégration TMDB et SQLite", () => {
 
   it("reprend après réouverture, conserve les échecs réseau en attente et n’attend pas le réseau pour classer le cache", async () => {
     await importProfile(database.db, { version: 1, entries: [
-      { movie: { canonicalId: "arrival", displayTitle: "Arrival", year: 2016, tmdbId: remote.tmdbId }, status: "unseen" },
+      { movie: { canonicalId: "arrival", displayTitle: "Arrival", year: 2016, tmdbId: remote.tmdbId, metadata: { genres: ["Thriller"] } }, status: "unseen" },
       { movie: { canonicalId: "cure", displayTitle: "Cure", year: 1997 }, status: "unseen" },
     ] });
     let releaseFetch: (response: Response) => void = () => undefined;
@@ -155,9 +157,25 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.3.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.4.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
+  });
+
+  it("écarte durablement les refus et n’apprend rien d’un visionnage sans note", async () => {
+    const { db } = database;
+    await cacheFilm(db, remote);
+    const [{ id }] = (await readCatalogue(db)).catalogue;
+    expect((await findTonight(db, criteria, async () => undefined, now, true)).films.map((film) => film.id)).toEqual([id]);
+    expect(await saveFeedback(db, { action: "intention", movieId: id, intention: "not_interested" })).toMatchObject({ ok: true });
+    database.close();
+    database = await openDatabase(join(folder, "cinema.sqlite"), resolve("drizzle"));
+    const reopened = database.db;
+    expect((await findTonight(reopened, criteria, async () => undefined, now, true)).films).toEqual([]);
+    expect(await saveFeedback(reopened, { action: "seen", movieId: id, score: null, appreciation: "Un commentaire libre." }))
+      .toMatchObject({ ok: true });
+    expect(await readCatalogue(reopened)).toMatchObject({ catalogue: [{ id, status: "seen" }], signals: [] });
+    expect((await findTonight(reopened, criteria, async () => undefined, now, true)).films).toEqual([]);
   });
 
   it("écarte les films fictifs du profil d’exemple et retrouve une affiche locale sans réseau", async () => {
@@ -185,7 +203,7 @@ describe("intégration TMDB et SQLite", () => {
       expect(url.pathname).toBe("/3/movie/329865");
       return mockResponse({
         id: remote.tmdbId, title: remote.title, original_title: remote.originalTitle, release_date: "2016-11-10",
-        status: "Released", genres: [{ id: 878, name: "Science-Fiction" }],
+        vote_average: 8.1, vote_count: 650, status: "Released", genres: [{ id: 878, name: "Science-Fiction" }],
         keywords: { keywords: [{ id: 123, name: "first contact" }] },
         release_dates: { results: [{ iso_3166_1: "US", release_dates: [{ type: 3, release_date: "2016-11-11T00:00:00.000Z" }] }] },
         original_language: "en", production_countries: [{ iso_3166_1: "US" }], runtime: 116,
@@ -198,6 +216,7 @@ describe("intégration TMDB et SQLite", () => {
     expect(await findTonight(database.db, criteria, async () => client, now)).toMatchObject({
       connection: "online", films: [{ metadata: { minutes: 116, directors: ["Denis Villeneuve"],
         synopsis: "Une linguiste est appelée pour établir le premier contact.", poster: "/arrival.jpg",
+        reputation: { source: "TMDB", average: 8.1, count: 650 },
         release: { source: "TMDB", primaryDate: "2016-11-10", status: "Released", runtime: 116,
           genres: [{ id: 878, name: "Science-Fiction" }], keywords: [{ id: 123, name: "first contact" }],
           events: [{ country: "US", type: 3, date: "2016-11-11T00:00:00.000Z" }] } } }],
@@ -220,6 +239,10 @@ describe("intégration TMDB et SQLite", () => {
     const queries = discoveryQueries({ ...criteria, requiredCountries: ["ES"], requiredLanguages: ["ja"] }, 4, 2026);
     expect(queries[0]).toMatchObject({ page: "2", with_original_language: "ja" });
     expect(queries[1]).toMatchObject({ "primary_release_date.gte": "2005-01-01" });
+    expect(queries[3]).toMatchObject({ "primary_release_date.gte": "1900-01-01", "primary_release_date.lte": "1949-12-31",
+      "vote_count.gte": "35", with_original_language: "ja" });
+    expect([1, 2, 3].map((round) => discoveryQueries(criteria, round, 2026)[3]["primary_release_date.gte"]))
+      .toEqual(["1950-01-01", "1960-01-01", "1970-01-01"]);
     expect(queries[2]).toMatchObject({ with_origin_country: "ES", with_original_language: "ja" });
   });
 });

@@ -15,7 +15,7 @@ export function rankLabModels(catalogue: Film[], signals: Signal[], criteria: Cr
   excludedIds?: ReadonlySet<number>) {
   const policy = { mode: "classic", referenceDate, excludedIds } as const;
   return Object.fromEntries(affinityModels.map((model) => [
-    model, recommend(catalogue, signals, criteria, recent, policy, model).films.map(({ id }, index) => ({ movieId: id, rank: index + 1 })),
+    model, recommend(catalogue, signals, criteria, recent, policy, model, "legacy").films.map(({ id }, index) => ({ movieId: id, rank: index + 1 })),
   ])) as LabSelections;
 }
 
