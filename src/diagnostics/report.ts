@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { calendarDate, contentTypes, todayUtc, type CandidatePolicy } from "../domain/candidate-quality";
 import { z } from "zod";
 import { diagnoseRecommendation, engineVersion, holdoutInputs, recommend } from "../domain/recommendation";
 import { criteriaSchema, metadataSchema, moods, type Criteria } from "../shared/recommendation";
@@ -28,7 +29,7 @@ export const scenarios: { id: string; criteria: Criteria }[] = [
   { id: "combined", criteria: { ...neutral, requiredCountries: ["ES", "JP"], requiredLanguages: ["es", "ja"], maxMinutes: 105, avoid: "strange" } },
 ];
 export const evaluationConfig = { folds: 5, minimumRating: 8, cutoff: 5, criteria: neutral, split: "sha256-id-v1" };
-const formatVersion = 1;
+const formatVersion = 2;
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
@@ -69,7 +70,7 @@ function diversity(films: ReturnType<typeof recommend>["films"]) {
   };
 }
 
-function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>) {
+function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof recommend>[1], recent: Set<number>, policy: CandidatePolicy) {
   const targets = signals.flatMap(({ film, ratings }) => {
     const numeric = ratings.flatMap(({ numeric }) => numeric === undefined ? [] : [numeric]);
     if (!numeric.length) return [];
@@ -82,29 +83,35 @@ function evaluate(catalogue: Input["catalogue"], signals: Parameters<typeof reco
     const heldOut = new Set(sample.map(({ id }) => id));
     const { candidates, training } = holdoutInputs(catalogue, signals, heldOut);
     const history = new Set([...recent].filter((id) => !heldOut.has(id)));
-    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history);
-    const selected = trace.result.films.map(({ id }) => id);
+    const trace = diagnoseRecommendation(candidates, training, evaluationConfig.criteria, history, policy);
     const ranks = new Map(trace.base.map(({ id, rank }) => [id, rank]));
+    const policyExclusions = new Map(trace.exclusions.filter(({ causes }) => causes.content)
+      .map(({ id, quality }) => [id, quality.exclusionReasons]));
+    const eligibleTargets = sample.filter(({ id }) => ranks.has(id)).length;
+    const selected = trace.result.films.map(({ id }) => id);
     const discount = (position: number) => 1 / Math.log2(position + 2);
     const dcg = selected.reduce((sum, id, position) => sum + (heldOut.has(id) ? discount(position) : 0), 0);
     const ideal = sample.slice(0, evaluationConfig.cutoff).reduce((sum, _, position) => sum + discount(position), 0);
     return {
-      index: index + 1, trainingSignals: training.length, rankedCandidates: trace.base.length, selected,
+      index: index + 1, eligibleTargets, trainingSignals: training.length, rankedCandidates: trace.base.length, selected,
       targets: sample.map(({ id, numeric, mean }) => ({
-        id, numeric, mean, baseRank: ranks.get(id) ?? null, selectedRank: selected.includes(id) ? selected.indexOf(id) + 1 : null,
+        id, numeric, mean, exclusions: policyExclusions.get(id) ?? [],
+        baseRank: ranks.get(id) ?? null, selectedRank: selected.includes(id) ? selected.indexOf(id) + 1 : null,
       })),
       recallAt5: selected.filter((id) => heldOut.has(id)).length / sample.length,
       ndcgAt5: dcg / ideal,
     };
   });
   return {
-    config: evaluationConfig, targets: targets.length, folds,
+    config: evaluationConfig, targets: targets.length, eligibleTargets: folds.reduce((sum, fold) => sum + fold.eligibleTargets, 0), folds,
     recallAt5: count ? folds.reduce((sum, fold) => sum + fold.recallAt5, 0) / count : null,
     ndcgAt5: count ? folds.reduce((sum, fold) => sum + fold.ndcgAt5, 0) / count : null,
   };
 }
 
-export function createReport(raw: unknown) {
+export function createReport(raw: unknown, { referenceDate = todayUtc(), mode = "classic" }: Partial<CandidatePolicy> = {}) {
+  if (calendarDate(referenceDate) !== referenceDate) throw new Error("Date de référence invalide. Format attendu AAAA-MM-JJ.");
+  const policy = { referenceDate, mode } as const;
   const input = parseInput(raw);
   const { catalogue } = input;
   const byId = new Map(catalogue.map((film) => [film.id, film]));
@@ -113,8 +120,8 @@ export function createReport(raw: unknown) {
   const popularity = catalogue.flatMap(({ metadata }) => metadata.popularity === undefined ? [] : [metadata.popularity]).sort((a, b) => a - b);
   const median = popularity.length ? (popularity[Math.floor((popularity.length - 1) / 2)] + popularity[Math.floor(popularity.length / 2)]) / 2 : null;
   return {
-    formatVersion, engineVersion,
-    fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig }),
+    formatVersion, engineVersion: mode === "legacy" ? "1.1.0" : engineVersion, policy,
+    fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, referenceDate }),
     catalogue: {
       total: catalogue.length, signals: signals.length,
       films: catalogue.map(({ id, title }) => ({ id, title })),
@@ -129,27 +136,45 @@ export function createReport(raw: unknown) {
       },
     },
     scenarios: scenarios.map(({ id, criteria }) => {
-      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent);
-      const counts = { seen: 0, country: 0, language: 0, duration: 0, recent: 0 };
+      const trace = diagnoseRecommendation(catalogue, signals, criteria, recent, policy);
+      const qualityById = new Map(trace.exclusions.map(({ id, quality }) => [id, quality]));
+      const counts = { seen: 0, country: 0, language: 0, duration: 0, content: 0, recent: 0 };
       let eligible = 0;
-      for (const { causes } of trace.exclusions) {
+      let eligibleBeforePolicy = 0;
+      const distribution = Object.fromEntries(contentTypes.map((type) => [type, 0]));
+      const exclusionsByType = Object.fromEntries(contentTypes.map((type) => [type, 0]));
+      const exclusionsByReason: Record<string, number> = {};
+      const retainedUnknown: number[] = [];
+      for (const { id, causes, quality } of trace.exclusions) {
         counts.seen += Number(causes.seen);
         counts.country += Number(causes.country);
         counts.language += Number(causes.language);
         counts.duration += Number(causes.duration);
         counts.recent += Number(causes.recent);
-        eligible += Number(!causes.seen && !causes.country && !causes.language && !causes.duration);
+        counts.content += Number(causes.content);
+        distribution[quality.category]++;
+        const otherwiseEligible = !causes.seen && !causes.country && !causes.language && !causes.duration;
+        eligibleBeforePolicy += Number(otherwiseEligible);
+        eligible += Number(otherwiseEligible && !causes.content);
+        if (otherwiseEligible && causes.content) {
+          exclusionsByType[quality.category]++;
+          for (const reason of quality.exclusionReasons) exclusionsByReason[reason] = (exclusionsByReason[reason] ?? 0) + 1;
+        }
+        if (otherwiseEligible && !causes.content && quality.category === "unknown") retainedUnknown.push(id);
       }
       return {
-        id, criteria, counts, eligible, removedByRecent: eligible - trace.base.length,
+        id, criteria, counts, eligible, eligibleBeforePolicy,
+        content: { distribution, uncertain: distribution.unknown, exclusionsByType, exclusionsByReason, retainedUnknown,
+          unknownShare: eligible ? retainedUnknown.length / eligible : null },
+        removedByRecent: eligible - trace.base.length,
         ...trace, diversity: diversity(trace.result.films),
         discovery: trace.result.films.map(({ id, metadata }) => ({
-          id, popularity: metadata.popularity ?? null,
+          id, type: qualityById.get(id)!.category, popularity: metadata.popularity ?? null,
           belowCatalogueMedian: metadata.popularity === undefined || median === null ? null : metadata.popularity < median,
         })),
       };
     }),
-    holdout: evaluate(catalogue, signals, recent),
+    holdout: evaluate(catalogue, signals, recent, policy),
   };
 }
 
@@ -163,6 +188,7 @@ export function compareReports(baseline: Report, current: Report) {
   const changed = <T>({ before, after }: { before: T; after: T }) => canonical(before) !== canonical(after);
   return {
     engine: pair(baseline.engineVersion, current.engineVersion),
+    policy: pair(baseline.policy, current.policy),
     scenarios: current.scenarios.map((scenario) => {
       const prior = baseline.scenarios.find(({ id }) => id === scenario.id);
       if (!prior) throw new Error("Scénario absent du rapport de référence.");
@@ -188,6 +214,10 @@ export function compareReports(baseline: Report, current: Report) {
         }),
         diversity: pair(prior.diversity, scenario.diversity),
         discovery: pair(prior.discovery, scenario.discovery),
+        content: pair(prior.content, scenario.content),
+        eligibility: pair(prior.eligible, scenario.eligible),
+        exclusionChanges: scenario.exclusions.flatMap((row, index) =>
+          changed(pair(prior.exclusions[index], row)) ? [{ id: row.id, ...pair(prior.exclusions[index], row) }] : []),
         exclusionsChanged: changed(pair(prior.exclusions, scenario.exclusions)),
       };
     }),

@@ -155,7 +155,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.1.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.2.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });
@@ -185,6 +185,9 @@ describe("intégration TMDB et SQLite", () => {
       expect(url.pathname).toBe("/3/movie/329865");
       return mockResponse({
         id: remote.tmdbId, title: remote.title, original_title: remote.originalTitle, release_date: "2016-11-10",
+        status: "Released", genres: [{ id: 878, name: "Science-Fiction" }],
+        keywords: { keywords: [{ id: 123, name: "first contact" }] },
+        release_dates: { results: [{ iso_3166_1: "US", release_dates: [{ type: 3, release_date: "2016-11-11T00:00:00.000Z" }] }] },
         original_language: "en", production_countries: [{ iso_3166_1: "US" }], runtime: 116,
         overview: "Une linguiste est appelée pour établir le premier contact. Suite du récit.",
         credits: { crew: [{ name: "Denis Villeneuve", job: "Director" }] }, imdb_id: remote.imdbId,
@@ -194,7 +197,10 @@ describe("intégration TMDB et SQLite", () => {
     const client = new TmdbClient("test-token", fetcher, () => now);
     expect(await findTonight(database.db, criteria, async () => client, now)).toMatchObject({
       connection: "online", films: [{ metadata: { minutes: 116, directors: ["Denis Villeneuve"],
-        synopsis: "Une linguiste est appelée pour établir le premier contact.", poster: "/arrival.jpg" } }],
+        synopsis: "Une linguiste est appelée pour établir le premier contact.", poster: "/arrival.jpg",
+        release: { source: "TMDB", primaryDate: "2016-11-10", status: "Released", runtime: 116,
+          genres: [{ id: 878, name: "Science-Fiction" }], keywords: [{ id: 123, name: "first contact" }],
+          events: [{ country: "US", type: 3, date: "2016-11-11T00:00:00.000Z" }] } } }],
     });
     expect(await findTonight(database.db, criteria, async () => client, now, true)).toMatchObject({ connection: "cached" });
     expect(fetcher.mock.calls.filter(([url]) => String(url).includes("/movie/329865"))).toHaveLength(1);

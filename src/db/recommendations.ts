@@ -54,7 +54,7 @@ function normalizeMetadata(input: Record<string, unknown> | null): Metadata {
   return {
     genres: unique(read("genres")), directors: unique(read("directors")), keywords: unique(read("keywords")),
     countries: unique(read("countries")), minutes: read("minutes"), language: read("language"),
-    synopsis: read("synopsis")?.trim().slice(0, 280), poster: read("poster"), popularity: read("popularity"),
+    synopsis: read("synopsis")?.trim().slice(0, 280), poster: read("poster"), popularity: read("popularity"), release: read("release"),
   };
 }
 

@@ -1,0 +1,21 @@
+{
+  "catalogue": [
+    {"id":1,"title":"Une ombre sur le quai","year":1998,"metadata":{"minutes":96,"genres":["Thriller"],"countries":["FR"],"language":"fr"}},
+    {"id":2,"title":"Sous les marées","year":2020,"metadata":{"minutes":89,"genres":["Documentary"],"countries":["ES"],"language":"es"}},
+    {"id":3,"title":"Une nuit de papier","year":2022,"metadata":{"minutes":85,"genres":["Animation","Adventure"],"countries":["JP"],"language":"ja"}},
+    {"id":4,"title":"Live Show Music Concert","year":1971,"metadata":{"minutes":45,"genres":["Music"],"keywords":["experimental film"],"countries":["JP"],"language":"ja","popularity":0.1}},
+    {"id":5,"title":"Accord de minuit","year":2015,"metadata":{"minutes":110,"genres":["Music"],"keywords":["concert film"],"countries":["ES"],"language":"es"}},
+    {"id":6,"title":"La fin du bal","year":2018,"metadata":{"minutes":130,"genres":["Drama"],"keywords":["filmed play"]}},
+    {"id":7,"title":"La Patrouille des nuages : Dernière mission","year":2010,"metadata":{"minutes":73,"genres":["Animation","Adventure","Téléfilm"],"keywords":["tv series spin-off"],"countries":["JP"],"language":"ja"}},
+    {"id":8,"title":"Les rues sans danger","year":1997,"metadata":{"minutes":13,"genres":["Animation","Family","Téléfilm"],"keywords":["road safety","short film"]}},
+    {"id":9,"title":"La Salle des comètes","year":2030,"metadata":{"minutes":98,"genres":["Science Fiction"],"release":{"source":"TMDB","primaryDate":"2030-03-08","status":"Post Production"}}},
+    {"id":10,"title":"Le Bleu du jour","year":null,"metadata":{}},
+    {"id":11,"title":"La Note tenue","year":2001,"status":"seen","metadata":{"minutes":103,"genres":["Music"],"keywords":["concert film"]}},
+    {"id":12,"title":"L'Autre rive","year":1999,"status":"seen","metadata":{"minutes":101,"genres":["Documentary"],"countries":["ES"],"language":"es"}}
+  ],
+  "signals": [
+    {"id":11,"ratings":[{"numeric":8.5}],"spontaneous":true,"memorable":false,"rewatch":false},
+    {"id":12,"ratings":[{"numeric":9.5}],"spontaneous":false,"memorable":false,"rewatch":false}
+  ],
+  "recent":[1]
+}
