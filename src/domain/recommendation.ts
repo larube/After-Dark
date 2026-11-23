@@ -3,12 +3,15 @@ import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-qua
 import { decadeOf, tonightDefaults, type TonightPreferences } from "./tonight-preferences";
 import { normalizeTitle } from "./ratings";
 
-import { affinityDetails, buildAffinity, catalogueFrequency, features, type AffinityModel } from "./affinity";
+import { affinityDetails, buildAffinity, catalogueFrequency, features, type TonightAffinityModel } from "./affinity";
 export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
 
 export const legacyEngineVersion = "1.3.0";
-export const engineVersion = "1.4.0";
-export type RankingPolicy = "legacy" | "relevance-initial" | "relevance";
+export const engineVersion = "1.5.0";
+export const tonightAffinityModel = "personal" as const;
+export const tonightRanking = "relevance-personal" as const;
+export type RankingPolicy = "legacy" | "relevance-initial" | "relevance" | "relevance-personal";
+const usesTonightPreferences = (ranking: RankingPolicy) => ranking === "relevance" || ranking === "relevance-personal";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
   dismissed?: boolean;
@@ -69,7 +72,7 @@ function reputationContribution(reputation: Metadata["reputation"]) {
   return Math.max(-3, Math.min(3, 1.5 * adjusted));
 }
 
-function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: AffinityModel, ranking: RankingPolicy, preferences: TonightPreferences, frequency?: ReturnType<typeof catalogueFrequency>) {
+function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: TonightAffinityModel, ranking: RankingPolicy, preferences: TonightPreferences, frequency?: ReturnType<typeof catalogueFrequency>) {
   const { metadata } = film;
   const affinity = affinityDetails(film, traits, model, frequency);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
@@ -80,15 +83,17 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   const energy = criteria.energy === "low" && duration !== undefined ? duration <= 100 ? 0.7 : duration > 135 ? -0.7 : 0 : 0;
   const exploration = metadata.popularity === undefined ? 0 : 1 / (1 + metadata.popularity / 10);
   const reputation = ranking === "legacy" ? 0 : reputationContribution(metadata.reputation);
-  const period = ranking === "relevance" ? preferences.period : null;
+  const period = usesTonightPreferences(ranking) ? preferences.period : null;
   const older = !!period && film.year !== null && film.year > 0 && film.year < period.fromYear;
   const periodMismatch = older && affinity.score < period.minimumAffinity &&
     !((mood?.weight ?? 0) >= 2 && reputation >= period.minimumReputationWithMood);
-  const animation = ranking === "relevance" && metadata.genres.some((genre) => normalizeTitle(genre) === "animation");
+  const animation = usesTonightPreferences(ranking) && metadata.genres.some((genre) => normalizeTitle(genre) === "animation");
   // Keep the evidence gate on the original scale. Soft adjustments affect ordering.
-  const reputationWeight = ranking === "relevance" && reputation > 0 ? 0.65 : 1;
+  const reputationWeight = ranking !== "legacy" && ranking !== "relevance-initial" && reputation > 0
+    ? 0.65 * (ranking === "relevance-personal" ? 1 - Math.min(1, Math.max(0, affinity.score)) : 1)
+    : 1;
   const reasons = [
-    ...(metadata.reputation && reputation >= 1.5 ? [`Avis TMDB favorables, pondérés par le nombre de votes (${metadata.reputation.count}).`] : []),
+    ...(metadata.reputation && reputation >= 1.5 && reputationWeight > 0 ? [`Avis TMDB favorables, pondérés par le nombre de votes (${metadata.reputation.count}).`] : []),
     ...(ranking === "legacy" && criteria.mood === "surprise" && exploration >= 0.5 ? ["Popularité TMDB modérée, favorisée en mode Surprends-moi."] : []),
     ...(mood?.labels.length ? [`Indices pour ce mood dans les métadonnées : ${mood.labels.join(", ")}.`] : []),
     ...(affinity.positive.length ? [`Traits associés à vos appréciations positives : ${affinity.positive.join(", ")}.`] : []),
@@ -152,13 +157,13 @@ type Step = {
 
 function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy,
-  model: AffinityModel,
+  model: TonightAffinityModel,
   rankingPolicy: RankingPolicy,
   preferences: TonightPreferences,
   trace?: Trace,
 ) {
   const traits = buildAffinity(signals, undefined, model !== "current");
-  const frequency = model === "rarity" || model === "hybrid" ? catalogueFrequency(catalogue) : undefined;
+  const frequency = model === "rarity" || model === "hybrid" || model === "personal" ? catalogueFrequency(catalogue) : undefined;
   const candidates = catalogue.map((film) => candidateEligibility(film, criteria, policy));
   if (trace) trace.candidates = candidates;
   const eligibleFilms = catalogue.filter((film, index) => !Object.values(candidates[index].causes).some(Boolean));
@@ -174,11 +179,11 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const selected: Ranked[] = [];
   const films: Recommendation["films"] = [];
   const categories = ["safe", "gem", "wildcard", "safe", "gem"] as const;
-  const olderLimit = rankingPolicy === "relevance" ? preferences.period?.maxExceptions ?? Infinity : Infinity;
+  const olderLimit = usesTonightPreferences(rankingPolicy) ? preferences.period?.maxExceptions ?? Infinity : Infinity;
   let olderSelected = 0;
   for (const category of categories) {
     const ranking = ranked.filter(({ older }) => !older || olderSelected < olderLimit).map((candidate) => {
-      const decadePenalty = rankingPolicy === "relevance" && candidate.decade !== null &&
+      const decadePenalty = usesTonightPreferences(rankingPolicy) && candidate.decade !== null &&
         selected.some(({ decade }) => decade === candidate.decade) ? preferences.repeatedDecadePenalty : 0;
       const penalty = diversityPenalty(candidate, selected) * (rankingPolicy === "legacy" ? 1 : 0.2);
       const bonus = rankingPolicy !== "legacy" ? 0 : category === "gem" ? candidate.exploration * 2
@@ -214,13 +219,13 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
 }
 
 export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance",
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
   preferences: TonightPreferences = tonightDefaults) {
   return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences);
 }
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current", ranking: RankingPolicy = "relevance",
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
   preferences: TonightPreferences = tonightDefaults) {
   const trace: Trace = { base: [], weak: new Set(), periodMismatch: new Set(), periodLimit: new Set(), steps: [], candidates: [] };
   const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, trace);

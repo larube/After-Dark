@@ -17,7 +17,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "diagnose": "node scripts/diagnose.mjs",
-    "calibrate:affinity": "node scripts/calibrate-affinity.mjs"
+    "calibrate:affinity": "node scripts/calibrate-affinity.mjs",
+    "diagnose:tonight-affinity": "node scripts/compare-tonight-affinity.mjs"
   },
   "devDependencies": {
     "@electron-forge/cli": "7.11.2",

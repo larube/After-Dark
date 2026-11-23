@@ -10,6 +10,7 @@ import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
 import { importProfile } from "../src/import/profile";
 import { attachPosters } from "../src/main/posters";
+import { compareTonightAffinity } from "../src/diagnostics/tonight-affinity";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../src/diagnostics/tonight";
 import { findTonight } from "../src/main/recommend";
 import { discoveryQueries, TmdbClient, type TmdbFilm } from "../src/main/tmdb";
@@ -158,7 +159,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.4.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.5.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });
@@ -259,6 +260,9 @@ describe("intégration TMDB et SQLite", () => {
     expect(json).not.toContain("PRIVATE_TEST_TOKEN");
     expect((await stat(join(output, "tonight.json"))).mode & 0o777).toBe(0o600);
     await expect(writeTonightDiagnostic(output, report)).rejects.toMatchObject({ code: "EEXIST" });
+    const comparison = await compareTonightAffinity(join(folder, "cinema.sqlite"), JSON.parse(json));
+    expect(comparison.variants).toHaveLength(6);
+    expect(comparison.variants.at(-1)).toMatchObject({ matchesCapture: true, forbiddenSelections: 0 });
     const repeat = await findTonight(db, criteria, async () => client, now, true);
     expect(repeat.films).toEqual(result.films);
     expect(capture).toHaveBeenCalledOnce();

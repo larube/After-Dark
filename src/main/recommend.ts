@@ -6,7 +6,7 @@ import type { CinemaDatabase } from "../db/client";
 import { cacheFilm, readCatalogue, readHistory, saveRecommendation } from "../db/recommendations";
 import type { TonightPreferences } from "../domain/tonight-preferences";
 import { tonightDiagnostic, type TonightDiagnostic, type Acquisition } from "../diagnostics/tonight";
-import { diagnoseRecommendation, recommend } from "../domain/recommendation";
+import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
 import type { Criteria, Recommendation } from "../shared/recommendation";
 import { TmdbClient, TmdbError } from "./tmdb";
 
@@ -87,7 +87,7 @@ export async function findTonight(
   const blocked = await franchiseExclusions(db, state.movies);
   const date = now.toISOString();
   const args = [state.catalogue, state.signals, criteria, allowRecent ? new Set<number>() : history.recent,
-    { referenceDate: date.slice(0, 10), excludedIds: blocked }, "current", "relevance", preferences] as const;
+    { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, preferences] as const;
   const trace = onDiagnostic ? diagnoseRecommendation(...args) : undefined;
   const result = { ...(trace?.result ?? recommend(...args)), connection };
   await saveRecommendation(db, criteria, result, date);

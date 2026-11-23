@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { calendarDate, contentTypes, todayUtc, type CandidatePolicy } from "../domain/candidate-quality";
 import { z } from "zod";
 import { affinityModels, catalogueFrequency, type AffinityModel } from "../domain/affinity";
-import { diagnoseRecommendation, engineVersion, legacyEngineVersion, holdoutInputs, recommend, type RankingPolicy } from "../domain/recommendation";
+import { diagnoseRecommendation, legacyEngineVersion, holdoutInputs, recommend, type RankingPolicy } from "../domain/recommendation";
 import { criteriaSchema, metadataSchema, moods, type Criteria } from "../shared/recommendation";
 
 const filmSchema = z.strictObject({
@@ -149,7 +149,7 @@ export function createReport(raw: unknown, {
   const popularity = catalogue.flatMap(({ metadata }) => metadata.popularity === undefined ? [] : [metadata.popularity]).sort((a, b) => a - b);
   const median = popularity.length ? (popularity[Math.floor((popularity.length - 1) / 2)] + popularity[Math.floor(popularity.length / 2)]) / 2 : null;
   return {
-    formatVersion, engineVersion: ranking === "legacy" ? (mode === "legacy" ? "1.1.0" : legacyEngineVersion) : ranking === "relevance-initial" ? "1.4.0-pr21-initial" : engineVersion, policy,
+    formatVersion, engineVersion: ranking === "legacy" ? (mode === "legacy" ? "1.1.0" : legacyEngineVersion) : ranking === "relevance-initial" ? "1.4.0-pr21-initial" : "1.4.0", policy,
     ...(ranking === "relevance" ? { preferences } : {}),
     ...(affinityModel === "current" ? {} : { affinityModel }),
     fingerprint: hash({ catalogue, signals: input.signals, recent: [...recent], scenarios, evaluationConfig, referenceDate }),

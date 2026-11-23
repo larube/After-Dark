@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { filmFranchise } from "../domain/franchises";
-import { engineVersion, type Film, type diagnoseRecommendation } from "../domain/recommendation";
+import { engineVersion, tonightAffinityModel, tonightRanking, type Film, type diagnoseRecommendation } from "../domain/recommendation";
 import { normalizeTitle } from "../domain/ratings";
 import { decadeOf, tonightDefaults, type TonightPreferences } from "../domain/tonight-preferences";
 import type { Criteria, Recommendation } from "../shared/recommendation";
@@ -93,7 +93,7 @@ export function tonightDiagnostic(input: {
   const alternatives = trace.base.filter(({ id }) => !selected.has(id)).slice(0, 30).map(describe);
   const selection = trace.result.films.map(({ id }) => describe(base.get(id)!));
   return {
-    format: "after-dark-tonight-v1", engineVersion, date: input.date, criteria: input.criteria,
+    format: "after-dark-tonight-v1", engineVersion, affinityModel: tonightAffinityModel, ranking: tonightRanking, date: input.date, criteria: input.criteria,
     allowRecent: input.allowRecent, preferences: input.preferences ?? tonightDefaults,
     acquisition,
     pool: {
