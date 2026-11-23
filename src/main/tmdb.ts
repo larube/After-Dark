@@ -9,15 +9,16 @@ const listing = z.object({
   release_date: z.string().nullish(), adult: z.boolean().optional(),
 });
 const results = z.object({ results: z.array(z.unknown()).max(100) });
-const named = z.object({ name: z.string().min(1) });
+const named = z.object({ id: z.number().int().optional(), name: z.string().min(1) });
 const details = listing.extend({
-  runtime: z.number().int().nullish(), original_language: z.string().nullish(),
+  status: z.string().nullish(), runtime: z.number().int().nullish(), original_language: z.string().nullish(),
   genres: z.array(named).optional(), production_countries: z.array(z.object({ iso_3166_1: z.string() })).optional(),
   credits: z.object({ crew: z.array(named.extend({ job: z.string() })) }).optional(),
   keywords: z.object({ keywords: z.array(named) }).optional(),
   alternative_titles: z.object({ titles: z.array(z.object({ title: z.string().min(1) })) }).optional(),
   release_dates: z.object({ results: z.array(z.object({
-    release_dates: z.array(z.object({ release_date: z.string(), type: z.number() })),
+    iso_3166_1: z.string().optional(),
+    release_dates: z.array(z.object({ release_date: z.string(), type: z.number().int() })),
   })) }).optional(),
   imdb_id: z.string().nullish(), overview: z.string().nullish(), poster_path: z.string().nullish(),
   popularity: z.number().nonnegative().optional(),
@@ -190,6 +191,12 @@ export class TmdbClient {
         keywords: [...new Set(movie.keywords?.keywords.map(({ name }) => name))],
         synopsis: synopsis(movie.overview), poster: valid(movie.poster_path, /^\/[A-Za-z0-9_-]+\.jpg$/),
         popularity: movie.popularity,
+        release: {
+          source: "TMDB", primaryDate: movie.release_date, status: movie.status, runtime: movie.runtime,
+          genres: movie.genres, keywords: movie.keywords?.keywords,
+          events: movie.release_dates?.results.flatMap(({ iso_3166_1, release_dates }) =>
+            release_dates.map(({ release_date, type }) => ({ country: iso_3166_1, date: release_date, type }))),
+        },
       },
     };
   }

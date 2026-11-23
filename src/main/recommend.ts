@@ -67,7 +67,8 @@ export async function findTonight(
     connection = error.connection;
   }
   state = await readCatalogue(db);
-  const result = { ...recommend(state.catalogue, state.signals, criteria, allowRecent ? new Set() : history.recent), connection };
+  const result = { ...recommend(state.catalogue, state.signals, criteria, allowRecent ? new Set() : history.recent,
+    { referenceDate: now.toISOString().slice(0, 10) }), connection };
   await saveRecommendation(db, criteria, result, now.toISOString());
   return result;
 }

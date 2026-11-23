@@ -56,9 +56,13 @@ const within = (root: string, path: string) => {
   return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\"));
 };
 
-export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string }) {
-  const report = createReport(options.sqlite ? await readLocalDatabase(options.sqlite) : await readJson(options.input!));
-  const comparison = options.baseline ? compareReports(await readJson(options.baseline) as Report, report) : undefined;
+export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean }) {
+  if (options.baseline && options.comparePolicy) throw new Error("Choisissez soit --baseline, soit --compare-policy.");
+  const input = options.sqlite ? await readLocalDatabase(options.sqlite) : await readJson(options.input!);
+  const report = createReport(input, { referenceDate: options.referenceDate });
+  const baseline = options.baseline ? await readJson(options.baseline) as Report
+    : options.comparePolicy ? createReport(input, { referenceDate: report.policy.referenceDate, mode: "legacy" }) : undefined;
+  const comparison = baseline ? compareReports(baseline, report) : undefined;
   const output = resolve(options.output);
   const root = await realpath(process.cwd());
   if (options.sqlite && within(root, output)) throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
@@ -82,5 +86,6 @@ export async function diagnose(options: { input?: string; sqlite?: string; outpu
   const write = (name: string, data: string) => writeFile(join(directory, name), data, { mode: 0o600, flag: "wx" });
   await write("report.json", JSON.stringify(report, null, 2) + "\n");
   await write("report.html", renderReport(report, comparison));
+  if (baseline && options.comparePolicy) await write("legacy.json", JSON.stringify(baseline, null, 2) + "\n");
   if (comparison) await write("comparison.json", JSON.stringify(comparison, null, 2) + "\n");
 }

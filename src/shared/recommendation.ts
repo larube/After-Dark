@@ -24,6 +24,14 @@ export const metadataSchema = z.object({
   keywords: z.array(z.string()).default([]),
   synopsis: z.string().optional(), poster: z.string().regex(/^\/[a-zA-Z0-9_-]+\.jpg$/).optional(),
   popularity: z.number().nonnegative().optional(),
+  release: z.strictObject({
+    source: z.literal("TMDB"),
+    primaryDate: z.string().nullable().optional(), status: z.string().nullable().optional(),
+    runtime: z.number().int().nullable().optional(),
+    genres: z.array(z.object({ id: z.number().int().optional(), name: z.string() })).optional(),
+    keywords: z.array(z.object({ id: z.number().int().optional(), name: z.string() })).optional(),
+    events: z.array(z.object({ country: z.string().optional(), date: z.string(), type: z.number().int() })).optional(),
+  }).optional(),
 });
 export type Metadata = z.infer<typeof metadataSchema>;
 

@@ -1,7 +1,8 @@
 import type { Criteria, Metadata, Recommendation } from "../shared/recommendation";
+import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
 import { normalizeTitle } from "./ratings";
 
-export const engineVersion = "1.1.0";
+export const engineVersion = "1.2.0";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
   status?: "seen" | "unseen" | "unknown";
@@ -43,8 +44,14 @@ function eligibility(film: Film, criteria: Criteria) {
   };
 }
 
-export function eligible(film: Film, criteria: Criteria) {
-  return !Object.values(eligibility(film, criteria)).some(Boolean);
+function candidateEligibility(film: Film, criteria: Criteria, policy: CandidatePolicy) {
+  const quality = classifyContent(film.metadata, policy.referenceDate);
+  const content = policy.mode !== "legacy" && quality.exclusionReasons.length > 0;
+  return { quality, causes: { ...eligibility(film, criteria), content } };
+}
+
+export function eligible(film: Film, criteria: Criteria, policy: CandidatePolicy = { referenceDate: todayUtc() }) {
+  return !Object.values(candidateEligibility(film, criteria, policy).causes).some(Boolean);
 }
 
 function features(metadata: Metadata) {
@@ -154,10 +161,13 @@ type Step = {
 };
 
 function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  trace?: { base: Ranked[]; steps: Step[] },
+  policy: CandidatePolicy,
+  trace?: { base: Ranked[]; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] },
 ) {
   const traits = buildAffinity(signals);
-  const eligibleFilms = catalogue.filter((film) => eligible(film, criteria));
+  const candidates = catalogue.map((film) => candidateEligibility(film, criteria, policy));
+  if (trace) trace.candidates = candidates;
+  const eligibleFilms = catalogue.filter((_, index) => !Object.values(candidates[index].causes).some(Boolean));
   let ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits));
   if (trace) trace.base = [...ranked].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
   const selected: Ranked[] = [];
@@ -191,18 +201,20 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   return { films, personalized: selected.some((candidate) => candidate.affinity !== 0), status } as const;
 }
 
-export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>) {
-  return runRecommendation(catalogue, signals, criteria, recent);
+export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
+  policy: CandidatePolicy = { referenceDate: todayUtc() }) {
+  return runRecommendation(catalogue, signals, criteria, recent, policy);
 }
 
-export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>) {
-  const trace: { base: Ranked[]; steps: Step[] } = { base: [], steps: [] };
-  const result = runRecommendation(catalogue, signals, criteria, recent, trace);
+export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
+  policy: CandidatePolicy = { referenceDate: todayUtc() }) {
+  const trace: { base: Ranked[]; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] } = { base: [], steps: [], candidates: [] };
+  const result = runRecommendation(catalogue, signals, criteria, recent, policy, trace);
   return {
     result, steps: trace.steps,
-    exclusions: catalogue.map((film) => {
-      const causes = eligibility(film, criteria);
-      return { id: film.id, causes: { ...causes, recent: recent.has(film.id) },
+    exclusions: catalogue.map((film, index) => {
+      const { causes, quality } = trace.candidates[index];
+      return { id: film.id, quality, causes: { ...causes, recent: recent.has(film.id) },
         excluded: Object.values(causes).some(Boolean) || recent.has(film.id) };
     }),
     base: trace.base.map(({ film, score, details, exploration, reasons, warnings }, index) => ({
