@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { discoveryModes, type DiscoveryFilm, type DiscoveryMode, type DiscoveryView } from "../shared/discovery";
 import { discoveryExportNotice } from "./discovery-export";
+import { AllocineLink } from "./allocine";
 
 const modes = {
   gems: { title: "Les pépites", description: "Des films de popularité TMDB plus basse dans le catalogue, avec des liens possibles avec vos goûts." },
@@ -10,10 +11,14 @@ const modes = {
 
 function DiscoveryCard({ film, actions }: { film: DiscoveryFilm; actions: ReactNode }) {
   const meta = [film.year, film.minutes && `${film.minutes} min`].filter(Boolean).join(" · ");
+  const [broken, setBroken] = useState<string>();
   return <article className="discovery-card">
     <div className="poster-mount discovery-poster">
-      {film.posterData ? <img className="poster" src={film.posterData} alt="" /> :
-        <div className="poster poster-empty"><span aria-hidden="true">◈</span><span>Affiche indisponible</span></div>}
+      {film.posterData && film.posterData !== broken ?
+        <img className="poster" src={film.posterData} alt="" onError={() => setBroken(film.posterData)} /> :
+        <div className="poster poster-empty discovery-poster-placeholder">
+          <span aria-hidden="true">◈</span><span>Affiche indisponible</span>
+        </div>}
     </div>
     <div className="discovery-copy">
       <h3>{film.title}</h3>
@@ -21,6 +26,7 @@ function DiscoveryCard({ film, actions }: { film: DiscoveryFilm; actions: ReactN
       {(film.genres.length > 0 || film.format) && <p className="film-meta">{[...new Set([...film.genres, ...(film.format ? ["Téléfilm"] : [])])].join(" · ")}</p>}
       <p className="discovery-reason">{film.reason}</p>
       {film.synopsis && <details className="film-reasons"><summary>Lire le synopsis</summary><p>{film.synopsis}</p></details>}
+      <AllocineLink title={film.title} year={film.year} />
     </div>
     <div className="discovery-actions">{actions}</div>
   </article>;
@@ -28,9 +34,10 @@ function DiscoveryCard({ film, actions }: { film: DiscoveryFilm; actions: ReactN
 
 type PageState = { view: DiscoveryView | null; empty?: boolean };
 
-export function Discovery({ active, disabled, actions }: {
+export function Discovery({ active, disabled, enriched, actions }: {
   active: boolean;
   disabled: boolean;
+  enriched?: number;
   actions: (film: DiscoveryFilm) => ReactNode;
 }) {
   const [mode, setMode] = useState<DiscoveryMode>("gems");
@@ -40,7 +47,10 @@ export function Discovery({ active, disabled, actions }: {
   const [retry, setRetry] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [exportNotice, setExportNotice] = useState("");
-  const [posters, setPosters] = useState<Record<string, string>>({});
+  type Posters = { exploration: number; images: Record<number, string> };
+  const [posters, setPosters] = useState<Partial<Record<DiscoveryMode, Posters>>>({});
+  const loaded = useRef(posters);
+  const [connection, setConnection] = useState(0);
   const generation = useRef(0);
   const inFlight = useRef(false);
   const state = states[mode];
@@ -87,23 +97,34 @@ export function Discovery({ active, disabled, actions }: {
 
   const view = state?.view;
   useEffect(() => {
+    if (!active) return;
+    const reconnect = () => setConnection((value) => value + 1);
+    window.addEventListener("online", reconnect);
+    return () => window.removeEventListener("online", reconnect);
+  }, [active]);
+
+  useEffect(() => {
     if (!active || !view || generating === mode) return;
     let live = true;
-    setPosters({});
+    const exploreId = view.id;
+    const previous = loaded.current[mode];
+    const images = { ...(previous?.exploration === exploreId ? previous.images : {}) };
+    const missing = view.films.filter(({ id, posterData }) => !posterData && !images[id]).map(({ id }) => id);
     async function load() {
-      if (!view) return;
-      const missing = view.films.filter(({ posterData }) => !posterData).map(({ id }) => id);
       for (let offset = 0; live && offset < missing.length; offset += 2) {
-        const result = await window.afterDark.discoveryPosters(mode, view.id, missing.slice(offset, offset + 2));
-        if (!live || !result.ok) return;
-        if (result.data.length) setPosters((current) => ({
-          ...current, ...Object.fromEntries(result.data.map(({ id, data }) => [view.id + ":" + id, data])),
-        }));
+        const result = await window.afterDark.discoveryPosters(mode, exploreId, missing.slice(offset, offset + 2));
+        if (!live) return;
+        if (!result.ok || !result.data.length) continue;
+        Object.assign(images, Object.fromEntries(result.data.map(({ id, data }) => [id, data])));
+        loaded.current = { ...loaded.current, [mode]: { exploration: exploreId, images: { ...images } } };
+        setPosters(loaded.current);
       }
     }
     void load().catch(() => undefined);
     return () => { live = false; };
-  }, [active, generating, mode, view]);
+  }, [active, connection, enriched, generating, mode, view]);
+
+  const currentPosters = posters[mode];
 
   async function exportDiagnostic() {
     if (!view || exporting) return;
@@ -149,7 +170,9 @@ export function Discovery({ active, disabled, actions }: {
     <p className="discovery-status" role="status">{status}</p>
     {error && <p className="notice error" role="alert">{error}</p>}
     {view && <ul className="discovery-grid" aria-label={modes[mode].title} aria-busy={loading}>
-      {view.films.map((film) => <li key={film.id}><DiscoveryCard film={{ ...film, posterData: film.posterData ?? posters[view.id + ":" + film.id] }} actions={actions(film)} /></li>)}
+      {view.films.map((film) => <li key={film.id}><DiscoveryCard film={{ ...film,
+        posterData: film.posterData ?? (currentPosters?.exploration === view.id ? currentPosters.images[film.id] : undefined),
+      }} actions={actions(film)} /></li>)}
     </ul>}
     {view && <details className="film-reasons">
       <summary>Diagnostic de cette exploration</summary>

@@ -1,5 +1,5 @@
 import { currentDiscovery, discoveryDiagnostic, generateDiscovery, inspectDiscovery } from "../db/discovery";
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { mkdirSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -14,6 +14,7 @@ import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
 import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-posters";
+import { openAllocine } from "./allocine";
 import { exportDiscoveryDiagnostic } from "./discovery-export";
 import { startEnrichment } from "./enrichment";
 import { findTonight, localTmdb } from "./recommend";
@@ -193,6 +194,10 @@ void app.whenReady().then(async () => {
     }
   });
   register(ipc.discoveryCurrent, async (db, _owner, [mode]) => discoveryView(db, await currentDiscovery(db, mode)));
+  register(ipc.openAllocine, async (_db, _owner, [film]) => {
+    await openAllocine(film, (url) => shell.openExternal(url));
+    return { ok: true, data: null } as const;
+  });
   register(ipc.discoveryGenerate, async (db, _owner, [mode, previous]) => discoveryView(db, await generateDiscovery(db, mode, previous)));
   register(ipc.discoveryPosters, async (db, _owner, [mode, id, ids]): ReturnType<DesktopApi["discoveryPosters"]> => {
     const row = await currentDiscovery(db, mode);

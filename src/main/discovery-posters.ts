@@ -6,7 +6,7 @@ import type { TmdbClient } from "./tmdb";
 const cacheFile = (directory: string, tmdbId: number) => join(directory, "posters", "movie-" + tmdbId + ".txt");
 
 export async function cachedDiscoveryPosterPath(path: string | undefined, tmdbId: number | null | undefined, directory: string) {
-  if (path || !tmdbId) return path;
+  if (validPoster(path) || !tmdbId) return validPoster(path) ? path : undefined;
   const value = await readFile(cacheFile(directory, tmdbId), "utf8").catch(() => "");
   return validPoster(value) ? value : undefined;
 }
@@ -44,5 +44,5 @@ export function createDiscoveryPosters(getClient: (directory: string) => Promise
   }
 
   return async (path: string | undefined, tmdbId: number | null | undefined, directory: string) =>
-    loadPoster(path ?? (tmdbId ? await findPath(tmdbId, directory) : undefined), directory, true);
+    loadPoster(validPoster(path) ? path : tmdbId ? await findPath(tmdbId, directory) : undefined, directory, true);
 }
