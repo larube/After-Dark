@@ -20,23 +20,33 @@ export async function currentDiscovery(db: CinemaDatabase, mode: DiscoveryMode):
   return latest ?? null;
 }
 
+export async function discoveryExclusions(db: CinemaDatabase | CinemaTransaction) {
+  const blocked = await db.select({ id: movieFeedback.movieId }).from(movieFeedback)
+    .where(or(eq(movieFeedback.intention, "not_interested"), isNotNull(movieFeedback.seenAt))).all();
+  return new Set(blocked.map(({ id }) => id));
+}
+
+export async function discoveryRotation(db: CinemaDatabase | CinemaTransaction, mode: DiscoveryMode,
+  recent?: Exploration[]) {
+  const previous = (recent ?? await history(db, mode, discoveryHistorySize)).map(({ films }) => films.map(({ id }) => id));
+  const adjacent: number[] = [];
+  for (const other of discoveryModes) {
+    if (other === mode) continue;
+    const latest = (await history(db, other, 1))[0];
+    if (latest) adjacent.push(...latest.films.map(({ id }) => id));
+  }
+  return { previous, adjacent };
+}
+
 export async function generateDiscovery(db: CinemaDatabase, mode: DiscoveryMode, previous: number | null,
   now = new Date(), seed: string = randomUUID()) {
   return db.transaction(async (tx) => {
     const recent = await history(tx, mode, discoveryHistorySize);
     // An old or duplicated request returns the current exploration instead of advancing rotation twice.
     if ((recent[0]?.id ?? null) !== previous) return recent[0] ?? null;
-    const adjacent: number[] = [];
-    for (const other of discoveryModes) {
-      if (other === mode) continue;
-      const latest = (await history(tx, other, 1))[0];
-      if (latest) adjacent.push(...latest.films.map(({ id }) => id));
-    }
-    const rotation = { previous: recent.map(({ films }) => films.map(({ id }) => id)), adjacent };
+    const rotation = await discoveryRotation(tx, mode, recent);
     const { catalogue, signals } = await readCatalogue(tx);
-    const blocked = await tx.select({ id: movieFeedback.movieId }).from(movieFeedback)
-      .where(or(eq(movieFeedback.intention, "not_interested"), isNotNull(movieFeedback.seenAt))).all();
-    const excluded = new Set(blocked.map(({ id }) => id));
+    const excluded = await discoveryExclusions(tx);
     const createdAt = now.toISOString();
     const referenceDate = createdAt.slice(0, 10);
     const result = explore(catalogue, signals, excluded, mode, rotation, seed, referenceDate);

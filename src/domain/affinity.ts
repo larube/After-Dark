@@ -42,7 +42,7 @@ export function buildAffinity(signals: Signal[], qualitative = qualitativeWeight
   return traits;
 }
 
-function uniqueFeatures(metadata: Metadata) {
+export function uniqueFeatures(metadata: Metadata) {
   return [...new Map(features(metadata).map((feature) => [feature.id, feature])).values()];
 }
 
