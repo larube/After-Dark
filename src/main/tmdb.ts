@@ -1,6 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import type { Criteria, Metadata } from "../shared/recommendation";
+import { tmdbCollectionSchema } from "../shared/franchises";
 import { normalizeTitle } from "../domain/ratings";
 
 const idSchema = z.number().int().positive();
@@ -22,6 +23,7 @@ const details = listing.extend({
   })) }).optional(),
   imdb_id: z.string().nullish(), overview: z.string().nullish(), poster_path: z.string().nullish(),
   popularity: z.number().nonnegative().optional(),
+  belongs_to_collection: z.unknown().optional(),
 });
 
 export type TmdbFilm = {
@@ -198,6 +200,8 @@ export class TmdbClient {
         directors: [...new Set(movie.credits?.crew.filter(({ job }) => job === "Director").map(({ name }) => name))],
         keywords: [...new Set(movie.keywords?.keywords.map(({ name }) => name))],
         synopsis: synopsis(movie.overview), poster: valid(movie.poster_path, /^\/[A-Za-z0-9_-]+\.jpg$/),
+        fullSynopsis: movie.overview?.trim() || undefined,
+        collection: movie.belongs_to_collection === null ? null : tmdbCollectionSchema.safeParse(movie.belongs_to_collection).data,
         popularity: movie.popularity,
         release: {
           source: "TMDB", primaryDate: movie.release_date, status: movie.status, runtime: movie.runtime,

@@ -54,6 +54,7 @@ export function normalizeMetadata(input: Record<string, unknown> | null): Metada
   return {
     genres: unique(read("genres")), directors: unique(read("directors")), keywords: unique(read("keywords")),
     countries: unique(read("countries")), minutes: read("minutes"), language: read("language"),
+    fullSynopsis: read("fullSynopsis"),
     synopsis: read("synopsis")?.trim().slice(0, 280), poster: read("poster"), popularity: read("popularity"), release: read("release"),
   };
 }

@@ -194,3 +194,8 @@ export const discoveryExplorations = sqliteTable("discovery_explorations", {
   index("discovery_mode_history").on(table.mode, table.id),
   check("discovery_mode", sql`${table.mode} IN ('gems', 'affinities', 'offbeat')`),
 ]);
+
+export const blockedFranchises = sqliteTable("blocked_franchises", {
+  key: text().primaryKey().notNull(),
+  name: text().notNull(),
+});

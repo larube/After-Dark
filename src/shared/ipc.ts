@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { franchiseKey, franchiseSchema } from "./franchises";
 import { allocineFilmSchema } from "./allocine";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
@@ -42,7 +43,11 @@ const enrichmentSchema = z.strictObject({
 });
 export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
+const franchiseMovieId = z.number().int().positive().nullable();
+
 export const ipc = {
+  franchises: { channel: "franchise:list", request: z.tuple([franchiseMovieId, z.boolean()]), response: reply(z.array(franchiseSchema)) },
+  setFranchise: { channel: "franchise:set", request: z.tuple([franchiseMovieId, franchiseKey, z.boolean()]), response: reply(z.null()) },
   openAllocine: { channel: "film:open-allocine", request: z.tuple([allocineFilmSchema]), response: reply(z.null()) },
   discoveryCurrent: { channel: "discovery:current", request: z.tuple([discoveryModeSchema]), response: reply(discoveryViewSchema.nullable()) },
   discoveryGenerate: { channel: "discovery:generate", request: z.tuple([discoveryModeSchema, discoveryIdSchema.nullable()]), response: reply(discoveryViewSchema.nullable()) },

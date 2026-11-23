@@ -522,3 +522,8 @@ summary:hover { color: var(--focus); }
 @media (max-width: 820px) {
   .discovery-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+.film-franchise { margin-block-start: 6px; }
+.franchise-group { padding-block: 8px; border-block-start: 1px solid var(--border); }
+.franchise-group details { margin-block: 4px; }
+.franchise-group ul { padding-inline-start: 18px; }

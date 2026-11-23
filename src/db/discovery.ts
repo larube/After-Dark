@@ -6,6 +6,7 @@ import { normalizeTitle } from "../domain/ratings";
 import { engineVersion } from "../domain/recommendation";
 import { discoveryModes, type DiscoveryMode } from "../shared/discovery";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
+import { franchiseExclusions } from "./franchises";
 import { labSeenIds } from "./lab";
 import { normalizeMetadata, readCatalogue } from "./recommendations";
 import { discoveryExplorations, movieEvaluations, movieFeedback, movies, movieStatuses } from "./schema";
@@ -23,7 +24,7 @@ export async function currentDiscovery(db: CinemaDatabase, mode: DiscoveryMode):
 export async function discoveryExclusions(db: CinemaDatabase | CinemaTransaction) {
   const blocked = await db.select({ id: movieFeedback.movieId }).from(movieFeedback)
     .where(or(eq(movieFeedback.intention, "not_interested"), isNotNull(movieFeedback.seenAt))).all();
-  return new Set(blocked.map(({ id }) => id));
+  return new Set([...blocked.map(({ id }) => id), ...await franchiseExclusions(db)]);
 }
 
 export async function discoveryRotation(db: CinemaDatabase | CinemaTransaction, mode: DiscoveryMode,
@@ -74,14 +75,16 @@ export async function inspectDiscovery(db: CinemaDatabase, row: Exploration, ref
     .leftJoin(movieFeedback, eq(movieFeedback.movieId, movies.id)).where(inArray(movies.id, ids)).all();
   const evaluated = new Set((await db.selectDistinct({ id: movieEvaluations.movieId }).from(movieEvaluations)
     .where(inArray(movieEvaluations.movieId, ids)).all()).map(({ id }) => id));
+  const blocked = await franchiseExclusions(db, catalogue);
   const known = new Map(catalogue.map((record) => [record.id, record]));
   return row.films.map((snapshot) => {
     const local = known.get(snapshot.id);
     const metadata = normalizeMetadata(local?.metadata ?? null);
     const quality = classifyContent(metadata, referenceDate);
     const seen = local?.status === "seen" || !!local?.confirmed || evaluated.has(snapshot.id);
-    const admissible = !!local && !seen && local.intention !== "not_interested" && quality.exclusionReasons.length === 0;
-    return { snapshot, local, metadata, quality, seen, admissible, poster: metadata.poster ?? snapshot.poster };
+    const franchiseBlocked = blocked.has(snapshot.id);
+    const admissible = !!local && !franchiseBlocked && !seen && local.intention !== "not_interested" && quality.exclusionReasons.length === 0;
+    return { snapshot, local, metadata, quality, seen, admissible, franchiseBlocked, poster: metadata.poster ?? snapshot.poster };
   });
 }
 
@@ -102,7 +105,7 @@ export async function discoveryDiagnostic(db: CinemaDatabase, row: Exploration, 
       repeatedFromLast: row.rotation.previous.length ? films.filter(({ snapshot }) => row.rotation.previous[0].includes(snapshot.id)).length : null,
       repeatedAcrossModes: films.filter(({ snapshot }) => row.rotation.adjacent.includes(snapshot.id)).length,
     },
-    films: await Promise.all(films.map(async ({ snapshot, local, metadata, quality, seen, admissible, poster }, index) => ({
+    films: await Promise.all(films.map(async ({ snapshot, local, metadata, quality, seen, admissible, franchiseBlocked, poster }, index) => ({
       id: snapshot.id, title: snapshot.title, position: index + 1,
       reason: snapshot.trace ? snapshot.reason : null,
       rankingAtGeneration: snapshot.trace ? {
@@ -113,7 +116,7 @@ export async function discoveryDiagnostic(db: CinemaDatabase, row: Exploration, 
       } : null,
       catalogueNow: {
         present: !!local, tmdbId: local?.tmdbId ?? null, status: local?.status ?? "unknown", seen,
-        dismissed: local?.intention === "not_interested", seenInLab: lab.has(snapshot.id), admissible,
+        dismissed: local?.intention === "not_interested", franchiseBlocked, seenInLab: lab.has(snapshot.id), admissible,
         sameTitleAndYear: !!local?.year && identities.some((other) => other.id !== local.id && other.year === local.year &&
           normalizeTitle(other.title) === normalizeTitle(local.title)),
         quality, metadata: {

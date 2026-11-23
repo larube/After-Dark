@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tmdbCollectionSchema } from "./franchises";
 
 export const moods = {
   surprise: "Surprends-moi", laugh: "Envie de rire", tension: "Suspense et tension",
@@ -22,6 +23,7 @@ export const metadataSchema = z.object({
   countries: codes.default([]), language: z.string().regex(/^[a-z]{2}$/).optional(),
   genres: z.array(z.string()).default([]), directors: z.array(z.string()).default([]),
   keywords: z.array(z.string()).default([]),
+  fullSynopsis: z.string().optional(), collection: tmdbCollectionSchema.nullable().optional(),
   synopsis: z.string().optional(), poster: z.string().regex(/^\/[a-zA-Z0-9_-]+\.jpg$/).optional(),
   popularity: z.number().nonnegative().optional(),
   release: z.strictObject({

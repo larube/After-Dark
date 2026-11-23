@@ -34,10 +34,11 @@ function DiscoveryCard({ film, actions }: { film: DiscoveryFilm; actions: ReactN
 
 type PageState = { view: DiscoveryView | null; empty?: boolean };
 
-export function Discovery({ active, disabled, enriched, actions }: {
+export function Discovery({ active, disabled, enriched, franchiseRevision, actions }: {
   active: boolean;
   disabled: boolean;
   enriched?: number;
+  franchiseRevision?: number;
   actions: (film: DiscoveryFilm) => ReactNode;
 }) {
   const [mode, setMode] = useState<DiscoveryMode>("gems");
@@ -71,7 +72,7 @@ export function Discovery({ active, disabled, enriched, actions }: {
       if (live && version === generation.current) setErrors((entries) => ({ ...entries, [mode]: "Impossible de lire l’exploration enregistrée." }));
     });
     return () => { live = false; };
-  }, [active, mode, retry]);
+  }, [active, mode, retry, franchiseRevision]);
 
   async function generate() {
     if (inFlight.current || disabled || !state) return;
