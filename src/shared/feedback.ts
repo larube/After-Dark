@@ -9,6 +9,7 @@ const movieId = z.number().int().positive();
 const appreciation = z.string().trim().min(1).max(1000);
 
 export const feedbackRequestSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("undo_seen"), movieId }),
   z.strictObject({ action: z.literal("intention"), movieId, intention: intentionSchema }),
   z.strictObject({ action: z.literal("seen"), movieId, score: score.nullable(), appreciation: appreciation.nullable() }),
 ]);

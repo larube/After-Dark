@@ -1,0 +1,1 @@
+ALTER TABLE `movie_feedback` ADD `previous_status` text;

@@ -70,6 +70,7 @@ export const movieFeedback = sqliteTable("movie_feedback", {
   movieId: integer("movie_id").primaryKey().references(() => movies.id, { onDelete: "cascade" }),
   intention: text({ enum: intentions }).notNull().default("none"),
   seenAt: text("seen_at"),
+  previousStatus: text("previous_status", { enum: ["seen", "unseen", "unknown"] }),
   scoreId: integer("score_id").unique().references(() => movieEvaluations.id, { onDelete: "set null" }),
   appreciation: text(),
 }, (table) => [

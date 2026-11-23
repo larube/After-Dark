@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 import type { CinemaDatabase, CinemaTransaction } from "../db/client";
 import { favorites, movieEvaluations, movieFeedback, movieIdentifiers, movies, movieStatuses, movieTitles } from "../db/schema";
 import { normalizeTitle } from "../domain/ratings";
@@ -138,6 +138,13 @@ async function storeStatus(db: CinemaTransaction, movieId: number, incoming: Pro
     throw new Error("Le statut explicitement non vu est incompatible avec une évaluation existante ou importée.");
   }
   const status = hasEvaluations ? "seen" : incoming;
+  if (incoming === "seen" && saved?.status === "seen") {
+    const confirmed = await db.update(movieFeedback).set({ previousStatus: "seen" }).where(and(
+      eq(movieFeedback.movieId, movieId), isNotNull(movieFeedback.seenAt),
+      sql`${movieFeedback.previousStatus} IS NOT 'seen'`,
+    )).run();
+    return confirmed.rowsAffected > 0;
+  }
   if (status === undefined || status === saved?.status || (status === "unknown" && saved)) return false;
   await db.insert(movieStatuses).values({ movieId, status })
     .onConflictDoUpdate({ target: movieStatuses.movieId, set: { status } }).run();

@@ -81,8 +81,8 @@ function App() {
         return reply.data ? [...entries, reply.data] : entries;
       });
       setFeedbackMessage(request.action === "seen" ? "Visionnage enregistré." :
-        request.intention === "none" ? "Intention retirée." : "Intention enregistrée.");
-      if (page === "collection" && request.action === "intention") {
+        request.action === "undo_seen" ? "Marquage vu annulé." : request.intention === "none" ? "Intention retirée." : "Intention enregistrée.");
+      if (page === "collection" && request.action !== "seen") {
         requestAnimationFrame(() => feedbackStatus.current?.focus({ preventScroll: true }));
       }
       await refreshSummary();

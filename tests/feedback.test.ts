@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDatabase } from "../src/db/client";
+import { getProfileSummary } from "../src/db/profile";
 import { getCollection, saveFeedback } from "../src/db/feedback";
 import { readCatalogue } from "../src/db/recommendations";
 import { movieEvaluations, movies, movieStatuses } from "../src/db/schema";
@@ -113,6 +114,54 @@ describe("Retours personnels SQLite", () => {
     expect(await saveFeedback(connection.db, { action: "intention", movieId: 2, intention: "tonight" })).toEqual({
       ok: false, error: "Ce film est déjà marqué comme vu.",
     });
+  });
+
+  it.each(["unseen", "unknown", undefined] as const)("annule un visionnage depuis le statut %s et persiste après relance", async (status) => {
+    await importProfile(connection.db, { version: 1, entries: [{ movie: other, status }] });
+    const seen = { action: "seen", movieId: 1, score: 6, appreciation: "Saisie par erreur" } as const;
+    await saveFeedback(connection.db, seen);
+    await saveFeedback(connection.db, { ...seen, score: 7 });
+    connection.close();
+    connection = await openDatabase(filename, migrations);
+    const undo = { action: "undo_seen", movieId: 1 } as const;
+    expect(await saveFeedback(connection.db, undo)).toEqual({ ok: true, data: null });
+    expect(await saveFeedback(connection.db, undo)).toEqual({ ok: true, data: null });
+    connection.close();
+    connection = await openDatabase(filename, migrations);
+    expect(await getCollection(connection.db)).toEqual([]);
+    expect(await connection.db.select().from(movieEvaluations)).toEqual([]);
+    expect(await connection.db.select().from(movieStatuses)).toEqual([{ movieId: 1, status: status ?? "unknown" }]);
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 0, evaluated: 0, unseen: status === "unseen" ? 1 : 0 });
+    const { catalogue, signals } = await readCatalogue(connection.db);
+    const criteria = criteriaSchema.parse({
+      mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
+    });
+    expect(recommend(catalogue, signals, criteria, new Set()).films.map(({ id }) => id)).toEqual([1]);
+  });
+
+  it("protège les notes historiques même lorsqu’elles arrivent après le marquage", async () => {
+    await importProfile(connection.db, { version: 1, entries: [{ movie: film, status: "unknown" }] });
+    await saveFeedback(connection.db, { action: "seen", movieId: 1, score: 6, appreciation: "Retour manuel" });
+    const imported = { ...profile.entries[0], status: undefined };
+    expect(await importProfile(connection.db, { version: 1, entries: [imported] })).toMatchObject({ errors: [], updated: 1 });
+    const original = await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id);
+    expect(original).toHaveLength(3);
+    expect(await saveFeedback(connection.db, { action: "undo_seen", movieId: 1 })).toMatchObject({ ok: false });
+    expect(await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id)).toEqual(original);
+    expect(await getCollection(connection.db)).toMatchObject([{ score: 6, appreciation: "Retour manuel" }]);
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 1, evaluated: 1 });
+  });
+
+  it.each([true, false])("protège un statut vu importé, avant ou après le marquage (%s)", async (before) => {
+    const imported = { version: 1, entries: [{ movie: other, status: "seen" }] };
+    await importProfile(connection.db, before ? imported : { version: 1, entries: [{ movie: other }] });
+    await saveFeedback(connection.db, { action: "seen", movieId: 1, score: null, appreciation: null });
+    if (!before) {
+      expect(await importProfile(connection.db, imported)).toMatchObject({ updated: 1, errors: [] });
+      expect(await importProfile(connection.db, imported)).toMatchObject({ duplicates: 1, errors: [] });
+    }
+    expect(await saveFeedback(connection.db, { action: "undo_seen", movieId: 1 })).toMatchObject({ ok: false });
+    expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 1, evaluated: 0 });
   });
 
   it("édite une seule note manuelle et conserve les évaluations importées à l’identique", async () => {

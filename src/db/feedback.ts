@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { FeedbackEntry, FeedbackRequest } from "../shared/feedback";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
 import { movieEvaluations, movieFeedback, movies, movieStatuses } from "./schema";
@@ -25,11 +25,27 @@ export async function getCollection(db: CinemaDatabase): Promise<FeedbackEntry[]
 export async function saveFeedback(db: CinemaDatabase, request: FeedbackRequest, now = new Date()) {
   return db.transaction(async (tx) => {
     const { movieId } = request;
-    const movie = await tx.select({ id: movies.id }).from(movies).where(eq(movies.id, movieId)).get();
+    const movie = await tx.select().from(movies).where(eq(movies.id, movieId)).get();
     if (!movie) return { ok: false, error: "Ce film n’est plus dans le catalogue." } as const;
     const saved = await tx.select().from(movieFeedback).where(eq(movieFeedback.movieId, movieId)).get();
+    if (request.action === "undo_seen") {
+      if (!saved?.seenAt) return { ok: true, data: saved ? readEntry({
+        movieId, intention: saved.intention, seenAt: null, appreciation: null,
+        title: movie.displayTitle, year: movie.year, score: null,
+      }) : null } as const;
+      const otherEvaluation = await tx.select({ id: movieEvaluations.id }).from(movieEvaluations)
+        .where(and(eq(movieEvaluations.movieId, movieId), saved.scoreId === null ? undefined : ne(movieEvaluations.id, saved.scoreId))).get();
+      if (otherEvaluation || saved.previousStatus === "seen") {
+        return { ok: false, error: "Ce film était déjà vu selon votre profil ou possède une autre évaluation." } as const;
+      }
+      await tx.delete(movieFeedback).where(eq(movieFeedback.movieId, movieId)).run();
+      if (saved.scoreId !== null) await tx.delete(movieEvaluations).where(eq(movieEvaluations.id, saved.scoreId)).run();
+      await tx.update(movieStatuses).set({ status: saved.previousStatus ?? "unknown" })
+        .where(eq(movieStatuses.movieId, movieId)).run();
+      return { ok: true, data: null } as const;
+    }
+    const status = await tx.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
     if (request.action === "intention") {
-      const status = await tx.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
       if (status?.status === "seen" && request.intention !== "none") {
         return { ok: false, error: "Ce film est déjà marqué comme vu." } as const;
       }
@@ -60,6 +76,7 @@ export async function saveFeedback(db: CinemaDatabase, request: FeedbackRequest,
       }
       const changes = {
         intention: "none" as const, seenAt: saved?.seenAt ?? now.toISOString(),
+        previousStatus: saved?.seenAt ? saved.previousStatus : status?.status ?? null,
         scoreId, appreciation: request.appreciation,
       };
       await tx.insert(movieFeedback).values({ movieId, ...changes })

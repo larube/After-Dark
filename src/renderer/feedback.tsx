@@ -15,6 +15,7 @@ export function FilmActions({ movieId, title, entry, disabled, save }: {
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const summary = useRef<HTMLElement>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const active = choices.find(([value]) => value === entry?.intention)?.[1];
 
@@ -23,7 +24,10 @@ export function FilmActions({ movieId, title, entry, disabled, save }: {
     setError("");
     try {
       await save(request);
-      if (request.action === "seen") {
+      if (request.action === "undo_seen") {
+        setEditing(false);
+        if (summary.current?.closest(".film-card")) requestAnimationFrame(() => summary.current?.focus());
+      } else if (request.action === "seen") {
         setEditing(false);
         requestAnimationFrame(() => toggle.current?.focus());
       }
@@ -47,7 +51,7 @@ export function FilmActions({ movieId, title, entry, disabled, save }: {
   }
 
   return <details className="feedback-actions">
-    <summary aria-label={`Actions pour ${title}${entry?.seenAt ? " · Déjà vu" : active ? " · " + active : ""}`}>
+    <summary ref={summary} aria-label={`Actions pour ${title}${entry?.seenAt ? " · Déjà vu" : active ? " · " + active : ""}`}>
       <span aria-hidden="true">＋</span> Actions
       {entry?.seenAt ? <span className="feedback-state">Déjà vu</span> : active && <span className="feedback-state">{active}</span>}
     </summary>
@@ -63,6 +67,8 @@ export function FilmActions({ movieId, title, entry, disabled, save }: {
         disabled={disabled || pending} onClick={() => setEditing(!editing)}>
         {entry?.seenAt ? "Modifier mon retour" : "Déjà vu"}
       </button>
+      {entry?.seenAt && <button type="button" className="button button-quiet" disabled={disabled || pending}
+        onClick={() => void submit({ action: "undo_seen", movieId })}>Annuler le marquage vu</button>}
       {editing && <form className="feedback-form" onSubmit={saveSeen}>
         <label>Note facultative (0 à 10)<input name="score" type="number" min="0" max="10" step="1"
           defaultValue={entry?.score ?? ""} disabled={disabled || pending} /></label>
