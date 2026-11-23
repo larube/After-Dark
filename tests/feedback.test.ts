@@ -199,7 +199,7 @@ describe("Retours personnels SQLite", () => {
 
     const rate = { action: "evaluate", movieId: 2, appreciation: "8/10 ? Ça se discute." } as const;
     await saveFeedback(connection.db, { ...rate, score: null });
-    expect((await getCollection(connection.db)).filter(needsRating)).toEqual([]);
+    expect((await getCollection(connection.db)).filter(needsRating).map((entry) => entry.movieId)).toEqual([2]);
     expect(await connection.db.select().from(movieEvaluations)).toEqual([]);
     for (const score of [0, 7, 7]) await saveFeedback(connection.db, { ...rate, score });
     expect(await connection.db.select().from(movieEvaluations)).toMatchObject([{ score: "7", source: "after-dark:manual" }]);
@@ -223,6 +223,47 @@ describe("Retours personnels SQLite", () => {
       { source: "import", score: "8,5" }, { source: "import", rangeMin: "7,5" },
     ]);
     expect(await getCollection(connection.db)).toEqual([]);
+  });
+
+  it("attend une note entière après confirmation locale et conserve les évaluations importées après relance", async () => {
+    await importProfile(connection.db, { version: 1, entries: [
+      { movie: film, status: "seen", evaluations: [
+        { kind: "qualitative", source: "import", sourceId: "comment", appreciation: "Une découverte." },
+        { kind: "historical_score", source: "import", sourceId: "half", score: "8,50" },
+      ] },
+      { movie: other, status: "seen" },
+      { movie: { ...other, canonicalId: "fixture:whole", displayTitle: "Prisoners" }, status: "seen", evaluations: [
+        { kind: "historical_score", source: "import", sourceId: "whole", score: "10,00" },
+      ] },
+    ] });
+    const imported = await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id);
+    expect(imported).toHaveLength(3);
+    expect((await getCollection(connection.db)).filter(needsRating)).toEqual([]);
+
+    const seen = { action: "seen", score: null, appreciation: "Revu, toujours marquant." } as const;
+    for (const movieId of [1, 2, 3]) await saveFeedback(connection.db, { ...seen, movieId });
+
+    async function reopenAndRead() {
+      connection.close();
+      connection = await openDatabase(filename, migrations);
+      return (await getCollection(connection.db)).filter(needsRating).map((entry) => entry.movieId).sort();
+    }
+    expect(await reopenAndRead()).toEqual([1, 2]);
+
+    const evaluation = { action: "evaluate", movieId: 1, appreciation: "Revu, toujours marquant." } as const;
+    await saveFeedback(connection.db, { ...evaluation, score: 0 });
+    expect(await reopenAndRead()).toEqual([2]);
+    await saveFeedback(connection.db, { ...evaluation, score: 9 });
+    expect(await reopenAndRead()).toEqual([2]);
+    expect(await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id)).toEqual([
+      ...imported, expect.objectContaining({ source: "after-dark:manual", score: "9" }),
+    ]);
+    await saveFeedback(connection.db, { ...evaluation, score: null });
+    expect(await reopenAndRead()).toEqual([1, 2]);
+    expect(await getCollection(connection.db)).toContainEqual(expect.objectContaining({
+      movieId: 1, appreciation: evaluation.appreciation, score: null,
+    }));
+    expect(await connection.db.select().from(movieEvaluations).orderBy(movieEvaluations.id)).toEqual(imported);
   });
 
   it("préserve les séances historiques en dédoublonnant une ancienne base", async () => {

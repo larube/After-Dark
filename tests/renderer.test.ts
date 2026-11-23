@@ -123,9 +123,9 @@ describe("Interface Neon Underground", () => {
     const film = { ...common, movieId: 1, title: "Cure", seenAt: null, selectedAt: "2026-11-23" };
     const reminder = renderToStaticMarkup(createElement(ViewingReminder, { film, disabled: false, async save() {}, dismiss() {} }));
     for (const label of ["Oui, je l’ai vu", "Pas encore", "Finalement, non"]) expect(reminder).toContain(label);
-    const entries = [film, { ...common, movieId: 2, title: "Tesis", seenAt: "2026-11-23T10:00:00.000Z" }];
+    const entries = [film, { ...common, movieId: 2, title: "Tesis", seenAt: "2026-11-23T10:00:00.000Z", appreciation: "À revoir." }];
     const html = renderToStaticMarkup(createElement(FeedbackCollection, { entries, disabled: false, error: "", async save() {} }));
-    expect(html).toMatch(/Films à noter.*Tesis.*Noter ce film.*Séances en attente.*Cure.*Film choisi/);
+    expect(html).toMatch(/Films à noter.*Tesis.*À revoir.*Modifier mon retour.*Séances en attente.*Cure.*Film choisi/);
   });
 
   it("expose la navigation avec une page courante et des contrôles natifs", () => {

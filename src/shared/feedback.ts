@@ -28,11 +28,11 @@ export const feedbackEntrySchema = z.strictObject({
   appreciation: appreciation.nullable(),
   selectedAt: z.string().optional(),
   needsConfirmation: z.boolean().optional(),
-  hasHistoricalEvaluation: z.boolean().optional(),
+  hasImportedWholeScore: z.boolean().optional(),
 });
 
 export function needsRating(entry: FeedbackEntry) {
-  return !!entry.seenAt && entry.score === null && entry.appreciation === null && !entry.hasHistoricalEvaluation;
+  return !!entry.seenAt && entry.score === null && !entry.hasImportedWholeScore;
 }
 
 export type FeedbackRequest = z.infer<typeof feedbackRequestSchema>;

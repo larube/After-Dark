@@ -10,9 +10,14 @@ function feedbackQuery(db: CinemaDatabase | CinemaTransaction) {
     intention: movieFeedback.intention, seenAt: movieFeedback.seenAt,
     score: movieEvaluations.score, appreciation: movieFeedback.appreciation,
     selectedAt: plannedViewings.selectedAt,
-    hasHistoricalEvaluation: sql<number>`exists (
+    hasImportedWholeScore: sql<number>`exists (
       select 1 from movie_evaluations as historical
       where historical.movie_id = ${movies.id} and historical.id IS NOT ${movieFeedback.scoreId}
+        and historical.kind in ('score', 'historical_score')
+        and (case
+          when historical.score glob '*[.,]*' then rtrim(rtrim(historical.score, '0'), '.,')
+          else historical.score
+        end) in ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10')
     )`,
   }).from(movies)
     .leftJoin(movieFeedback, eq(movieFeedback.movieId, movies.id))
@@ -23,11 +28,11 @@ function feedbackQuery(db: CinemaDatabase | CinemaTransaction) {
 }
 
 function readEntry(row: Awaited<ReturnType<ReturnType<typeof feedbackQuery>["all"]>>[number], startup?: string): FeedbackEntry {
-  const { selectedAt, hasHistoricalEvaluation, ...entry } = row;
+  const { selectedAt, hasImportedWholeScore, ...entry } = row;
   return {
     ...entry, intention: row.intention ?? "none", score: row.score === null ? null : Number(row.score),
     ...(selectedAt ? { selectedAt, needsConfirmation: !!startup && selectedAt < startup } : {}),
-    ...(hasHistoricalEvaluation ? { hasHistoricalEvaluation: true } : {}),
+    ...(hasImportedWholeScore ? { hasImportedWholeScore: true } : {}),
   };
 }
 
