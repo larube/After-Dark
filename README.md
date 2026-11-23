@@ -71,14 +71,16 @@ Ouvrez **Profil**, puis cliquez sur **Importer un profil** et choisissez un fich
 
 Le renderer associe le noir encre, l’ivoire papier, l’orange brûlé et le rouge affiche. **Barlow Condensed Black** compose le logotype, les titres et le CTA. **IBM Plex Sans** porte les commandes et la lecture. Les trois fichiers WOFF2 et leurs [licences OFL](public/licenses/) sont distribués avec l’application.
 
-Le [prototype « Ce soir » validé](docs/prototypes/ce-soir/README.md) guide la composition. La marquise, le portrait tramé et les six vignettes d’humeur sont des WebP locaux. L’affiche de la vedette repose sur un montage papier et les films suivants occupent une colonne décalée sur écran large. Les affiches proviennent du cache local TMDB. Un emplacement imprimé signale clairement une affiche indisponible.
+La [composition A](docs/prototypes/pr6-compositions/README.md) guide le rendu de « Ce soir ». Le portrait noir et blanc du bandeau encadre le titre et les six humeurs. Une vedette pleine largeur précède quatre propositions en grille 2 × 2 sur desktop, puis en liste en fenêtre étroite. Trois découpes de papier alternent autour des affiches. Un emplacement imprimé signale les affiches indisponibles.
 
-| Largeur Electron | Avant recherche | Après recherche |
+| Fenêtre | Bandeau et commandes | Recommandations |
 | --- | --- | --- |
-| 1160 px | [Ce soir](docs/screenshots/electron-ce-soir.jpg) | [Sélection](docs/screenshots/electron-recommandations.jpg) |
-| 520 px | [Ce soir](docs/screenshots/electron-fenetre-etroite.jpg) | [Sélection](docs/screenshots/electron-recommandations-etroite.jpg) |
+| 1160 px | [Ce soir](docs/screenshots/ce-soir-hero-1160.jpg) | [Sélection](docs/screenshots/ce-soir-reco-1160.jpg) |
+| 780 px | [Ce soir](docs/screenshots/ce-soir-hero-780.jpg) | [Sélection](docs/screenshots/ce-soir-reco-780.jpg) |
+| 520 px | [Ce soir](docs/screenshots/ce-soir-hero-520.jpg) | [Sélection](docs/screenshots/ce-soir-reco-520.jpg) |
+| 410 px | [Ce soir](docs/screenshots/ce-soir-hero-410.jpg) | [Sélection](docs/screenshots/ce-soir-reco-410.jpg) |
 
-Les captures proviennent d’une session Electron macOS avec une base de test isolée et des affiches réelles mises en cache. La sélection est calculée par le moteur. À 520 px, la capture après recherche montre la partie résultats de la fenêtre.
+Les captures proviennent du renderer React dans Electron sur macOS. Le moteur a calculé la sélection à partir d’un profil de test importé dans une base SQLite isolée, avec des affiches réelles mises en cache et deux films sans affiche. Le [panneau de filtres à 410 px](docs/screenshots/ce-soir-filtres-410.jpg) montre une sélection multiple de pays et de langues obligatoires.
 
 - **Ce soir** affiche les humeurs, les filtres et les recommandations. Choisissez un plafond de durée et, si besoin, une ambiance à éviter. Dans **Affiner ma séance**, ouvrez le sélecteur de pays de production ou de langue originale, puis cochez vos choix. Vous pouvez lancer la recherche directement en bas du panneau. France et Espagne font partie du même sélecteur de pays. Les choix sont souples par défaut. Activez **Uniquement les pays sélectionnés** ou **Uniquement les langues sélectionnées** pour limiter les résultats à l’un des choix cochés. Le résumé reste visible panneau fermé et **Réinitialiser les critères** efface les réglages secondaires en gardant l’humeur.
 - **Ma collection** montre les compteurs et favoris. Le détail du catalogue est à venir.
