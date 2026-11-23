@@ -57,15 +57,16 @@ export function Tonight({ ready, onComplete, filmActions }: {
     <form className="programme" onSubmit={submit}>
       <div className="projection" aria-hidden="true" />
       <header className="hero">
-        <h1>Ce soir ?</h1>
-        <p>Une envie, une ambiance.<br /> Le reste attendra.</p>
+        <h1>Sélection</h1>
       </header>
       <MoodSelector value={mood} onChange={setMood} busy={loading} />
-      <FilterPanel busy={loading} value={filters} onChange={setFilters} action={
-        <button className="button button-primary" type="submit" disabled={loading || !ready}>
-          <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Trouve-moi un film"}
-        </button>
-      } />
+      <button className="button button-primary" type="submit" disabled={loading || !ready}>
+        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Découvrir 5 films"}
+      </button>
+      <details className="selection-refine">
+        <summary>Affiner</summary>
+        <FilterPanel busy={loading} value={filters} onChange={setFilters} />
+      </details>
     </form>
     <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);

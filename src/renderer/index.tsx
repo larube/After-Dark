@@ -6,7 +6,6 @@ import { AppShell, type Page } from "./shell";
 import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
 import { needsRating, type FeedbackEntry, type FeedbackRequest } from "../shared/feedback";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "./feedback";
-import { Discovery } from "./discovery";
 import { Laboratory } from "./lab";
 import { Tonight } from "./tonight";
 import "./style.css";
@@ -16,8 +15,6 @@ declare global {
 }
 
 function App() {
-  const [franchiseRevision, setFranchiseRevision] = useState(0);
-  const franchiseChanged = () => setFranchiseRevision((revision) => revision + 1);
   const [collection, setCollection] = useState<FeedbackEntry[]>();
   const [reminders, setReminders] = useState<FeedbackEntry[]>([]);
   const [collectionError, setCollectionError] = useState("");
@@ -154,7 +151,7 @@ function App() {
       <Tonight ready={!!summary && !importing && !saving} onComplete={() => void refreshSummary()}
         filmActions={(film, loading) => <><FilmActions movieId={film.id} title={film.title}
           entry={collection?.find((entry) => entry.movieId === film.id)}
-          disabled={!collection || !!collectionError || importing || saving || loading} save={save} /><FranchisePreferences movieId={film.id} onChange={franchiseChanged} /></>} />
+          disabled={!collection || !!collectionError || importing || saving || loading} save={save} /><FranchisePreferences movieId={film.id} /></>} />
       <Enrichment progress={enrichment} />
     </div>
     {page === "collection" && <>
@@ -162,13 +159,9 @@ function App() {
       {collectionError && <button className="button" onClick={() => void refreshCollection()}>Recharger les retours</button>}
       <FeedbackCollection entries={collection} error={collectionError} disabled={importing || saving} save={save} />
       <CatalogueSummary summary={summary} />
-      <FranchisePreferences onChange={franchiseChanged} />
+      <FranchisePreferences />
       <button className="button" onClick={() => navigate("profile")}>Importer un profil</button>
     </>}
-    <Discovery franchiseRevision={franchiseRevision} active={page === "discover"} disabled={!summary || importing || saving} enriched={enrichment?.enriched}
-      actions={(film) => <><FilmActions movieId={film.id} title={film.title}
-        entry={collection?.find((entry) => entry.movieId === film.id)}
-        disabled={!collection || !!collectionError || importing || saving} save={save} /><FranchisePreferences movieId={film.id} onChange={franchiseChanged} /></>} />
     {page === "lab" && <Laboratory collectionChanged={async () => { await Promise.all([refreshCollection(), refreshSummary()]); }} />}
     {page === "history" && <>
       <header className="page-heading"><h1>Historique</h1></header>

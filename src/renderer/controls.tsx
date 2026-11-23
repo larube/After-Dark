@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useId, useRef, useState } from "react";
 import { moods, type Criteria } from "../shared/recommendation";
 
 import { defaultFilters, durations, type SessionFilters } from "./criteria";
@@ -137,8 +137,8 @@ function SingleFilter({ label, options, value, busy, help, onChange }: {
   </div>;
 }
 
-export function FilterPanel({ busy, value, onChange, action }: {
-  busy: boolean; value: SessionFilters; onChange: (value: SessionFilters) => void; action?: ReactNode;
+export function FilterPanel({ busy, value, onChange }: {
+  busy: boolean; value: SessionFilters; onChange: (value: SessionFilters) => void;
 }) {
   const { duration, avoid, countries: selectedCountries, languages: selectedLanguages, countriesRequired, languagesRequired } = value;
   const dirty = !!(duration || avoid || selectedCountries.length || selectedLanguages.length);
@@ -157,7 +157,6 @@ export function FilterPanel({ busy, value, onChange, action }: {
     <SingleFilter label="Ambiance à éviter" options={avoidOptions} value={avoid} busy={busy}
       help="Préférence souple" onChange={(avoid) => onChange({ ...value, avoid })} />
     <div className="ticket-submit">
-      {action}
       <button type="button" className="text-action" aria-disabled={busy || !dirty}
         onClick={() => { if (!busy && dirty) onChange(defaultFilters); }}>Réinitialiser les critères</button>
     </div>
