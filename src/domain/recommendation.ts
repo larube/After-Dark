@@ -160,6 +160,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   model: TonightAffinityModel,
   rankingPolicy: RankingPolicy,
   preferences: TonightPreferences,
+  size: number,
   trace?: Trace,
 ) {
   const traits = buildAffinity(signals, undefined, model !== "current");
@@ -181,7 +182,8 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const categories = ["safe", "gem", "wildcard", "safe", "gem"] as const;
   const olderLimit = usesTonightPreferences(rankingPolicy) ? preferences.period?.maxExceptions ?? Infinity : Infinity;
   let olderSelected = 0;
-  for (const category of categories) {
+  for (let index = 0; index < size; index++) {
+    const category = categories[index % categories.length];
     const ranking = ranked.filter(({ older }) => !older || olderSelected < olderLimit).map((candidate) => {
       const decadePenalty = usesTonightPreferences(rankingPolicy) && candidate.decade !== null &&
         selected.some(({ decade }) => decade === candidate.decade) ? preferences.repeatedDecadePenalty : 0;
@@ -220,15 +222,15 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
 
 export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
-  preferences: TonightPreferences = tonightDefaults) {
-  return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences);
+  preferences: TonightPreferences = tonightDefaults, size = 5) {
+  return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, size);
 }
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
-  preferences: TonightPreferences = tonightDefaults) {
+  preferences: TonightPreferences = tonightDefaults, size = 5) {
   const trace: Trace = { base: [], weak: new Set(), periodMismatch: new Set(), periodLimit: new Set(), steps: [], candidates: [] };
-  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, trace);
+  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, size, trace);
   return {
     result, steps: trace.steps,
     exclusions: catalogue.map((film, index) => {

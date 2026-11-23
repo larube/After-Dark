@@ -23,7 +23,7 @@ import { exportDiscoveryDiagnostic } from "./discovery-export";
 import { startEnrichment } from "./enrichment";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../diagnostics/tonight";
 import { findTonight, localTmdb } from "./recommend";
-import { attachPosters, posterCacheState, posterData } from "./posters";
+import { posterCacheState, posterData, recommendationPoster } from "./posters";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -190,6 +190,7 @@ void app.whenReady().then(async () => {
     ? (report: TonightDiagnostic) => writeTonightDiagnostic(diagnosticDirectory, report)
     : undefined;
   if (diagnosticDirectory && !captureTonight) console.error("Le diagnostic Ce soir exige un chemin absolu.");
+  let latestSelection: Awaited<ReturnType<typeof findTonight>> | undefined;
   register(ipc.recommend, async (db, _owner, [criteria, allowRecent]): ReturnType<DesktopApi["recommend"]> => {
     if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
     recommending = true;
@@ -199,12 +200,15 @@ void app.whenReady().then(async () => {
       const capture = captureTonight;
       captureTonight = undefined;
       const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent, undefined, capture);
-      await attachPosters(result, directory);
+      latestSelection = result;
       return { ok: true, data: result };
     } finally {
       recommending = false;
     }
   });
+  register(ipc.recommendationPoster, async (_db, _owner, [id]): ReturnType<DesktopApi["recommendationPoster"]> => ({
+    ok: true, data: latestSelection ? await recommendationPoster(latestSelection, id, app.getPath("userData")) ?? null : null,
+  }));
   register(ipc.franchises, async (db, _owner, [id, verify]): ReturnType<DesktopApi["franchises"]> => {
     let data = await franchisePreferences(db, id);
     if (data.length === 0 && id !== null && verify) {

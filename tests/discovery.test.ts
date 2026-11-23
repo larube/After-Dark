@@ -5,16 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDatabase } from "../src/db/client";
 import { enrichmentQueue } from "../src/db/enrichment";
 import { enrichNext } from "../src/main/enrichment";
+import { setFranchisePreference } from "../src/db/franchises";
+import { recommend, tonightAffinityModel, tonightRanking } from "../src/domain/recommendation";
 import { saveFeedback } from "../src/db/feedback";
 import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
 import { importProfile } from "../src/import/profile";
-import { attachPosters } from "../src/main/posters";
+import { recommendationPoster } from "../src/main/posters";
 import { compareTonightAffinity } from "../src/diagnostics/tonight-affinity";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../src/diagnostics/tonight";
 import { findTonight } from "../src/main/recommend";
 import { discoveryQueries, TmdbClient, type TmdbFilm } from "../src/main/tmdb";
-import { criteriaSchema, metadataSchema } from "../src/shared/recommendation";
+import { criteriaSchema, metadataSchema, recommendationSchema } from "../src/shared/recommendation";
 
 const criteria = criteriaSchema.parse({
   mood: "tension", preferredCountries: [], requiredCountries: [],
@@ -180,6 +182,37 @@ describe("intégration TMDB et SQLite", () => {
     expect((await findTonight(reopened, criteria, async () => undefined, now, true)).films).toEqual([]);
   });
 
+  it("programme dix films, protège trois sélections récentes et conserve les exclusions au déblocage", async () => {
+    const { db } = database;
+    await importProfile(db, { version: 1, entries: Array.from({ length: 33 }, (_, index) => ({
+      movie: { canonicalId: `rotation:${index}`, displayTitle: `Rotation ${index}`, year: 2001 + index % 20,
+        ...(index === 2 ? { tmdbId: 940721 } : {}),
+        metadata: { minutes: 100 + index, reputation: { source: "TMDB", average: 8.5, count: 900 } } },
+      status: index === 0 ? "seen" : "unseen",
+    })) });
+    const { catalogue, signals, movies } = await readCatalogue(db);
+    const refused = movies.find(({ displayTitle }) => displayTitle === "Rotation 1")!.id;
+    await saveFeedback(db, { action: "intention", movieId: refused, intention: "not_interested" });
+    await setFranchisePreference(db, null, "godzilla", true);
+    const blocked = new Set([movies.find(({ displayTitle }) => displayTitle === "Rotation 2")!.id]);
+    const previous = recommend(catalogue.map((film) => ({ ...film, dismissed: film.id === refused })),
+      signals, criteria, new Set(), { referenceDate: "2026-07-13", excludedIds: blocked }, tonightAffinityModel, tonightRanking);
+    const session = () => findTonight(db, criteria, async () => undefined, now);
+    const first = await session();
+    expect(first.films.slice(0, 5)).toEqual(previous.films);
+    const rounds = [first, await session(), await session()];
+    for (const result of rounds) {
+      expect(result.films).toHaveLength(10);
+      expect(recommendationSchema.safeParse(result).success).toBe(true);
+    }
+    expect(new Set(rounds.flatMap(({ films }) => films.map(({ id }) => id))).size).toBe(30);
+    expect(await session()).toMatchObject({ status: "exhausted", films: [] });
+    expect(await findTonight(db, criteria, async () => undefined, now, true)).toEqual(first);
+    const small = await findTonight(db, { ...criteria, maxMinutes: 106 }, async () => undefined, now, true);
+    expect(small.films).toHaveLength(4);
+    expect(small.films.every(({ title }) => !["Rotation 0", "Rotation 1", "Rotation 2"].includes(title))).toBe(true);
+  });
+
   it("écarte les films fictifs du profil d’exemple et retrouve une affiche locale sans réseau", async () => {
     const { db } = database;
     await importProfile(db, { version: 1, entries: [
@@ -192,8 +225,8 @@ describe("intégration TMDB et SQLite", () => {
     await mkdir(posterFolder);
     const image = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
     await writeFile(join(posterFolder, "arrival.jpg"), image);
-    await attachPosters(result, folder);
-    expect(result.films[0].posterData).toBe("data:image/jpeg;base64," + image.toString("base64"));
+    expect(await recommendationPoster(result, -1, folder)).toBeUndefined();
+    expect(await recommendationPoster(result, result.films[0].id, folder)).toBe("data:image/jpeg;base64," + image.toString("base64"));
   });
 
   it("découvre des films, obtient des détails normalisés et réutilise les détails frais", async () => {
@@ -229,7 +262,7 @@ describe("intégration TMDB et SQLite", () => {
 
   it("capture le vrai vivier après acquisition et les 30 alternatives uniquement sur demande", async () => {
     const { db } = database;
-    await importProfile(db, { version: 1, entries: Array.from({ length: 36 }, (_, index) => ({
+    await importProfile(db, { version: 1, entries: Array.from({ length: 41 }, (_, index) => ({
       movie: { canonicalId: `test:${index}`, displayTitle: `Film ${index}`, year: 1980 + index,
         metadata: { genres: ["Thriller"], reputation: { source: "TMDB", average: 8.2, count: 100 } } },
     })) });
@@ -246,7 +279,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now, true, undefined, capture);
     expect(capture).toHaveBeenCalledOnce();
     const report = capture.mock.calls[0][0];
-    expect(report.acquisition).toMatchObject({ before: 36, after: 37, discovered: [357],
+    expect(report.acquisition).toMatchObject({ before: 41, after: 42, discovered: [357],
       lookups: [{ tmdbId: 357, result: "cached" }] });
     expect(report.acquisition.sources).toHaveLength(4);
     expect(report.selected.map(({ id }) => id)).toEqual(result.films.map(({ id }) => id));
@@ -263,6 +296,10 @@ describe("intégration TMDB et SQLite", () => {
     const comparison = await compareTonightAffinity(join(folder, "cinema.sqlite"), JSON.parse(json));
     expect(comparison.variants).toHaveLength(6);
     expect(comparison.variants.at(-1)).toMatchObject({ matchesCapture: true, forbiddenSelections: 0 });
+    const legacy = await compareTonightAffinity(join(folder, "cinema.sqlite"), {
+      ...report, size: undefined, recentLimit: undefined, selected: report.selected.slice(0, 5),
+    });
+    expect(legacy.variants.at(-1)).toMatchObject({ matchesCapture: true, forbiddenSelections: 0 });
     const repeat = await findTonight(db, criteria, async () => client, now, true);
     expect(repeat.films).toEqual(result.films);
     expect(capture).toHaveBeenCalledOnce();

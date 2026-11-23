@@ -1,5 +1,5 @@
-import { useRef, useState, type ReactNode, type FormEvent } from "react";
-import type { Criteria, Recommendation } from "../shared/recommendation";
+import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
+import { selectionSize, type Criteria, type Recommendation } from "../shared/recommendation";
 import { FilterPanel, MoodSelector } from "./controls";
 import { defaultFilters, readCriteria } from "./criteria";
 import { Results } from "./results";
@@ -10,11 +10,27 @@ export function Tonight({ ready, onComplete, filmActions }: {
   const [mood, setMood] = useState<Criteria["mood"]>("surprise");
   const [filters, setFilters] = useState(defaultFilters);
   const [result, setResult] = useState<Recommendation>();
+  const [selectionNumber, setSelectionNumber] = useState(0);
+  const [posters, setPosters] = useState<Record<number, string>>({});
   const [submitted, setSubmitted] = useState<Criteria>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const inFlight = useRef(false);
   const resultsHeading = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    let current = true;
+    for (const { id, metadata } of result?.films ?? []) {
+      if (!metadata.poster) continue;
+      void window.afterDark.recommendationPoster(id).then((reply) => {
+        if (current && reply.ok && reply.data) {
+          const data = reply.data;
+          setPosters((previous) => ({ ...previous, [id]: data }));
+        }
+      }).catch(() => { /* Keep the placeholder when an image cannot be retrieved. */ });
+    }
+    return () => { current = false; };
+  }, [result]);
 
   async function request(criteria: Criteria, allowRecent = false) {
     if (!ready || inFlight.current) return;
@@ -24,6 +40,8 @@ export function Tonight({ ready, onComplete, filmActions }: {
     try {
       const reply = await window.afterDark.recommend(criteria, allowRecent);
       if (reply.ok) {
+        setSelectionNumber((number) => number + 1);
+        setPosters({});
         setResult(reply.data);
         setSubmitted(criteria);
         const heading = resultsHeading.current;
@@ -61,14 +79,14 @@ export function Tonight({ ready, onComplete, filmActions }: {
       </header>
       <MoodSelector value={mood} onChange={setMood} busy={loading} />
       <button className="button button-primary" type="submit" disabled={loading || !ready}>
-        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : "Découvrir 5 films"}
+        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : `Découvrir ${selectionSize} films`}
       </button>
       <details className="selection-refine">
         <summary>Affiner</summary>
         <FilterPanel busy={loading} value={filters} onChange={setFilters} />
       </details>
     </form>
-    <Results headingRef={resultsHeading} result={result} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
+    <Results headingRef={resultsHeading} result={result} posters={posters} selectionNumber={selectionNumber} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);
     }} />
   </>;

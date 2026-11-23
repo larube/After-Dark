@@ -24,6 +24,13 @@ describe("contrats IPC", () => {
     expect(ipc.saveFeedback.response.parse({ ok: false, error: "Requête refusée." })).toEqual({ ok: false, error: "Requête refusée." });
   });
 
+  it("limite les demandes d’affiche à un identifiant de film et accepte une image absente", () => {
+    expect(ipc.recommendationPoster.request.safeParse([12]).success).toBe(true);
+    expect(ipc.recommendationPoster.request.safeParse(["/poster.jpg"]).success).toBe(false);
+    expect(ipc.recommendationPoster.request.safeParse([12, "https://example.org/image.jpg"]).success).toBe(false);
+    expect(ipc.recommendationPoster.response.safeParse({ ok: true, data: null }).success).toBe(true);
+  });
+
   it("valide les réponses, y compris une annulation, et rejette les champs superflus", () => {
     const summary = { movies: 6, seen: 4, unseen: 1, evaluated: 4, favorites: [] };
     expect(ipc.summary.response.safeParse({ ok: true, data: summary }).success).toBe(true);

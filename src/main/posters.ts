@@ -105,10 +105,8 @@ export function createPosterLoader(fetcher = fetch, now = Date.now) {
 
 export const posterData = createPosterLoader();
 
-export async function attachPosters(result: Recommendation, userData: string) {
+export async function recommendationPoster(result: Recommendation, id: number, userData: string) {
+  const film = result.films.find((entry) => entry.id === id);
   const online = result.connection === "online" || result.connection === "cached";
-  await Promise.all(result.films.map(async (film) => {
-    const data = await posterData(film.metadata.poster, userData, online);
-    if (data) film.posterData = data;
-  }));
+  return posterData(film?.metadata.poster, userData, online);
 }

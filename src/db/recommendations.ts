@@ -104,10 +104,10 @@ export async function readCatalogue(db: CinemaDatabase | CinemaTransaction) {
   };
 }
 
-export async function readHistory(db: CinemaDatabase | CinemaTransaction) {
+export async function readHistory(db: CinemaDatabase | CinemaTransaction, limit = 15) {
   const sessions = await db.select({ id: moodSessions.id }).from(moodSessions).orderBy(desc(moodSessions.id)).limit(1);
   const last = await db.select({ movieId: recommendationHistory.movieId })
-    .from(recommendationHistory).orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(15);
+    .from(recommendationHistory).orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(limit);
   return { round: sessions[0]?.id ?? 0, recent: new Set(last.map(({ movieId }) => movieId)) };
 }
 

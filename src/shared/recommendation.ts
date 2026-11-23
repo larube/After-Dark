@@ -42,15 +42,19 @@ export const metadataSchema = z.object({
 });
 export type Metadata = z.infer<typeof metadataSchema>;
 
+export const selectionSize = 10;
+export const recentSelectionLimit = 3 * selectionSize;
+export const posterDataSchema = z.string().max(400_024).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/);
+
 export const recommendationSchema = z.strictObject({
   connection: z.enum(["online", "cached", "unconfigured", "offline", "limited", "unauthorized", "unavailable"]),
   personalized: z.boolean(),
   status: z.enum(["ready", "empty", "no-match", "exhausted"]),
   films: z.array(z.strictObject({
     id: z.number().int(), title: z.string(), year: z.number().int().nullable(),
-    metadata: metadataSchema, posterData: z.string().max(400_024).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/).optional(),
+    metadata: metadataSchema, posterData: posterDataSchema.optional(),
     category: z.enum(["safe", "gem", "wildcard"]),
     reasons: z.array(z.string()), warnings: z.array(z.string()),
-  })).max(5),
+  })).max(selectionSize),
 });
 export type Recommendation = z.infer<typeof recommendationSchema>;

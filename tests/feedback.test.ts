@@ -93,6 +93,32 @@ describe("Retours personnels SQLite", () => {
     expect(await getCollection(connection.db)).toEqual([]);
   });
 
+  it("distingue intention de voir, refus et visionnage sans note, y compris après annulation", async () => {
+    const { db } = connection;
+    await importProfile(db, { version: 1, entries: [{ movie: other, status: "unseen" }] });
+    const catalogueState = async () => {
+      const { catalogue, signals } = await readCatalogue(db);
+      expect(signals).toEqual([]);
+      return { ...catalogue[0], dismissed: !!catalogue[0].dismissed };
+    };
+    const intent = (intention: "watch_later" | "not_interested" | "none") =>
+      saveFeedback(db, { action: "intention", movieId: 1, intention });
+    await intent("watch_later");
+    expect(await getCollection(db)).toMatchObject([{ intention: "watch_later", score: null }]);
+    expect(await catalogueState()).toMatchObject({ status: "unseen", dismissed: false });
+    await intent("none");
+    expect(await getCollection(db)).toEqual([]);
+    await intent("not_interested");
+    expect(await catalogueState()).toMatchObject({ status: "unseen", dismissed: true });
+    await intent("none");
+    expect(await catalogueState()).toMatchObject({ status: "unseen", dismissed: false });
+    await saveFeedback(db, { action: "seen", movieId: 1, score: null, appreciation: null });
+    expect(await catalogueState()).toMatchObject({ status: "seen", dismissed: false });
+    await saveFeedback(db, { action: "undo_seen", movieId: 1 });
+    expect(await catalogueState()).toMatchObject({ status: "unseen", dismissed: false });
+    expect(await db.select().from(movieEvaluations)).toEqual([]);
+  });
+
   it("exclut les films marqués vus, conserve les retours après relance et protège le réimport", async () => {
     await importProfile(connection.db, profile);
     expect(await saveFeedback(connection.db, { action: "intention", movieId: 2, intention: "watch_later" })).toMatchObject({ ok: true });
