@@ -4,8 +4,8 @@ import { tmdbCollectionSchema } from "../shared/franchises";
 export const franchiseGroups = [
   { key: "harry-potter", name: "Harry Potter", collections: [1241], films: [671, 672, 673, 674, 675, 767, 12444, 12445] },
   // MonsterVerse crossovers are explicit film IDs. Kong's solo films are outside this group.
-  { key: "godzilla", name: "Godzilla", collections: [374509, 374511, 374512, 535790],
-    films: [1678, 929, 124905, 373571, 315011, 399566, 823464, 940721] },
+  { key: "godzilla", name: "Godzilla", collections: [374509, 374511, 374512, 535790, 1474814],
+    films: [1678, 929, 124905, 373571, 315011, 399566, 823464, 940721, 1381071] },
 ];
 
 export function filmFranchise({ tmdbId, metadata }: { tmdbId: number | null; metadata: Record<string, unknown> | null }) {

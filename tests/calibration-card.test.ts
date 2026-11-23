@@ -17,7 +17,16 @@ it("signale le manque d’informations sans déduire un pitch du genre ou du tit
   const output = formatCalibrationCard({ title: "Ignoré\u001b[2J", year: null, synopsis: undefined, fullSynopsis: undefined,
     minutes: undefined, countries: [], genres: ["Horreur"], directors: [] }, 1, 4);
   expect(output).toContain("Pitch indisponible");
-  expect(output).toContain("Synopsis complet indisponible");
+  expect(output).toContain("Synopsis complémentaire indisponible");
   expect(output).toContain("Durée        Non renseignée");
   expect(output).not.toContain("\u001b");
+});
+
+it("oriente vers Allociné quand la fiche ne contient qu’un synopsis très court", () => {
+  const output = formatCalibrationCard({ title: "À l’écart", year: 1993, synopsis: "Une enquête.", fullSynopsis: "Une enquête.",
+    minutes: 92, countries: ["FR"], genres: [], directors: [] }, 1, 4);
+  expect(output).toContain("Une enquête.");
+  expect(output).toContain("Pour en savoir plus, consultez Allociné.");
+  expect(output).toContain("https://www.allocine.fr/rechercher/movie/?q=");
+  expect(output).not.toContain("tapez s");
 });
