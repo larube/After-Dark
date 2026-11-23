@@ -100,12 +100,12 @@ describe("Retours personnels SQLite", () => {
     const criteria = criteriaSchema.parse({
       mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
     });
-    expect(recommend(catalogue, signals, criteria, new Set()).films.map(({ id }) => id)).toEqual([2]);
+    expect(recommend(catalogue, signals, criteria, new Set(), undefined, "current", "legacy").films.map(({ id }) => id)).toEqual([2]);
     await saveFeedback(connection.db, { action: "seen", movieId: 2, score: null, appreciation: "Je me suis endormi." });
     connection.close();
     connection = await openDatabase(filename, migrations);
     const { catalogue: updated, signals: updatedSignals } = await readCatalogue(connection.db);
-    expect(recommend(updated, updatedSignals, criteria, new Set()).films).toEqual([]);
+    expect(recommend(updated, updatedSignals, criteria, new Set(), undefined, "current", "legacy").films).toEqual([]);
     expect(updatedSignals.map(({ film }) => film.id)).toEqual([1]);
     expect(await getCollection(connection.db)).toMatchObject([{ movieId: 2, intention: "none", appreciation: "Je me suis endormi." }]);
     expect(await importProfile(connection.db, profile)).toMatchObject({
@@ -137,7 +137,7 @@ describe("Retours personnels SQLite", () => {
     const criteria = criteriaSchema.parse({
       mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
     });
-    expect(recommend(catalogue, signals, criteria, new Set()).films.map(({ id }) => id)).toEqual([1]);
+    expect(recommend(catalogue, signals, criteria, new Set(), undefined, "current", "legacy").films.map(({ id }) => id)).toEqual([1]);
   });
 
   it("protège les notes historiques même lorsqu’elles arrivent après le marquage", async () => {

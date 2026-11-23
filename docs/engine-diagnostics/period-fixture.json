@@ -1,0 +1,20 @@
+{
+  "catalogue": [
+    {"id":1,"title":"Chambre d’orage","year":1948,"metadata":{"genres":["Thriller"],"reputation":{"source":"TMDB","average":9.1,"count":1000}}},
+    {"id":2,"title":"Les Échos de juin","year":1956,"metadata":{"genres":["Thriller"],"reputation":{"source":"TMDB","average":9.2,"count":1100}}},
+    {"id":3,"title":"Les Heures grises","year":1965,"metadata":{"genres":["Drame"],"directors":["Lina Ardent"],"keywords":["mémoire"],"reputation":{"source":"TMDB","average":9,"count":900}}},
+    {"id":4,"title":"Le Port immobile","year":1974,"metadata":{"genres":["Aventure"],"reputation":{"source":"TMDB","average":7.9,"count":460}}},
+    {"id":5,"title":"La Route des pins","year":1986,"metadata":{"genres":["Comédie"],"reputation":{"source":"TMDB","average":7.85,"count":460}}},
+    {"id":6,"title":"Derrière la vitre","year":1995,"metadata":{"genres":["Mystère"],"reputation":{"source":"TMDB","average":7.8,"count":460}}},
+    {"id":7,"title":"Les Fenêtres du canal","year":2004,"metadata":{"genres":["Drame"],"directors":["Lina Ardent"]}},
+    {"id":8,"title":"Le Train du soir","year":2023,"metadata":{"genres":["Action"],"reputation":{"source":"TMDB","average":7.75,"count":460}}},
+    {"id":9,"title":"La Forêt dessinée","year":2022,"metadata":{"genres":["Animation"],"reputation":{"source":"TMDB","average":7.8,"count":460}}},
+    {"id":10,"title":"Les Lilas","year":2000,"status":"seen","metadata":{"genres":["Drame"],"directors":["Lina Ardent"],"keywords":["mémoire"]}},
+    {"id":11,"title":"Rive gauche","year":2005,"status":"seen","metadata":{"genres":["Drame"],"directors":["Lina Ardent"],"keywords":["mémoire"]}}
+  ],
+  "signals": [
+    {"id":10,"ratings":[{"numeric":8.5}],"spontaneous":false,"memorable":false,"rewatch":false},
+    {"id":11,"ratings":[{"numeric":9.5}],"spontaneous":false,"memorable":false,"rewatch":false}
+  ],
+  "recent":[]
+}

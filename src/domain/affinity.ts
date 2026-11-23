@@ -18,6 +18,7 @@ export const qualitativeWeights: Readonly<Record<string, number>> = {
 
 export const affinityModels = ["current", "normalized", "rarity", "hybrid"] as const;
 export type AffinityModel = typeof affinityModels[number];
+export type TonightAffinityModel = AffinityModel | "personal";
 type Trait = { sum: number; count: number; negativeCount?: number };
 
 export function buildAffinity(signals: Signal[], qualitative = qualitativeWeights, trackNegative = false) {
@@ -59,10 +60,10 @@ export function rarityWeight(total: number, count: number) {
 }
 
 export function affinityDetails(film: Film, traits: ReturnType<typeof buildAffinity>,
-  model: AffinityModel = "current", frequency?: ReturnType<typeof catalogueFrequency>) {
+  model: TonightAffinityModel = "current", frequency?: ReturnType<typeof catalogueFrequency>) {
   const available = uniqueFeatures(film.metadata);
   const familySizes = new Map<string, number>();
-  if (model === "normalized" || model === "hybrid") {
+  if (model === "normalized" || model === "hybrid" || model === "personal") {
     for (const { key } of available) familySizes.set(key, (familySizes.get(key) ?? 0) + 1);
   }
   const matches = available.flatMap((feature) => {
@@ -70,20 +71,23 @@ export function affinityDetails(film: Film, traits: ReturnType<typeof buildAffin
     if (!trait) return [];
     const baseContribution = trait.sum / (trait.count + 1) * feature.weight;
     const budget = feature.key === "keyword" ? 3 : 1;
-    const normalization = 1 / Math.sqrt(Math.max(1, (familySizes.get(feature.key) ?? 0) / budget));
+    const familyLoad = Math.max(1, (familySizes.get(feature.key) ?? 0) / budget);
+    const normalization = model === "personal" && feature.key === "keyword" ? 1 / familyLoad : 1 / Math.sqrt(familyLoad);
     const documentCount = frequency?.counts.get(feature.id) ?? 0;
     const rarity = frequency ? rarityWeight(frequency.total, documentCount) : 1;
     const negativeCount = trait.negativeCount ?? 0;
-    const negativeConfidence = model !== "current" && baseContribution < 0 ? negativeCount / (negativeCount + 2) : 1;
+    const negativeConfidence = model !== "current" && model !== "personal" && baseContribution < 0 ? negativeCount / (negativeCount + 2) : 1;
+    const positiveConfidence = model === "personal" && baseContribution > 0 && trait.count === 1 ? 0.5 : 1;
     return [{
       ...feature, signalCount: trait.count, signalSum: trait.sum,
-      contribution: baseContribution * normalization * rarity * negativeConfidence,
+      contribution: baseContribution * normalization * rarity * negativeConfidence * positiveConfidence,
+      ...(model === "personal" ? { positiveConfidence } : {}),
       ...(model === "current" ? {} : { baseContribution, normalization, rarity, documentCount, negativeCount, negativeConfidence }),
     }];
   }).sort((a, b) => b.contribution - a.contribution);
   const raw = matches.reduce((sum, feature) => sum + feature.contribution, 0);
   return {
-    raw, matches, score: Math.max(-4, Math.min(4, raw)),
+    raw, matches, score: model === "personal" ? 4 * Math.tanh(raw / 4) : Math.max(-4, Math.min(4, raw)),
     positive: matches.filter((feature) => feature.contribution > 0.08).slice(0, 3).map((feature) => feature.label),
     negative: matches.filter((feature) => feature.contribution < -0.15).slice(-2).map((feature) => feature.label),
   };

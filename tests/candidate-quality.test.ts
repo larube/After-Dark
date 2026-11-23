@@ -103,9 +103,9 @@ describe("politique de séance classique", () => {
   });
 
   it("compare deux politiques sur un instantané fixe et conserve le dénominateur du holdout", () => {
-    const classic = createReport(fixture, policy);
+    const classic = createReport(fixture, { ...policy, ranking: "legacy" });
     const legacy = createReport(fixture, { ...policy, mode: "legacy" });
-    expect(createReport(fixture, policy)).toEqual(classic);
+    expect(createReport(fixture, { ...policy, ranking: "legacy" })).toEqual(classic);
     expect(classic.scenarios[0]).toMatchObject({ eligibleBeforePolicy: 10, eligible: 5 });
     expect(classic.holdout).toMatchObject({ targets: 2, eligibleTargets: 1 });
     expect(legacy.holdout).toMatchObject({ targets: 2, eligibleTargets: 2 });

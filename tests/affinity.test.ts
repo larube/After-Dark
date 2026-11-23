@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixture from "../docs/engine-diagnostics/fixture.json";
 import { compareAffinityModels, createReport } from "../src/diagnostics/report";
 import { affinityDetails, affinityModels, buildAffinity, catalogueFrequency, rarityWeight } from "../src/domain/affinity";
-import { holdoutInputs, type Film, type Signal } from "../src/domain/recommendation";
+import { diagnoseRecommendation, holdoutInputs, tonightAffinityModel, tonightRanking, type Film, type Signal } from "../src/domain/recommendation";
 
 const film = (id: number, metadata: Partial<Film["metadata"]> = {}): Film => ({
   id, title: String(id), year: null, metadata: { directors: [], genres: [], countries: [], keywords: [], ...metadata },
@@ -73,10 +73,49 @@ describe("affinity experiments", () => {
     expect(mixed.ratings[0].numeric).toBe(8.5);
   });
 
+  it("budgets matched and unmatched keyword volume, shrinks isolated positives and retains signed evidence", () => {
+    const keywords = Array.from({ length: 24 }, (_, index) => "mot " + index);
+    const metadata = { directors: ["Mina Ocre"], keywords };
+    const source = film(1, metadata);
+    const candidate = film(2, metadata);
+    const secondSource = film(3, metadata);
+    const catalogue = [source, candidate, secondSource, ...Array.from({ length: 15 }, (_, index) => film(index + 4, { keywords }))];
+    const frequency = catalogueFrequency(catalogue);
+    const exact = (...signals: Signal[]) => affinityDetails(candidate, buildAffinity(signals, undefined, true), "personal", frequency);
+    expect(exact(vote(source, 10)).matches.find(({ key }) => key === "keyword")).toMatchObject({
+      positiveConfidence: 0.5, normalization: 0.125, signalCount: 1,
+    });
+    const supported = exact(vote(source, 10), vote(secondSource, 10));
+    expect(supported.score).toBeGreaterThan(exact(vote(source, 10)).score);
+    expect(supported.score).toBeLessThan(4);
+    expect(exact(vote(source, 0)).matches.every(({ contribution, negativeConfidence }) => contribution < 0 && negativeConfidence === 1)).toBe(true);
+    expect(exact(vote(source, 0), vote(secondSource, 10)).raw).toBe(0);
+  });
+
+  it("keeps unknown reputation neutral and uses good reputation as a fallback for weak personal evidence", () => {
+    const rep = (average: number, count = 1000) => ({ source: "TMDB", average, count } as const);
+    const director = { directors: ["Mina Ocre"] };
+    const source = film(1, director);
+    const secondSource = film(2, director);
+    const candidates = [film(3, director), film(4, { ...director, reputation: rep(9) }),
+      film(5, { ...director, reputation: rep(4) }), film(6, { ...director, reputation: rep(10, 0) }),
+      ...Array.from({ length: 100 }, (_, index) => film(10 + index))];
+    const run = (signals: Signal[]) => diagnoseRecommendation(candidates, signals, { mood: "surprise",
+      preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
+    }, new Set(), { referenceDate: date }, tonightAffinityModel, tonightRanking);
+    const populated = run([source, secondSource].map((film) => ({ ...vote(film, 10), spontaneous: true, memorable: true })));
+    const contribution = (id: number) => populated.base.find((row) => row.id === id)!.contributions.reputation;
+    expect(contribution(3)).toBe(0);
+    expect(contribution(4)).toBe(0);
+    expect(contribution(5)).toBeLessThan(0);
+    expect(contribution(6)).toBe(0);
+    expect(run([]).result.films.map(({ id }) => id)).toEqual([4]);
+  });
+
   it("replays all scenarios on the same candidates and holdout folds, with exact baseline scores", () => {
     const comparison = compareAffinityModels(fixture, date);
     expect(compareAffinityModels(fixture, date)).toEqual(comparison);
-    const current = createReport(fixture, { referenceDate: date });
+    const current = createReport(fixture, { referenceDate: date, ranking: "legacy" });
     expect(comparison.models[0].holdout).toEqual(current.holdout);
     expect(comparison.models[0].runs.map(({ ranking }) => ranking.map(({ id, score }) => [id, score])))
       .toEqual(current.scenarios.map(({ base }) => base.map(({ id, score }) => [id, score])));
@@ -84,7 +123,7 @@ describe("affinity experiments", () => {
       expect(variant.holdout.folds.map(({ targets }) => targets.map(({ id, numeric }) => [id, numeric])))
         .toEqual(current.holdout.folds.map(({ targets }) => targets.map(({ id, numeric }) => [id, numeric])));
     }
-    const hybrid = createReport(fixture, { referenceDate: date, affinityModel: "hybrid" });
+    const hybrid = createReport(fixture, { referenceDate: date, affinityModel: "hybrid", ranking: "legacy" });
     expect(hybrid.fingerprint).toBe(current.fingerprint);
     expect(hybrid.scenarios.map(({ exclusions }) => exclusions)).toEqual(current.scenarios.map(({ exclusions }) => exclusions));
     expect(hybrid.holdout).toEqual(comparison.models[3].holdout);

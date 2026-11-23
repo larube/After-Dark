@@ -54,7 +54,7 @@ it("respecte et annule les exclusions persistées dans les sélections, sans tou
   try {
     const [zero, one, other] = await connection.db.insert(movies).values([
       minusZero, minusOne,
-      { displayTitle: "Godzilla Minus Zero", tmdbId: 99999999, year: 2026 },
+      { displayTitle: "Godzilla Minus Zero", tmdbId: 99999999, year: 2026, metadata: { reputation: { source: "TMDB", average: 8, count: 500 } } },
       ...Array.from({ length: 3 }, (_, i) => ({ displayTitle: `Autre film ${i}`, year: 2001 + i })),
     ]).returning();
     const before = await getCollection(connection.db);

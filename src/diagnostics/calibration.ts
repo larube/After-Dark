@@ -1,7 +1,7 @@
 import { calibrationProtocol, type DiscoveryOptions } from "../domain/discovery-calibration";
 import { discoveryHash, discoverySize, inspectDiscoveryRanking, type Rotation } from "../domain/discovery";
 import { assignBlindFilms } from "../domain/lab";
-import { engineVersion, holdoutInputs, type Film, type Signal } from "../domain/recommendation";
+import { legacyEngineVersion as engineVersion, holdoutInputs, type Film, type Signal } from "../domain/recommendation";
 import { discoveryModes, type DiscoveryMode } from "../shared/discovery";
 
 const arms = ["A", "B", "C", "D"] as const;

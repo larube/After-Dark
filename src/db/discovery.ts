@@ -3,7 +3,7 @@ import { desc, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { discoveryHash, discoveryHistorySize, discoveryProtocol, discoverySnapshot, explore } from "../domain/discovery";
 import { classifyContent, todayUtc } from "../domain/candidate-quality";
 import { normalizeTitle } from "../domain/ratings";
-import { engineVersion } from "../domain/recommendation";
+import { legacyEngineVersion as engineVersion } from "../domain/recommendation";
 import { discoveryModes, type DiscoveryMode } from "../shared/discovery";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
 import { franchiseExclusions } from "./franchises";
