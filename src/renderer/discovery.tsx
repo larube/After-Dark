@@ -77,7 +77,7 @@ export function Discovery({ active, disabled, actions }: {
   const noun = count === 1 ? "film" : "films";
   const status = loading ? "Exploration en cours…" : state?.empty ? "Le catalogue local ne contient aucun film admissible pour le moment." :
     view ? `${count} ${noun}${view.renewed === null ? "" : view.renewed === 0
-      ? " · Aucun autre film disponible pour renouveler cette sélection."
+      ? " · Aucune autre proposition comparable pour renouveler cette sélection."
       : ` · ${view.renewed} ${view.renewed === 1 ? "différent" : "différents"} de l’exploration précédente`}` : "";
 
   return <section hidden={!active} className="discovery" aria-labelledby="discovery-heading">

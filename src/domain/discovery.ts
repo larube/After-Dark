@@ -3,7 +3,7 @@ import type { DiscoveryFilm, DiscoveryMode } from "../shared/discovery";
 import { affinityDetails, buildAffinity, catalogueFrequency, features } from "./affinity";
 import { eligible, type Film, type Signal } from "./recommendation";
 
-export const discoveryProtocol = "discovery-v1";
+export const discoveryProtocol = "discovery-v2";
 export const discoverySize = 8;
 export const discoveryHistorySize = 3;
 export const discoveryHash = (data: unknown) => createHash("sha256").update(JSON.stringify(data)).digest("hex");
@@ -69,9 +69,12 @@ function rankCandidates(pool: Film[], signals: Signal[], mode: DiscoveryMode, ro
         : newDecade ? `Une décennie peu représentée dans vos retours : les années ${period}.` : affinityReason,
     };
     const tie = discoveryHash([seed, id]);
+    const priorityFallback = mode === "affinities" ? fit <= .08 || !positive.length : mode === "gems" && fit < 0;
+    const qualityTier = fit < -1 ? 2 : Number(priorityFallback);
     return {
       film, fit, popularity, tier: rotationTier + 1, crossMode: Number(otherModes.has(id)),
       preferenceTier: mode === "affinities" ? Number(fit <= .08) : mode === "gems" ? Number(fit < 0) : Number(fit < -.5),
+      qualityTier,
       score: scores[mode], jitter: parseInt(tie.slice(0, 8), 16) / 0xffffffff * .32, tie,
       reason: reasons[mode] || (mode === "gems" && popularity === undefined
         ? "Popularité TMDB inconnue. Le film reste admissible dans la sélection."
@@ -97,19 +100,35 @@ function diversify(ranked: Ranked[], mode: DiscoveryMode) {
   const selected: Ranked[] = [];
   const pending = ranked.map((item) => ({ item, overlap: 0 }));
   const penalty = { gems: .73, affinities: .53, offbeat: .91 }[mode];
-  // Never recycle a more recent result when an older or unseen candidate is available.
+  const noveltyAllowance = .48; // Same score budget as the existing cross-mode novelty penalty.
   const rotationPriority = (tier: number) => tier === 0 ? 0 : discoveryHistorySize + 1 - tier;
-  function compare(a: typeof pending[number], b: typeof pending[number]) {
-    const value = ({ item, overlap }: typeof a) => item.score + item.jitter - (.48 * item.crossMode)
-      - penalty * overlap - .9 * item.preferenceTier;
-    return Number(a.item.fit < -1) - Number(b.item.fit < -1) ||
-      rotationPriority(a.item.tier) - rotationPriority(b.item.tier) ||
-      value(b) - value(a) || a.item.tie.localeCompare(b.item.tie, "en") || a.item.film.id - b.item.film.id;
+  type Pending = typeof pending[number];
+  const value = ({ item, overlap }: Pending) => item.score - noveltyAllowance * item.crossMode
+    - penalty * overlap - .9 * item.preferenceTier;
+  function compare(a: Pending, b: Pending) {
+    return rotationPriority(a.item.tier) - rotationPriority(b.item.tier) ||
+      (value(b) + b.item.jitter) - (value(a) + a.item.jitter) ||
+      a.item.tie.localeCompare(b.item.tie, "en") || a.item.film.id - b.item.film.id;
   }
+  const hasRecentCandidates = ranked.some(({ tier }) => tier > 0);
   while (selected.length < discoverySize && pending.length) {
-    let best = 0;
-    for (let index = 1; index < pending.length; index++) {
-      if (compare(pending[index], pending[best]) < 0) best = index;
+    let bestTier = Infinity;
+    let bestValue = -Infinity;
+    for (const candidate of pending) {
+      const { qualityTier } = candidate.item;
+      if (qualityTier < bestTier) {
+        bestTier = qualityTier;
+        bestValue = value(candidate);
+      } else if (qualityTier === bestTier) {
+        bestValue = Math.max(bestValue, value(candidate));
+      }
+    }
+    let best = -1;
+    for (const [index, candidate] of pending.entries()) {
+      if (candidate.item.qualityTier !== bestTier) continue;
+      // Apply recent-history priority only among comparable candidates.
+      if (hasRecentCandidates && value(candidate) < bestValue - noveltyAllowance) continue;
+      if (best === -1 || compare(candidate, pending[best]) < 0) best = index;
     }
     const [{ item }] = pending.splice(best, 1);
     selected.push(item);

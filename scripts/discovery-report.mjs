@@ -17,6 +17,11 @@ try {
     const median = !known.length ? null : (known[Math.floor((known.length - 1) / 2)] + known[Math.floor(known.length / 2)]) / 2;
     return { known: known.length, unknown: values.length - known.length, min: known[0] ?? null, median, max: known.at(-1) ?? null };
   };
+  const affinities = (result) => ({
+    ...distribution(result.selected.map(({ fit }) => Number(fit.toFixed(3)))),
+    negative: result.selected.filter(({ fit }) => fit < 0).length,
+    belowMinusOne: result.selected.filter(({ fit }) => fit < -1).length,
+  });
   const trials = discoveryModes.map((mode) => {
     const result = explore(catalogue, signals, excluded, mode, rotation, firstSeed, discoveryDate);
     const films = result.selected.map(({ film }) => film);
@@ -30,7 +35,8 @@ try {
         decades: unique(films.flatMap(({ year }) => year ? [Math.floor(year / 10) * 10] : [])),
       },
       popularity: distribution(films.map(({ metadata }) => metadata.popularity)),
-      discoveryAffinity: distribution(result.selected.map(({ fit }) => Number(fit.toFixed(3)))),
+      discoveryAffinity: affinities(result),
+      nextDiscoveryAffinity: affinities(next),
       picks: result.selected.map(({ film, reason }) => ({ title: film.title, reason })),
     };
   });
@@ -40,6 +46,7 @@ try {
     coverage: { first: unique(trials.flatMap(({ ids }) => ids)), firstAndNext: unique(trials.flatMap(({ ids, next }) => [...ids, ...next])) },
     overlap: trials.flatMap((a, index) => trials.slice(index + 1).map((b) => ({
       modes: [a.mode, b.mode], shared: a.ids.filter((id) => b.ids.includes(id)).length,
+      sharedAfterRenewal: a.next.filter((id) => b.next.includes(id)).length,
     }))),
     trials,
   }, null, 2) + "\n");

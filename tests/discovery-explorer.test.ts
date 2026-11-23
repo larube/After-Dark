@@ -39,14 +39,61 @@ describe("Découvertes", () => {
     const first = run("gems");
     expect(run("gems")).toEqual(first);
     const second = run("gems", { previous: [ids(first)], adjacent: [] }, "second");
-    expect(second.renewed).toBe(8);
-    expect(ids(second).some((id) => ids(first).includes(id))).toBe(false);
+    expect(second.renewed).toBe(6);
+    expect(run("gems", { previous: [ids(first)], adjacent: [] }, "second")).toEqual(second);
     const small = fixture.catalogue.filter(({ id }) => id === 1 || id === 37);
     const repeated = explore(small, [], new Set(), "offbeat", { previous: [[1, 37]], adjacent: [] }, "test", discoveryDate);
     expect(repeated.renewed).toBe(0);
     expect(ids(repeated).sort()).toEqual([1, 37]);
     expect(discoveryPool(small, new Set([1]), discoveryDate)[0].metadata.poster).toBeUndefined();
     expect(explore([], [], new Set(), "gems", blank, "test", discoveryDate).selected).toEqual([]);
+  });
+
+  it.each(discoveryModes)("préserve la pertinence des films récents en mode %s", (mode) => {
+    const source = fixture.signals[0];
+    const good = { ...source.film, id: 101, status: "unknown" as const };
+    const disliked = fixture.catalogue.find(({ id }) => id === 19)!;
+    const negative = { ...disliked, metadata: { ...disliked.metadata, directors: [] } };
+    const signals = [...fixture.signals, {
+      ...source, spontaneous: false, film: disliked, ratings: [{ numeric: 0 }],
+    }];
+    expect(explore([negative], signals, new Set(), mode, blank, "rotation", discoveryDate).selected[0].fit).toBe(-.85);
+    expect(ids(explore([good, negative], signals, new Set(), mode, { ...blank, previous: [[good.id]] }, "rotation", discoveryDate)))
+      .toEqual([good.id, negative.id]);
+  });
+
+  it.each(discoveryModes)("limite le bonus de nouveauté entre films admissibles du même niveau en mode %s", (mode) => {
+    const source = fixture.signals[0].film;
+    const metadata = { genres: [], directors: [], countries: [], keywords: source.metadata.keywords.slice(0, 3) };
+    const recent = { ...source, id: 101, status: "unknown" as const, metadata };
+    const fresh = { ...recent, id: 102, metadata: { ...metadata, keywords: ["rare weak trait"] } };
+    const signals = [...fixture.signals, {
+      film: fresh, ratings: [{ numeric: 7 }], spontaneous: false, memorable: false, rewatch: false,
+    }];
+    const result = explore([recent, fresh], signals, new Set(), mode,
+      { ...blank, previous: [[recent.id]] }, "window", discoveryDate);
+    expect(result.selected.every(({ qualityTier }) => qualityTier === 0)).toBe(true);
+    expect(ids(result)).toEqual([recent.id, fresh.id]);
+  });
+
+  it.each(discoveryModes)("fait passer un inédit comparable devant son équivalent récent en mode %s", (mode) => {
+    const source = fixture.signals[0].film;
+    const recent = { ...source, id: 101, status: "unknown" as const };
+    const older = { ...recent, id: 102 };
+    const fresh = { ...recent, id: 103 };
+    const result = explore([recent, older, fresh], fixture.signals, new Set(), mode,
+      { ...blank, previous: [[recent.id], [older.id]] }, "comparable", discoveryDate);
+    expect(ids(result)).toEqual([fresh.id, older.id, recent.id]);
+  });
+
+  it("laisse Hors piste explorer les fiches neutres mais garde les fortes affinités négatives en dernier recours", () => {
+    const [neutral, disliked] = [28, 20].map((id) => fixture.catalogue.find((film) => film.id === id)!);
+    const signals = [...fixture.signals, {
+      film: disliked, ratings: [{ numeric: 0 }], spontaneous: false, memorable: false, rewatch: false,
+    }];
+    const result = explore([neutral, disliked], signals, new Set(), "offbeat", { ...blank, previous: [[neutral.id]] }, "test", discoveryDate);
+    expect(ids(result)).toEqual([neutral.id, disliked.id]);
+    expect(result.selected[1].fit).toBeLessThan(-1);
   });
 
   it("borne les mots-clés et accepte un film ambigu, un documentaire et une animation", () => {
@@ -138,7 +185,7 @@ describe("Découvertes", () => {
       connection = await openDatabase(filename, "drizzle");
       expect(await currentDiscovery(connection.db, "gems")).toEqual(first);
       const next = await generateDiscovery(connection.db, "gems", first!.id, date, "seed-two");
-      expect(next?.renewed).toBe(8);
+      expect(next?.renewed).toBeGreaterThan(0);
       expect((await getCollection(connection.db)).find((entry) => entry.movieId === movieId)?.intention).toBe("watch_later");
       await saveFeedback(connection.db, { action: "seen", movieId, score: null, appreciation: null });
       expect((await getCollection(connection.db)).find((entry) => entry.movieId === movieId)?.seenAt).toBeTruthy();

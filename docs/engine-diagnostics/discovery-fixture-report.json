@@ -1,5 +1,5 @@
 {
-  "protocol": "discovery-v1",
+  "protocol": "discovery-v2",
   "date": "2026-11-23",
   "firstSeed": "fixture-v1",
   "secondSeed": "second",
@@ -15,7 +15,7 @@
   ],
   "coverage": {
     "first": 20,
-    "firstAndNext": 30
+    "firstAndNext": 28
   },
   "overlap": [
     {
@@ -23,21 +23,24 @@
         "gems",
         "affinities"
       ],
-      "shared": 2
+      "shared": 2,
+      "sharedAfterRenewal": 3
     },
     {
       "modes": [
         "gems",
         "offbeat"
       ],
-      "shared": 1
+      "shared": 1,
+      "sharedAfterRenewal": 1
     },
     {
       "modes": [
         "affinities",
         "offbeat"
       ],
-      "shared": 1
+      "shared": 1,
+      "sharedAfterRenewal": 0
     }
   ],
   "trials": [
@@ -54,16 +57,16 @@
         1
       ],
       "next": [
-        15,
+        11,
         5,
-        30,
         13,
+        30,
         4,
         20,
-        37,
-        17
+        12,
+        15
       ],
-      "renewed": 8,
+      "renewed": 6,
       "diversity": {
         "genres": 4,
         "countries": 4,
@@ -82,7 +85,18 @@
         "unknown": 0,
         "min": 0,
         "median": 2.292,
-        "max": 4
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 2.292,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
       },
       "picks": [
         {
@@ -132,16 +146,16 @@
         1
       ],
       "next": [
+        2,
         7,
+        5,
+        6,
+        8,
+        9,
         11,
-        15,
-        18,
-        12,
-        14,
-        16,
-        10
+        4
       ],
-      "renewed": 8,
+      "renewed": 2,
       "diversity": {
         "genres": 2,
         "countries": 2,
@@ -160,7 +174,18 @@
         "unknown": 0,
         "min": 2.292,
         "median": 4,
-        "max": 4
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 2.292,
+        "median": 4,
+        "max": 4,
+        "negative": 0,
+        "belowMinusOne": 0
       },
       "picks": [
         {
@@ -238,7 +263,18 @@
         "unknown": 0,
         "min": 0,
         "median": 0,
-        "max": 3.171
+        "max": 3.171,
+        "negative": 0,
+        "belowMinusOne": 0
+      },
+      "nextDiscoveryAffinity": {
+        "known": 8,
+        "unknown": 0,
+        "min": 0,
+        "median": 0,
+        "max": 3.171,
+        "negative": 0,
+        "belowMinusOne": 0
       },
       "picks": [
         {
