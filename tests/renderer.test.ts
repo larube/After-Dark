@@ -122,6 +122,9 @@ describe("Interface Neon Underground", () => {
       expect(card).not.toMatch(/<details[^>]* open|Aucune franchise|Pays inconnu/);
     }
     expect(cards[0].includes("Franchise · Une saga")).toBe(withFranchise);
+    expect(cards[0].includes("Vérifier la saga sur TMDB")).toBe(!withFranchise);
+    expect(cards[1]).toMatch(/<details class="film-details">.*Vérifier la saga sur TMDB.*<\/details>/);
+    expect(cards[1]).not.toContain("Impossible de vérifier");
     expect(cards[1]).not.toContain("Franchise");
     if (withFranchise) expect(cards[0]).toMatch(/Pas ce soir.*Franchise · Une saga/);
   });

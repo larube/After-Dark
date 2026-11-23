@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type Ref } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 import type { Recommendation } from "../shared/recommendation";
 import { FilmFranchise } from "./franchises";
 import { AllocineLink } from "./allocine";
@@ -22,8 +22,28 @@ const empty = {
 function RecommendationCard({ film, actions, image }: {
   film: Recommendation["films"][number]; actions: ReactNode; image?: string;
 }) {
-  const { title, year, metadata, posterData = image, reasons: [reason, ...otherReasons], warnings, franchise } = film;
+  const { title, year, metadata, posterData = image, reasons: [reason, ...otherReasons], warnings } = film;
   const [skipped, setSkipped] = useState(false);
+  const [franchise, setFranchise] = useState(film.franchise);
+  const [verification, setVerification] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const detailsSummary = useRef<HTMLElement>(null);
+  const verifyButton = useRef<HTMLButtonElement>(null);
+
+  async function verifyFranchise() {
+    setVerification("pending");
+    try {
+      const reply = await window.afterDark.franchises(film.id, true);
+      if (!reply.ok) {
+        setVerification("error");
+        return;
+      }
+      if (document.activeElement === verifyButton.current) detailsSummary.current?.focus();
+      setFranchise(reply.data[0]);
+      setVerification("done");
+    } catch {
+      setVerification("error");
+    }
+  }
   return <article className={skipped ? "film-card film-card-skipped" : "film-card"}>
     <div className="poster-mount">
       {posterData ? <img className="poster" src={posterData} alt="" /> :
@@ -46,11 +66,18 @@ function RecommendationCard({ film, actions, image }: {
       </button>
       <div hidden={skipped} className="film-secondary">
         <details className="film-details">
-          <summary>Détails du film</summary>
+          <summary ref={detailsSummary}>Détails du film</summary>
           {metadata.countries.length > 0 && <p className="film-meta">{metadata.countries.map((code) => regions.of(code)).join(", ")}</p>}
           {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
           {otherReasons.length > 0 && <ul>{otherReasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
           <AllocineLink title={title} year={year} />
+          {!franchise && verification !== "done" && <div>
+            <button ref={verifyButton} className="text-action" type="button" aria-disabled={verification === "pending"}
+              onClick={() => { if (verification !== "pending") void verifyFranchise(); }}>
+              {verification === "pending" ? "Vérification en cours…" : "Vérifier la saga sur TMDB"}
+            </button>
+            {verification === "error" && <p role="alert" className="warning">Impossible de vérifier la saga sur TMDB. Réessayer est possible.</p>}
+          </div>}
         </details>
         {franchise && <FilmFranchise movieId={film.id} franchise={franchise} />}
       </div>

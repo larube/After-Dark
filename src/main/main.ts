@@ -6,10 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { z } from "zod";
-import { eq } from "drizzle-orm";
-import { movies } from "../db/schema";
-import { franchisePreferences, setFranchisePreference } from "../db/franchises";
-import { cacheFilm } from "../db/recommendations";
+import { setFranchisePreference } from "../db/franchises";
 import { openDatabase } from "../db/client";
 import { getCollection, saveFeedback } from "../db/feedback";
 import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab, transferLabSeen } from "../db/lab";
@@ -20,6 +17,7 @@ import { ipc, type DesktopApi } from "../shared/ipc";
 import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-posters";
 import { openAllocine } from "./allocine";
 import { exportDiscoveryDiagnostic } from "./discovery-export";
+import { readFilmFranchises } from "./franchises";
 import { startEnrichment } from "./enrichment";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../diagnostics/tonight";
 import { findTonight, localTmdb } from "./recommend";
@@ -209,24 +207,8 @@ void app.whenReady().then(async () => {
   register(ipc.recommendationPoster, async (_db, _owner, [id]): ReturnType<DesktopApi["recommendationPoster"]> => ({
     ok: true, data: latestSelection ? await recommendationPoster(latestSelection, id, app.getPath("userData")) ?? null : null,
   }));
-  register(ipc.franchises, async (db, _owner, [id, verify]): ReturnType<DesktopApi["franchises"]> => {
-    let data = await franchisePreferences(db, id);
-    if (data.length === 0 && id !== null && verify) {
-      const movie = await db.select({ tmdbId: movies.tmdbId, metadata: movies.metadata }).from(movies).where(eq(movies.id, id)).get();
-      const cached = movie?.metadata?.tmdb;
-      const details = cached && typeof cached === "object" && "data" in cached ? cached.data : undefined;
-      if (movie?.tmdbId && !(details && typeof details === "object" && "collection" in details)) {
-        try {
-          const client = await localTmdb(app.getPath("userData"));
-          const film = await client?.film(movie.tmdbId);
-          if (film && await cacheFilm(db, film, id)) data = await franchisePreferences(db, id);
-        } catch {
-          return { ok: false, error: "Impossible de vérifier cette collection auprès de TMDB." };
-        }
-      }
-    }
-    return { ok: true, data };
-  });
+  register(ipc.franchises, (db, _owner, [id, verify]) =>
+    readFilmFranchises(db, id, verify, () => localTmdb(app.getPath("userData"))));
   register(ipc.setFranchise, async (db, _owner, [id, key, blocked]) => {
     await setFranchisePreference(db, id, key, blocked);
     return { ok: true, data: null } as const;
