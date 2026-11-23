@@ -2,6 +2,9 @@ import type { Criteria, Metadata, Recommendation } from "../shared/recommendatio
 import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
 import { normalizeTitle } from "./ratings";
 
+import { affinityDetails, buildAffinity, catalogueFrequency, features, type AffinityModel } from "./affinity";
+export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
+
 export const engineVersion = "1.2.0";
 export type Film = {
   id: number; title: string; year: number | null; metadata: Metadata;
@@ -54,61 +57,9 @@ export function eligible(film: Film, criteria: Criteria, policy: CandidatePolicy
   return !Object.values(candidateEligibility(film, criteria, policy).causes).some(Boolean);
 }
 
-function features(metadata: Metadata) {
-  return [
-    ...metadata.directors.map((label) => ({ key: "director", label, weight: 2.5 })),
-    ...metadata.genres.map((label) => ({ key: "genre", label, weight: 1 })),
-    ...metadata.countries.map((label) => ({ key: "country", label, weight: 0.7 })),
-    ...metadata.keywords.map((label) => ({ key: "keyword", label, weight: 1.4 })),
-  ].map((item) => ({ ...item, id: item.key + ":" + normalizeTitle(item.label) }));
-}
-
-// Ordered affinity weights, separate from the numerical rating scale.
-export const qualitativeWeights: Readonly<Record<string, number>> = {
-  deteste: -1, bof: -0.65, bien: 0.25, "beaucoup aime": 0.7, adore: 1,
-};
-
-export function buildAffinity(signals: Signal[], qualitative = qualitativeWeights) {
-  const traits = new Map<string, { sum: number; count: number }>();
-  for (const signal of signals) {
-    const votes = signal.ratings.flatMap(({ numeric, qualitative: label }) => {
-      if (numeric !== undefined) return [(numeric - 6) / (numeric >= 6 ? 4 : 6)];
-      const weight = label && qualitative[normalizeTitle(label)];
-      return typeof weight === "number" ? [weight] : [];
-    });
-    const favorites = Number(signal.spontaneous) * 0.45 + Number(signal.memorable) * 0.25 + Number(signal.rewatch) * 0.2;
-    if (!votes.length && !favorites) continue;
-    const value = (votes.length ? votes.reduce((sum, vote) => sum + vote, 0) / votes.length : 0) + favorites;
-    for (const id of new Set(features(signal.film.metadata).map((feature) => feature.id))) {
-      const previous = traits.get(id) ?? { sum: 0, count: 0 };
-      traits.set(id, { sum: previous.sum + value, count: previous.count + 1 });
-    }
-  }
-  return traits;
-}
-
-function affinityDetails(film: Film, traits: ReturnType<typeof buildAffinity>) {
-  const matches = [...new Map(features(film.metadata).map((feature) => [feature.id, feature])).values()]
-    .flatMap((feature) => {
-      const trait = traits.get(feature.id);
-      return trait ? [{ ...feature, signalCount: trait.count, signalSum: trait.sum, contribution: trait.sum / (trait.count + 1) * feature.weight }] : [];
-    }).sort((a, b) => b.contribution - a.contribution);
-  const raw = matches.reduce((sum, feature) => sum + feature.contribution, 0);
-  return {
-    raw, matches, score: Math.max(-4, Math.min(4, raw)),
-    positive: matches.filter((feature) => feature.contribution > 0.08).slice(0, 3).map((feature) => feature.label),
-    negative: matches.filter((feature) => feature.contribution < -0.15).slice(-2).map((feature) => feature.label),
-  };
-}
-
-export function affinityFor(film: Film, traits: ReturnType<typeof buildAffinity>) {
-  const { score, positive, negative } = affinityDetails(film, traits);
-  return { score, positive, negative };
-}
-
-function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>) {
+function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: AffinityModel, frequency?: ReturnType<typeof catalogueFrequency>) {
   const { metadata } = film;
-  const affinity = affinityDetails(film, traits);
+  const affinity = affinityDetails(film, traits, model, frequency);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
   const avoided = criteria.avoid ? moodEvidence(metadata, criteria.avoid) : undefined;
   const preferredCountry = metadata.countries.some((code) => criteria.preferredCountries.includes(code));
@@ -162,13 +113,15 @@ type Step = {
 
 function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy,
+  model: AffinityModel,
   trace?: { base: Ranked[]; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] },
 ) {
-  const traits = buildAffinity(signals);
+  const traits = buildAffinity(signals, undefined, model !== "current");
+  const frequency = model === "rarity" || model === "hybrid" ? catalogueFrequency(catalogue) : undefined;
   const candidates = catalogue.map((film) => candidateEligibility(film, criteria, policy));
   if (trace) trace.candidates = candidates;
   const eligibleFilms = catalogue.filter((_, index) => !Object.values(candidates[index].causes).some(Boolean));
-  let ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits));
+  let ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits, model, frequency));
   if (trace) trace.base = [...ranked].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
   const selected: Ranked[] = [];
   const films: Recommendation["films"] = [];
@@ -202,14 +155,14 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
 }
 
 export function recommend(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }) {
-  return runRecommendation(catalogue, signals, criteria, recent, policy);
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current") {
+  return runRecommendation(catalogue, signals, criteria, recent, policy, model);
 }
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
-  policy: CandidatePolicy = { referenceDate: todayUtc() }) {
+  policy: CandidatePolicy = { referenceDate: todayUtc() }, model: AffinityModel = "current") {
   const trace: { base: Ranked[]; steps: Step[]; candidates: ReturnType<typeof candidateEligibility>[] } = { base: [], steps: [], candidates: [] };
-  const result = runRecommendation(catalogue, signals, criteria, recent, policy, trace);
+  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, trace);
   return {
     result, steps: trace.steps,
     exclusions: catalogue.map((film, index) => {
