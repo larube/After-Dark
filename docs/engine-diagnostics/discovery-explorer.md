@@ -1,5 +1,7 @@
 # Découvertes
 
+La [PR 14](discovery-quality.md) documente la validation des lots enregistrés, le filtre partagé et les nouveaux diagnostics de `discovery-v3`.
+
 Dans **Découvertes**, choisir une piste puis sélectionner **Explorer**. L’écran reprend la dernière exploration de chaque mode. **Explorer encore** demande une nouvelle sélection. Les actions sur les cartes utilisent les mêmes retours, séances et évaluations que « Ce soir » et « Ma collection ». Un film marqué vu ou écarté reste visible avec son nouvel état dans la sélection affichée. Il est retiré des prochaines sélections. L’action « Déjà vu » ouvre la notation facultative.
 
 ## Politique de sélection

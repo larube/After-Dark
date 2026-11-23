@@ -5,6 +5,9 @@ export const discoveryModeSchema = z.enum(discoveryModes);
 export type DiscoveryMode = z.infer<typeof discoveryModeSchema>;
 export const discoveryIdSchema = z.number().int().positive();
 
+export const posterDataSchema = z.string().max(400_024).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/);
+export const discoveryPosterSchema = z.strictObject({ id: discoveryIdSchema, data: posterDataSchema });
+
 export const discoveryFilmSchema = z.strictObject({
   id: discoveryIdSchema,
   title: z.string(),
@@ -13,7 +16,8 @@ export const discoveryFilmSchema = z.strictObject({
   genres: z.array(z.string()).max(3),
   synopsis: z.string().optional(),
   reason: z.string(),
-  posterData: z.string().max(400_024).regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/).optional(),
+  format: z.literal("tv_movie").optional(),
+  posterData: posterDataSchema.optional(),
 });
 export const discoveryViewSchema = z.strictObject({
   id: discoveryIdSchema,

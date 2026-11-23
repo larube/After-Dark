@@ -1,4 +1,4 @@
-import { currentDiscovery, generateDiscovery } from "../db/discovery";
+import { currentDiscovery, discoveryDiagnostic, generateDiscovery, inspectDiscovery } from "../db/discovery";
 import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { mkdirSync } from "node:fs";
@@ -8,14 +8,15 @@ import { pathToFileURL } from "node:url";
 import type { z } from "zod";
 import { openDatabase } from "../db/client";
 import { getCollection, saveFeedback } from "../db/feedback";
-import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab } from "../db/lab";
+import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab, transferLabSeen } from "../db/lab";
 import { getProfileSummary } from "../db/profile";
 import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
+import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-posters";
 import { startEnrichment } from "./enrichment";
 import { findTonight, localTmdb } from "./recommend";
-import { attachPosters, posterData } from "./posters";
+import { attachPosters, posterCacheState, posterData } from "./posters";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -87,12 +88,24 @@ function createWindow() {
   });
 }
 
-async function discoveryView(row: Awaited<ReturnType<typeof currentDiscovery>>): ReturnType<DesktopApi["discoveryCurrent"]> {
+const loadDiscoveryPoster = createDiscoveryPosters(localTmdb);
+type Db = NonNullable<typeof database>["db"];
+
+async function discoveryView(db: Db, row: Awaited<ReturnType<typeof currentDiscovery>>): ReturnType<DesktopApi["discoveryCurrent"]> {
   if (!row) return { ok: true, data: null };
-  const films = await Promise.all(row.films.map(async ({ poster, ...film }) => ({
-    ...film, posterData: await posterData(poster, app.getPath("userData")),
-  })));
-  return { ok: true, data: { id: row.id, films, eligible: row.eligible, renewed: row.renewed } };
+  const directory = app.getPath("userData");
+  const films = await Promise.all((await inspectDiscovery(db, row)).filter(({ admissible }) => admissible)
+    .map(async ({ snapshot, local, poster, quality }) => {
+      const { id, title, year, minutes, genres, synopsis, trace, reason } = snapshot;
+      return {
+        id, title, year, minutes, genres, synopsis, reason: trace ? reason : "Film proposé lors d’une exploration précédente.",
+        format: quality.category === "tv_movie" ? "tv_movie" as const : undefined,
+        posterData: await posterData(await cachedDiscoveryPosterPath(poster, local?.tmdbId, directory), directory),
+      };
+    }));
+  const renewed = row.renewed === null ? null : row.renewed === 0 ? 0
+    : films.filter(({ id }) => !row.rotation.previous[0]?.includes(id)).length;
+  return { ok: true, data: { id: row.id, films, eligible: row.eligible, renewed } };
 }
 
 async function labView({ public: view, poster }: Awaited<ReturnType<typeof currentLab>>): ReturnType<DesktopApi["labCurrent"]> {
@@ -178,8 +191,34 @@ void app.whenReady().then(async () => {
       recommending = false;
     }
   });
-  register(ipc.discoveryCurrent, async (db, _owner, [mode]) => discoveryView(await currentDiscovery(db, mode)));
-  register(ipc.discoveryGenerate, async (db, _owner, [mode, previous]) => discoveryView(await generateDiscovery(db, mode, previous)));
+  register(ipc.discoveryCurrent, async (db, _owner, [mode]) => discoveryView(db, await currentDiscovery(db, mode)));
+  register(ipc.discoveryGenerate, async (db, _owner, [mode, previous]) => discoveryView(db, await generateDiscovery(db, mode, previous)));
+  register(ipc.discoveryPosters, async (db, _owner, [mode, id, ids]): ReturnType<DesktopApi["discoveryPosters"]> => {
+    const row = await currentDiscovery(db, mode);
+    if (!row || row.id !== id) return { ok: true, data: [] };
+    const requested = { ...row, films: row.films.filter((film) => ids.includes(film.id)) };
+    const directory = app.getPath("userData");
+    const posters = await Promise.all((await inspectDiscovery(db, requested)).filter(({ admissible }) => admissible)
+      .map(async ({ snapshot, local, poster }) => {
+        const data = await loadDiscoveryPoster(poster, local?.tmdbId, directory);
+        return data ? [{ id: snapshot.id, data }] : [];
+      }));
+    return { ok: true, data: posters.flat() } as const;
+  });
+  register(ipc.discoveryExport, async (db, owner, [mode, id]): ReturnType<DesktopApi["discoveryExport"]> => {
+    const row = await currentDiscovery(db, mode);
+    if (!row || row.id !== id) return { ok: false, error: "Cette exploration n’est plus active." };
+    const result = await dialog.showSaveDialog(owner, {
+      title: "Exporter le diagnostic de Découvertes", defaultPath: "after-dark-decouvertes.json",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) return { ok: true, data: "cancelled" };
+    const directory = app.getPath("userData");
+    const report = await discoveryDiagnostic(db, row, async (poster, tmdbId) =>
+      posterCacheState(await cachedDiscoveryPosterPath(poster, tmdbId, directory), directory));
+    await writeFile(result.filePath, JSON.stringify(report, null, 2) + "\n", { mode: 0o600 });
+    return { ok: true, data: "saved" };
+  });
   register(ipc.labCurrent, async (db) => labView(await currentLab(db)));
   register(ipc.labStart, async (db, _owner, [criteria, repeats]) => labView(await startLab(db, criteria, repeats)));
   register(ipc.labPause, async (db, _owner, [id, paused]) => labView(await pauseLab(db, id, paused)));
@@ -188,6 +227,18 @@ void app.whenReady().then(async () => {
   register(ipc.labFinish, async (db, _owner, [id]): ReturnType<DesktopApi["labFinish"]> => await finishLab(db, id)
     ? { ok: true, data: null } : { ok: false, error: "Répondez à toutes les propositions avant de terminer." });
   register(ipc.labResults, async (db): ReturnType<DesktopApi["labResults"]> => ({ ok: true, data: await labResults(db) }));
+  register(ipc.labTransferSeen, async (db, _owner, [id, position]): ReturnType<DesktopApi["labTransferSeen"]> => {
+    if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
+    savingFeedback = true;
+    try {
+      await enrichment?.settleWrite();
+      const reply = await transferLabSeen(db, id, position);
+      return reply.ok ? { ok: true, data: null } : reply;
+    } finally {
+      savingFeedback = false;
+      enrichment?.wake();
+    }
+  });
   register(ipc.labExport, async (db, owner): ReturnType<DesktopApi["labExport"]> => {
     const result = await dialog.showSaveDialog(owner, {
       title: "Exporter le Laboratoire", defaultPath: "after-dark-laboratoire.json", filters: [{ name: "JSON", extensions: ["json"] }],

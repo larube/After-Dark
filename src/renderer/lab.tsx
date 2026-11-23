@@ -41,7 +41,7 @@ function LabSummary({ result }: { result: LabResults }) {
   </section>;
 }
 
-export function Laboratory() {
+export function Laboratory({ collectionChanged }: { collectionChanged: () => Promise<void> }) {
   const [mood, setMood] = useState<Criteria["mood"]>("surprise");
   const [state, setState] = useState<LabState>();
   const [summary, setSummary] = useState<LabResults>();
@@ -50,6 +50,7 @@ export function Laboratory() {
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [transfer, setTransfer] = useState<LabResults["seenForCollection"][number]>();
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const target = useRef<HTMLDivElement>(null);
@@ -135,8 +136,25 @@ export function Laboratory() {
     <div className="lab-stage" ref={target} tabIndex={-1} aria-busy={busy}>
       {summary ? <>
         <LabSummary result={summary} />
+        {summary.seenForCollection.length > 0 && <section aria-labelledby="lab-transfer-title">
+          <h3 id="lab-transfer-title">Visionnages à reporter dans Ma collection</h3>
+          <ul className="lab-reviews">{summary.seenForCollection.map((item) => <li key={item.sessionId + ":" + item.position}>
+            <strong>{item.title}{item.year && ` (${item.year})`}</strong>
+            {transfer === item ? <>
+              <p>Marquer ce film comme vu dans Ma collection ? Votre réponse au Laboratoire sera conservée.</p>
+              <button className="button" disabled={busy} onClick={() => void run(async () => {
+                unwrap(await window.afterDark.labTransferSeen(item.sessionId, item.position));
+                setTransfer(undefined);
+                await collectionChanged();
+                await loadResults();
+                setNotice("Visionnage ajouté à Ma collection.");
+              })}>Confirmer le visionnage</button>
+              <button className="lab-quiet" disabled={busy} onClick={() => setTransfer(undefined)}>Annuler</button>
+            </> : <button className="button" disabled={busy} onClick={() => setTransfer(item)}>Reporter « Déjà vu »</button>}
+          </li>)}</ul>
+        </section>}
         <div className="lab-actions">
-          <button className="button button-primary" disabled={busy} onClick={() => { setSummary(undefined); setNotice(""); }}>Retour au Laboratoire</button>
+          <button className="button button-primary" disabled={busy} onClick={() => { setSummary(undefined); setTransfer(undefined); setNotice(""); }}>Retour au Laboratoire</button>
           <button className="button" disabled={busy} onClick={() => void run(async () => {
             if (unwrap(await window.afterDark.labExport()) === "saved") setNotice("Export JSON enregistré.");
           }, false)}>Exporter en JSON</button>

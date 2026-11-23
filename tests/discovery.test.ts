@@ -155,7 +155,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.2.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.3.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });

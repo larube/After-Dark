@@ -2,7 +2,7 @@ import { z } from "zod";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
 import { criteriaSchema, recommendationSchema } from "./recommendation";
-import { discoveryIdSchema, discoveryModeSchema, discoveryViewSchema } from "./discovery";
+import { discoveryIdSchema, discoveryModeSchema, discoveryPosterSchema, discoveryViewSchema } from "./discovery";
 
 const count = z.number().int().nonnegative();
 const issue = z.strictObject({ entry: z.number().int().positive().optional(), path: z.string().optional(), message: z.string() });
@@ -44,6 +44,8 @@ export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 export const ipc = {
   discoveryCurrent: { channel: "discovery:current", request: z.tuple([discoveryModeSchema]), response: reply(discoveryViewSchema.nullable()) },
   discoveryGenerate: { channel: "discovery:generate", request: z.tuple([discoveryModeSchema, discoveryIdSchema.nullable()]), response: reply(discoveryViewSchema.nullable()) },
+  discoveryPosters: { channel: "discovery:posters", request: z.tuple([discoveryModeSchema, discoveryIdSchema, z.array(discoveryIdSchema).min(1).max(2)]), response: reply(z.array(discoveryPosterSchema).max(2)) },
+  discoveryExport: { channel: "discovery:export", request: z.tuple([discoveryModeSchema, discoveryIdSchema]), response: reply(z.enum(["saved", "cancelled"])) },
   labCurrent: { channel: "lab:current", request: z.tuple([]), response: reply(labStateSchema) },
   labStart: { channel: "lab:start", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(labStateSchema) },
   labPause: { channel: "lab:pause", request: z.tuple([labSessionId, z.boolean()]), response: reply(labStateSchema) },
@@ -51,6 +53,7 @@ export const ipc = {
   labAnswer: { channel: "lab:answer", request: z.tuple([labSessionId, labPosition, labAnswerSchema]), response: reply(labStateSchema) },
   labFinish: { channel: "lab:finish", request: z.tuple([labSessionId]), response: reply(z.null()) },
   labResults: { channel: "lab:results", request: z.tuple([]), response: reply(labResultsSchema) },
+  labTransferSeen: { channel: "lab:transfer-seen", request: z.tuple([labSessionId, labPosition]), response: reply(z.null()) },
   labExport: { channel: "lab:export", request: z.tuple([]), response: reply(z.enum(["saved", "cancelled"])) },
   collection: { channel: "cinema:collection", request: z.tuple([]), response: reply(z.array(feedbackEntrySchema)) },
   deferViewing: { channel: "cinema:defer-viewing", request: z.tuple([z.number().int().positive()]), response: reply(z.null()) },

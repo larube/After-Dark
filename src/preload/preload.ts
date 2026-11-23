@@ -9,8 +9,10 @@ function invoke<A extends unknown[], T>(route: {
 
 const api: DesktopApi = {
   discoveryCurrent: invoke(ipc.discoveryCurrent), discoveryGenerate: invoke(ipc.discoveryGenerate),
+  discoveryPosters: invoke(ipc.discoveryPosters), discoveryExport: invoke(ipc.discoveryExport),
   labCurrent: invoke(ipc.labCurrent), labStart: invoke(ipc.labStart), labPause: invoke(ipc.labPause),
   labAbandon: invoke(ipc.labAbandon), labAnswer: invoke(ipc.labAnswer), labFinish: invoke(ipc.labFinish), labResults: invoke(ipc.labResults),
+  labTransferSeen: invoke(ipc.labTransferSeen),
   labExport: invoke(ipc.labExport),
   collection: async () => ipc.collection.response.parse(await ipcRenderer.invoke(ipc.collection.channel)),
   deferViewing: async (...args) => ipc.deferViewing.response.parse(await ipcRenderer.invoke(

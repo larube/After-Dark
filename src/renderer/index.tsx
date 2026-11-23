@@ -165,7 +165,7 @@ function App() {
       actions={(film) => <FilmActions movieId={film.id} title={film.title}
         entry={collection?.find((entry) => entry.movieId === film.id)}
         disabled={!collection || !!collectionError || importing || saving} save={save} />} />
-    {page === "lab" && <Laboratory />}
+    {page === "lab" && <Laboratory collectionChanged={async () => { await Promise.all([refreshCollection(), refreshSummary()]); }} />}
     {page === "history" && <>
       <header className="page-heading"><h1>Historique</h1></header>
       <p className="notice">À venir · La consultation des recommandations passées.</p>

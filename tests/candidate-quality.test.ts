@@ -30,11 +30,42 @@ describe("politique de séance classique", () => {
 
   it("conserve les téléfilms ambigus et des œuvres dont les signaux se contredisent", () => {
     expect(classify({ minutes: 73, genres: ["Animation", "Téléfilm", "Family"], keywords: ["zombie"] }))
-      .toMatchObject({ category: "unknown", certainty: "uncertain", exclusionReasons: [], missing: ["releaseDate", "releaseStatus"] });
+      .toMatchObject({ category: "tv_movie", certainty: "inferred", exclusionReasons: [], missing: ["releaseDate", "releaseStatus"] });
     expect(classify({ minutes: 98, keywords: ["short film"] })).toMatchObject({ category: "unknown", exclusionReasons: [] });
     expect(classify({ minutes: 89, keywords: ["filmed play", "concert film"] }))
       .toMatchObject({ category: "unknown", exclusionReasons: [] });
     expect(classify({ minutes: 40, genres: ["Documentaire"] })).toMatchObject({ category: "feature_film", exclusionReasons: [] });
+  });
+
+  it("distingue une captation et un documentaire incluant des extraits musicaux", () => {
+    expect(classify({
+      minutes: 197, genres: ["Musique"],
+      keywords: ["concert", "musician", "celebrity", "celebration", "death of a musician", "death of friend"],
+    })).toMatchObject({ category: "concert", certainty: "strong", exclusionReasons: ["concert"] });
+    expect(classify({
+      minutes: 118, genres: ["Musique", "Documentaire"],
+      keywords: ["concert footage", "archive footage", "music documentary", "celebrity interview"],
+    })).toMatchObject({ category: "feature_film", exclusionReasons: [] });
+    expect(classify({ minutes: 112, genres: ["Musique"], keywords: ["concert"] })).toMatchObject({ exclusionReasons: [] });
+    expect(classify({ minutes: 91, keywords: ["recorded stage performance", "tv special"] }))
+      .toMatchObject({ category: "stage_performance", exclusionReasons: ["stage_performance"] });
+    expect(classify({ keywords: ["concert footage"], genres: ["Music"] })).toMatchObject({ category: "unknown", exclusionReasons: [] });
+  });
+
+  it("distingue les programmes TV des films et téléfilms diffusés à la télévision", () => {
+    const tv = { source: "TMDB", events: [{ type: 6, date: "2007-07-25" }, { type: 6, date: "2008-10-17" }] };
+    expect(classify({ minutes: 87, genres: ["Documentaire", "Horreur"], keywords: ["investigation", "paranormal"], release: tv }))
+      .toMatchObject({ category: "feature_film", exclusionReasons: [] });
+    expect(classify({ minutes: 90, genres: ["TV Movie"], keywords: ["based on tv series"] }))
+      .toMatchObject({ category: "tv_movie", exclusionReasons: [] });
+    expect(classify({ minutes: 90, genres: ["TV Movie"], keywords: ["tv pilot"] }))
+      .toMatchObject({ category: "unknown", exclusionReasons: [] });
+    expect(classify({ minutes: 90, genres: ["TV Movie"], keywords: ["tv pilot"], release: tv }))
+      .toMatchObject({ category: "tv_program", exclusionReasons: ["tv_program"] });
+    expect(classify({ genres: ["Documentaire"], keywords: ["television miniseries"] }))
+      .toMatchObject({ category: "tv_program", exclusionReasons: ["tv_program"] });
+    expect(classify({ minutes: 90, keywords: ["tv episode"], release: { ...tv, events: [{ type: 3, date: "2007-07-26" }] } }))
+      .toMatchObject({ category: "unknown", exclusionReasons: [] });
   });
 
   it("utilise les dates valides et respecte le premier événement connu", () => {
