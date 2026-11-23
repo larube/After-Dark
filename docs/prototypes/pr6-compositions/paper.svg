@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><filter id="fiber"><feTurbulence baseFrequency=".72" numOctaves="3" seed="23" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><path opacity=".49" filter="url(#fiber)" d="M0 0h120v120H0z"/></svg>
