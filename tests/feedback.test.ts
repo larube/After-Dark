@@ -7,9 +7,10 @@ import { openDatabase } from "../src/db/client";
 import { getProfileSummary } from "../src/db/profile";
 import { getCollection, saveFeedback } from "../src/db/feedback";
 import { readCatalogue } from "../src/db/recommendations";
-import { movieEvaluations, movies, movieStatuses } from "../src/db/schema";
+import { movieEvaluations, movies, movieStatuses, plannedViewings } from "../src/db/schema";
 import { recommend } from "../src/domain/recommendation";
 import { importProfile } from "../src/import/profile";
+import { needsRating } from "../src/shared/feedback";
 import { criteriaSchema } from "../src/shared/recommendation";
 
 const migrations = resolve("drizzle");
@@ -162,6 +163,93 @@ describe("Retours personnels SQLite", () => {
     }
     expect(await saveFeedback(connection.db, { action: "undo_seen", movieId: 1 })).toMatchObject({ ok: false });
     expect(await getProfileSummary(connection.db)).toMatchObject({ seen: 1, evaluated: 0 });
+  });
+
+  it("conserve plusieurs choix uniques et ne les relance qu’au démarrage suivant", async () => {
+    await importProfile(connection.db, { version: 1, entries: [{ movie: film }, { movie: other, status: "unseen" }] });
+    const startup = "2026-11-23T10:00:00.000Z";
+    const chosen = new Date("2026-11-23T10:30:00.000Z");
+    await saveFeedback(connection.db, { action: "intention", movieId: 1, intention: "watch_later" });
+    const launch = { action: "launch", movieId: 1 } as const;
+    await saveFeedback(connection.db, launch, chosen);
+    await saveFeedback(connection.db, launch, new Date("2026-11-23T11:00:00.000Z"));
+    await saveFeedback(connection.db, { ...launch, movieId: 2 }, chosen);
+    expect(await connection.db.select().from(plannedViewings)).toHaveLength(2);
+    expect((await getCollection(connection.db, startup)).every((entry) => !entry.needsConfirmation && !entry.seenAt)).toBe(true);
+
+    connection.close();
+    connection = await openDatabase(filename, migrations);
+    const next = "2026-11-24T10:00:00.000Z";
+    const pending = await getCollection(connection.db, next);
+    expect(pending).toHaveLength(2);
+    expect(pending.every((entry) => entry.needsConfirmation && entry.selectedAt === chosen.toISOString())).toBe(true);
+    await saveFeedback(connection.db, { action: "cancel_viewing", movieId: 1 });
+    expect(await getCollection(connection.db, next)).toContainEqual(expect.objectContaining({
+      movieId: 1, intention: "watch_later", seenAt: null,
+    }));
+    expect(await saveFeedback(connection.db, { action: "confirm_viewing", movieId: 1 })).toMatchObject({ data: { seenAt: null } });
+    await saveFeedback(connection.db, { action: "confirm_viewing", movieId: 2 });
+    await saveFeedback(connection.db, { action: "confirm_viewing", movieId: 2 });
+    expect((await getCollection(connection.db, next)).filter(needsRating).map((entry) => entry.movieId)).toEqual([2]);
+    expect(await connection.db.select().from(movieEvaluations)).toEqual([]);
+    expect(await connection.db.select().from(plannedViewings)).toMatchObject([
+      { movieId: 1, status: "cancelled", watchedAt: null },
+      { movieId: 2, status: "watched", watchedAt: expect.any(String) },
+    ]);
+
+    const rate = { action: "evaluate", movieId: 2, appreciation: "8/10 ? Ça se discute." } as const;
+    await saveFeedback(connection.db, { ...rate, score: null });
+    expect((await getCollection(connection.db)).filter(needsRating)).toEqual([]);
+    expect(await connection.db.select().from(movieEvaluations)).toEqual([]);
+    for (const score of [0, 7, 7]) await saveFeedback(connection.db, { ...rate, score });
+    expect(await connection.db.select().from(movieEvaluations)).toMatchObject([{ score: "7", source: "after-dark:manual" }]);
+    await saveFeedback(connection.db, { ...rate, score: null, appreciation: null });
+    expect((await getCollection(connection.db)).filter(needsRating)).toHaveLength(1);
+    await saveFeedback(connection.db, { action: "undo_seen", movieId: 2 });
+    expect(await connection.db.select().from(movieStatuses)).toContainEqual({ movieId: 2, status: "unseen" });
+    expect(await connection.db.select().from(plannedViewings)).toMatchObject([
+      { status: "cancelled" }, { status: "cancelled", watchedAt: null },
+    ]);
+  });
+
+  it("clôt une séance devenue incompatible après réimport sans créer de visionnage After Dark", async () => {
+    await importProfile(connection.db, { version: 1, entries: [{ movie: film }] });
+    await saveFeedback(connection.db, { action: "launch", movieId: 1 });
+    const imported = { version: 1, entries: [profile.entries[0]] };
+    await importProfile(connection.db, imported);
+    expect(await importProfile(connection.db, imported)).toMatchObject({ duplicates: 1, errors: [] });
+    expect(await connection.db.select().from(plannedViewings)).toMatchObject([{ status: "cancelled", watchedAt: null }]);
+    expect(await connection.db.select().from(movieEvaluations)).toMatchObject([
+      { source: "import", score: "8,5" }, { source: "import", rangeMin: "7,5" },
+    ]);
+    expect(await getCollection(connection.db)).toEqual([]);
+  });
+
+  it("préserve les séances historiques en dédoublonnant une ancienne base", async () => {
+    const legacy = join(directory, "pr6");
+    mkdirSync(join(legacy, "meta"), { recursive: true });
+    const journal = JSON.parse(readFileSync(join(migrations, "meta", "_journal.json"), "utf8"));
+    journal.entries = journal.entries.slice(0, 5);
+    writeFileSync(join(legacy, "meta", "_journal.json"), JSON.stringify(journal));
+    for (const { tag } of journal.entries) copyFileSync(join(migrations, tag + ".sql"), join(legacy, tag + ".sql"));
+    const previousFile = join(directory, "pr6.sqlite");
+    const previous = await openDatabase(previousFile, legacy);
+    try {
+      await previous.db.insert(movies).values({ id: 1, displayTitle: "Cure" }).run();
+      for (const selectedAt of ["2026-10-10", "2026-10-12", "2026-10-12"]) {
+        await previous.db.insert(plannedViewings).values({ movieId: 1, selectedAt }).run();
+      }
+    } finally {
+      previous.close();
+    }
+    const upgraded = await openDatabase(previousFile, migrations);
+    try {
+      expect(await upgraded.db.select().from(plannedViewings)).toMatchObject([
+        { id: 1, status: "cancelled" }, { id: 2, status: "cancelled" }, { id: 3, status: "planned" },
+      ]);
+    } finally {
+      upgraded.close();
+    }
   });
 
   it("édite une seule note manuelle et conserve les évaluations importées à l’identique", async () => {

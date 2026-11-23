@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import type { DesktopApi, EnrichmentProgress, ImportReport, ProfileSummary } from "../shared/ipc";
 import { AppShell, type Page } from "./shell";
 import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
-import type { FeedbackEntry, FeedbackRequest } from "../shared/feedback";
-import { FeedbackCollection, FilmActions } from "./feedback";
+import { needsRating, type FeedbackEntry, type FeedbackRequest } from "../shared/feedback";
+import { FeedbackCollection, FilmActions, ViewingReminder } from "./feedback";
 import { Tonight } from "./tonight";
 import "./style.css";
 
@@ -14,6 +14,7 @@ declare global {
 
 function App() {
   const [collection, setCollection] = useState<FeedbackEntry[]>();
+  const [reminders, setReminders] = useState<FeedbackEntry[]>([]);
   const [collectionError, setCollectionError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,7 +31,7 @@ function App() {
 
   useEffect(() => {
     void refreshSummary();
-    void refreshCollection();
+    void refreshCollection(true);
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     async function loadProgress() {
@@ -57,11 +58,16 @@ function App() {
     }
   }
 
-  async function refreshCollection() {
+  async function refreshCollection(loadReminders = false) {
     setCollectionError("");
     try {
       const reply = await window.afterDark.collection();
-      if (reply.ok) setCollection(reply.data);
+      if (reply.ok) {
+        setCollection(reply.data);
+        if (loadReminders) setReminders(reply.data.filter((entry) => entry.needsConfirmation));
+        else setReminders((current) => current.filter((film) =>
+          reply.data.some((entry) => entry.movieId === film.movieId && entry.selectedAt === film.selectedAt)));
+      }
       else setCollectionError(reply.error);
     } catch {
       setCollectionError("Impossible de lire les retours enregistrés.");
@@ -80,11 +86,19 @@ function App() {
         const entries = (current ?? []).filter((entry) => entry.movieId !== request.movieId);
         return reply.data ? [...entries, reply.data] : entries;
       });
-      setFeedbackMessage(request.action === "seen" ? "Visionnage enregistré." :
-        request.action === "undo_seen" ? "Marquage vu annulé." : request.intention === "none" ? "Intention retirée." : "Intention enregistrée.");
-      if (page === "collection" && request.action !== "seen") {
-        requestAnimationFrame(() => feedbackStatus.current?.focus({ preventScroll: true }));
+      const messages = {
+        seen: "Visionnage enregistré.", confirm_viewing: "Visionnage confirmé.", evaluate: "Retour enregistré.",
+        launch: "Film choisi pour la séance.", cancel_viewing: "Séance annulée.", undo_seen: "Marquage vu annulé.",
+        intention: request.action === "intention" && request.intention === "none" ? "Intention retirée." : "Intention enregistrée.",
+      };
+      setFeedbackMessage(messages[request.action]);
+      if (request.action !== "confirm_viewing" && !reply.data?.selectedAt && request.action !== "evaluate") {
+        setReminders((current) => current.filter((entry) => entry.movieId !== request.movieId));
       }
+      if (page === "collection") requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active === document.body) feedbackStatus.current?.focus({ preventScroll: true });
+      });
       await refreshSummary();
     } finally {
       feedbackInFlight.current = false;
@@ -120,9 +134,17 @@ function App() {
   }
 
   const status = databaseError ? "Base locale indisponible" : summary ? "Base locale prête" : "Ouverture de la base locale…";
-  return <AppShell page={page} navigate={navigate} status={status}>
+  return <AppShell page={page} navigate={navigate} status={status} ratingCount={collection?.filter(needsRating).length}>
     {databaseError && <p className="notice error" role="alert">{databaseError}</p>}
     <p className="feedback-live" role="status" tabIndex={-1} ref={feedbackStatus}>{feedbackMessage}</p>
+    {reminders.length > 0 && <section className="viewing-reminders" aria-labelledby="viewing-heading">
+      <h2 id="viewing-heading">Alors, ce film ?</h2>
+      {reminders.map((film) => <ViewingReminder key={film.movieId} film={film} disabled={importing || saving} save={save}
+        dismiss={() => {
+          setReminders((current) => current.filter((entry) => entry.movieId !== film.movieId));
+          requestAnimationFrame(() => feedbackStatus.current?.focus({ preventScroll: true }));
+        }} />)}
+    </section>}
     <div hidden={page !== "tonight"}>
       <Tonight ready={!!summary && !importing && !saving} onComplete={() => void refreshSummary()}
         filmActions={(film, loading) => <FilmActions movieId={film.id} title={film.title}
@@ -131,7 +153,7 @@ function App() {
       <Enrichment progress={enrichment} />
     </div>
     {page === "collection" && <>
-      <header className="page-heading"><h1>Ma collection</h1><p>Vos films enregistrés et vos favoris.</p></header>
+      <header className="page-heading collection-heading"><h1>Ma collection</h1><p>Vos films enregistrés et vos favoris.</p></header>
       {collectionError && <button className="button" onClick={() => void refreshCollection()}>Recharger les retours</button>}
       <FeedbackCollection entries={collection} error={collectionError} disabled={importing || saving} save={save} />
       <CatalogueSummary summary={summary} />

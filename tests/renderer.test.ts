@@ -5,7 +5,7 @@ import { ipc } from "../src/shared/ipc";
 import { recommendationSchema } from "../src/shared/recommendation";
 import { FilterPanel, MoodSelector, moodOrder } from "../src/renderer/controls";
 import { defaultFilters, durations, readCriteria } from "../src/renderer/criteria";
-import { FilmActions } from "../src/renderer/feedback";
+import { FeedbackCollection, FilmActions, ViewingReminder } from "../src/renderer/feedback";
 import { Results } from "../src/renderer/results";
 import { AppShell } from "../src/renderer/shell";
 
@@ -47,41 +47,22 @@ describe("Interface Neon Underground", () => {
     expect(readCriteria(selection, "laugh").data).toEqual(preferred.data);
   });
 
-  it("intègre France et Espagne à la sélection unique et affiche le résumé des critères", () => {
+  it("rend les filtres multiples, les puces amovibles et un seul bouton de recherche", () => {
+    const action = createElement("button", { type: "submit" }, "Trouve-moi un film");
     const html = renderToStaticMarkup(createElement(FilterPanel, {
-      value: { ...defaultFilters, countries: ["FR", "ES"], countriesRequired: true }, busy: false, onChange() {},
+      value: { ...defaultFilters, countries: ["FR", "ES"], countriesRequired: true, languages: ["ja", "es"] },
+      busy: false, onChange() {}, action,
     }));
-    expect(html).toContain("1 critère actif");
-    expect(html).toContain("Pays obligatoires · France, Espagne");
-    expect(html.match(/<input[^>]+checked=""\/>/g)).toHaveLength(3);
-    expect(html.match(/>France<\/label>/g)).toHaveLength(1);
-    expect(html.match(/>Espagne<\/label>/g)).toHaveLength(1);
+    for (const name of ["France", "Espagne", "Japonais", "Espagnol"]) {
+      expect(html).toContain(`aria-label="Retirer ${name}"`);
+    }
+    expect(html.match(/<input[^>]+checked=""[^>]*\/>/g)).toHaveLength(5);
+    expect(html.match(/type="submit"/g)).toHaveLength(1);
+    expect(html.match(/type="search"/g)).toHaveLength(2);
+    expect(html).toContain("Uniquement ces pays de production");
+    expect(html).toContain("Uniquement ces langues originales");
     expect(html).toContain("Réinitialiser les critères");
     expect(html).not.toContain("Énergie disponible");
-  });
-
-  it("compte les filtres avancés uniquement et propose deux boutons de soumission", () => {
-    const action = createElement("button", { type: "submit" }, "Trouve-moi un film");
-    const render = (value: typeof defaultFilters) =>
-      renderToStaticMarkup(createElement(FilterPanel, { value, busy: false, onChange() {}, action }));
-    const quickOnly = { ...defaultFilters, duration: "120", avoid: "tension" };
-    const html = render(quickOnly);
-    expect(html).not.toContain("critère actif");
-    expect(html.match(/<details class="filter-picker" name="session-geography">/g)).toHaveLength(2);
-    expect(html.match(/type="submit"/g)).toHaveLength(2);
-    expect(render({ ...quickOnly, countries: ["FR", "ES"], languages: ["es"] })).toContain("2 critères actifs");
-  });
-
-  it("indique que choisir l’Argentine comme préférence laisse les autres pays possibles", () => {
-    const html = renderToStaticMarkup(createElement(FilterPanel, {
-      value: { ...defaultFilters, countries: ["AR"] }, busy: false, onChange() {},
-    }));
-    expect(html).toContain("Pays préférés · Argentine");
-    expect(html).toContain("Uniquement les pays sélectionnés");
-    expect(html).toContain("D’autres pays restent possibles.");
-    expect(readCriteria({ ...defaultFilters, countries: ["AR"] }, "laugh").data).toMatchObject({
-      preferredCountries: ["AR"], requiredCountries: [],
-    });
   });
 
   it("affiche les résultats avec les raisons et avertissements du moteur", () => {
@@ -132,9 +113,19 @@ describe("Interface Neon Underground", () => {
         movieId: 1, title: "Cure", year: 1997, intention: "watch_later", seenAt: null, score: null, appreciation: null,
       }, disabled: false, async save() {},
     }));
-    expect(html).toContain('aria-label="Actions pour Cure · À voir un jour"');
-    expect(html).toContain('aria-pressed="true">À voir un jour');
-    for (const label of ["Pour ce soir", "Pas intéressé", "Déjà vu", "Retirer l’intention"]) expect(html).toContain(label);
+    expect(html).toContain('aria-label="Choix pour Cure"');
+    expect(html).toContain('aria-pressed="true"');
+    for (const label of ["Je lance ce film", "Pour ce soir", "Pas pour moi", "Déjà vu", "À voir un jour", "Dans ma liste"]) expect(html).toContain(label);
+  });
+
+  it("distingue une séance en attente d’un film à noter", () => {
+    const common = { year: null, intention: "none", score: null, appreciation: null } as const;
+    const film = { ...common, movieId: 1, title: "Cure", seenAt: null, selectedAt: "2026-11-23" };
+    const reminder = renderToStaticMarkup(createElement(ViewingReminder, { film, disabled: false, async save() {}, dismiss() {} }));
+    for (const label of ["Oui, je l’ai vu", "Pas encore", "Finalement, non"]) expect(reminder).toContain(label);
+    const entries = [film, { ...common, movieId: 2, title: "Tesis", seenAt: "2026-11-23T10:00:00.000Z" }];
+    const html = renderToStaticMarkup(createElement(FeedbackCollection, { entries, disabled: false, error: "", async save() {} }));
+    expect(html).toMatch(/Films à noter.*Tesis.*Noter ce film.*Séances en attente.*Cure.*Film choisi/);
   });
 
   it("expose la navigation avec une page courante et des contrôles natifs", () => {

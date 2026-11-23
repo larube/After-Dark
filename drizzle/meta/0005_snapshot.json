@@ -1,0 +1,779 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "b3d06701-c40c-44b3-921b-456f63f76507",
+  "prevId": "1642db79-65cb-41c5-8818-6f4e098371d4",
+  "tables": {
+    "favorites": {
+      "name": "favorites",
+      "columns": {
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "spontaneous": {
+          "name": "spontaneous",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "memorable": {
+          "name": "memorable",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "rewatch": {
+          "name": "rewatch",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "favorites_movie_id_movies_id_fk": {
+          "name": "favorites_movie_id_movies_id_fk",
+          "tableFrom": "favorites",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "favorites_movie_id_source_pk": {
+          "columns": [
+            "movie_id",
+            "source"
+          ],
+          "name": "favorites_movie_id_source_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "favorite_spontaneous": {
+          "name": "favorite_spontaneous",
+          "value": "\"favorites\".\"spontaneous\" IN (0, 1)"
+        },
+        "favorite_memorable": {
+          "name": "favorite_memorable",
+          "value": "\"favorites\".\"memorable\" IN (0, 1)"
+        },
+        "favorite_rewatch": {
+          "name": "favorite_rewatch",
+          "value": "\"favorites\".\"rewatch\" IN (0, 1)"
+        }
+      }
+    },
+    "mood_sessions": {
+      "name": "mood_sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "date": {
+          "name": "date",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "criteria": {
+          "name": "criteria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "movie_evaluations": {
+      "name": "movie_evaluations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_id": {
+          "name": "source_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "range_min": {
+          "name": "range_min",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "range_max": {
+          "name": "range_max",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "appreciation": {
+          "name": "appreciation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "evaluated_on": {
+          "name": "evaluated_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "evaluations_movie_id": {
+          "name": "evaluations_movie_id",
+          "columns": [
+            "movie_id"
+          ],
+          "isUnique": false
+        },
+        "evaluation_source_id": {
+          "name": "evaluation_source_id",
+          "columns": [
+            "source",
+            "source_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "movie_evaluations_movie_id_movies_id_fk": {
+          "name": "movie_evaluations_movie_id_movies_id_fk",
+          "tableFrom": "movie_evaluations",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "evaluation_payload": {
+          "name": "evaluation_payload",
+          "value": "\n    (\"movie_evaluations\".\"kind\" = 'qualitative' AND \"movie_evaluations\".\"score\" IS NULL AND \"movie_evaluations\".\"range_min\" IS NULL AND \"movie_evaluations\".\"range_max\" IS NULL\n      AND \"movie_evaluations\".\"appreciation\" IS NOT NULL AND length(trim(\"movie_evaluations\".\"appreciation\")) > 0)\n    OR\n    (\"movie_evaluations\".\"kind\" IN ('score', 'historical_score') AND \"movie_evaluations\".\"appreciation\" IS NULL\n      AND \"movie_evaluations\".\"range_min\" IS NULL AND \"movie_evaluations\".\"range_max\" IS NULL AND \"movie_evaluations\".\"score\" IS NOT NULL\n      AND (\"movie_evaluations\".\"kind\" = 'historical_score' OR \"movie_evaluations\".\"score\" IN ('0','1','2','3','4','5','6','7','8','9','10')))\n    OR\n    (\"movie_evaluations\".\"kind\" = 'historical_range' AND \"movie_evaluations\".\"appreciation\" IS NULL AND \"movie_evaluations\".\"score\" IS NULL\n      AND \"movie_evaluations\".\"range_min\" IS NOT NULL AND \"movie_evaluations\".\"range_max\" IS NOT NULL)\n  "
+        }
+      }
+    },
+    "movie_feedback": {
+      "name": "movie_feedback",
+      "columns": {
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "intention": {
+          "name": "intention",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'none'"
+        },
+        "seen_at": {
+          "name": "seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "previous_status": {
+          "name": "previous_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "score_id": {
+          "name": "score_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "appreciation": {
+          "name": "appreciation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "movie_feedback_score_id_unique": {
+          "name": "movie_feedback_score_id_unique",
+          "columns": [
+            "score_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "movie_feedback_movie_id_movies_id_fk": {
+          "name": "movie_feedback_movie_id_movies_id_fk",
+          "tableFrom": "movie_feedback",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "movie_feedback_score_id_movie_evaluations_id_fk": {
+          "name": "movie_feedback_score_id_movie_evaluations_id_fk",
+          "tableFrom": "movie_feedback",
+          "tableTo": "movie_evaluations",
+          "columnsFrom": [
+            "score_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "feedback_intention": {
+          "name": "feedback_intention",
+          "value": "\"movie_feedback\".\"intention\" IN ('none', 'watch_later', 'tonight', 'not_interested')"
+        },
+        "feedback_seen": {
+          "name": "feedback_seen",
+          "value": "(\"movie_feedback\".\"seen_at\" IS NULL AND \"movie_feedback\".\"score_id\" IS NULL AND \"movie_feedback\".\"appreciation\" IS NULL)\n    OR (\"movie_feedback\".\"seen_at\" IS NOT NULL AND \"movie_feedback\".\"intention\" = 'none')"
+        }
+      }
+    },
+    "movie_identifiers": {
+      "name": "movie_identifiers",
+      "columns": {
+        "namespace": {
+          "name": "namespace",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "movie_identifiers_movie": {
+          "name": "movie_identifiers_movie",
+          "columns": [
+            "movie_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "movie_identifiers_movie_id_movies_id_fk": {
+          "name": "movie_identifiers_movie_id_movies_id_fk",
+          "tableFrom": "movie_identifiers",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "movie_identifiers_namespace_value_pk": {
+          "columns": [
+            "namespace",
+            "value"
+          ],
+          "name": "movie_identifiers_namespace_value_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "movie_statuses": {
+      "name": "movie_statuses",
+      "columns": {
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "movie_statuses_movie_id_movies_id_fk": {
+          "name": "movie_statuses_movie_id_movies_id_fk",
+          "tableFrom": "movie_statuses",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "movie_status": {
+          "name": "movie_status",
+          "value": "\"movie_statuses\".\"status\" IN ('seen', 'unseen', 'unknown')"
+        }
+      }
+    },
+    "movie_titles": {
+      "name": "movie_titles",
+      "columns": {
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "normalized_title": {
+          "name": "normalized_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "movie_titles_matching": {
+          "name": "movie_titles_matching",
+          "columns": [
+            "normalized_title"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "movie_titles_movie_id_movies_id_fk": {
+          "name": "movie_titles_movie_id_movies_id_fk",
+          "tableFrom": "movie_titles",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "movie_titles_movie_id_title_pk": {
+          "columns": [
+            "movie_id",
+            "title"
+          ],
+          "name": "movie_titles_movie_id_title_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "movies": {
+      "name": "movies",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "display_title": {
+          "name": "display_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "original_title": {
+          "name": "original_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tmdb_id": {
+          "name": "tmdb_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "movies_tmdb_id_unique": {
+          "name": "movies_tmdb_id_unique",
+          "columns": [
+            "tmdb_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "movie_title": {
+          "name": "movie_title",
+          "value": "length(trim(\"movies\".\"display_title\")) > 0"
+        },
+        "movie_year": {
+          "name": "movie_year",
+          "value": "\"movies\".\"year\" BETWEEN 1 AND 9999"
+        },
+        "movie_tmdb_id": {
+          "name": "movie_tmdb_id",
+          "value": "\"movies\".\"tmdb_id\" > 0"
+        }
+      }
+    },
+    "planned_viewings": {
+      "name": "planned_viewings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "selected_at": {
+          "name": "selected_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "watched_at": {
+          "name": "watched_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'planned'"
+        }
+      },
+      "indexes": {
+        "planned_viewings_movie": {
+          "name": "planned_viewings_movie",
+          "columns": [
+            "movie_id"
+          ],
+          "isUnique": false
+        },
+        "planned_viewings_active_movie": {
+          "name": "planned_viewings_active_movie",
+          "columns": [
+            "movie_id"
+          ],
+          "isUnique": true,
+          "where": "\"planned_viewings\".\"status\" = 'planned'"
+        }
+      },
+      "foreignKeys": {
+        "planned_viewings_movie_id_movies_id_fk": {
+          "name": "planned_viewings_movie_id_movies_id_fk",
+          "tableFrom": "planned_viewings",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "viewing_status": {
+          "name": "viewing_status",
+          "value": "\"planned_viewings\".\"status\" IN ('planned', 'watched', 'cancelled')"
+        },
+        "viewing_watched_date": {
+          "name": "viewing_watched_date",
+          "value": "\"planned_viewings\".\"watched_at\" IS NULL OR \"planned_viewings\".\"status\" = 'watched'"
+        }
+      }
+    },
+    "recommendation_history": {
+      "name": "recommendation_history",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mood_session_id": {
+          "name": "mood_session_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "movie_id": {
+          "name": "movie_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rank": {
+          "name": "rank",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "engine_version": {
+          "name": "engine_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "explanation": {
+          "name": "explanation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prediction": {
+          "name": "prediction",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "recommendation_session_movie": {
+          "name": "recommendation_session_movie",
+          "columns": [
+            "mood_session_id",
+            "movie_id"
+          ],
+          "isUnique": true
+        },
+        "recommendation_session_rank": {
+          "name": "recommendation_session_rank",
+          "columns": [
+            "mood_session_id",
+            "rank"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "recommendation_history_mood_session_id_mood_sessions_id_fk": {
+          "name": "recommendation_history_mood_session_id_mood_sessions_id_fk",
+          "tableFrom": "recommendation_history",
+          "tableTo": "mood_sessions",
+          "columnsFrom": [
+            "mood_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "recommendation_history_movie_id_movies_id_fk": {
+          "name": "recommendation_history_movie_id_movies_id_fk",
+          "tableFrom": "recommendation_history",
+          "tableTo": "movies",
+          "columnsFrom": [
+            "movie_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "recommendation_rank": {
+          "name": "recommendation_rank",
+          "value": "\"recommendation_history\".\"rank\" > 0"
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

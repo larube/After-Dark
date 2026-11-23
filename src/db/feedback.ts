@@ -1,69 +1,118 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, ne, or, sql } from "drizzle-orm";
 import type { FeedbackEntry, FeedbackRequest } from "../shared/feedback";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
-import { movieEvaluations, movieFeedback, movies, movieStatuses } from "./schema";
+import { movieEvaluations, movieFeedback, movies, movieStatuses, plannedViewings } from "./schema";
 
 function feedbackQuery(db: CinemaDatabase | CinemaTransaction) {
   return db.select({
-    movieId: movieFeedback.movieId, title: movies.displayTitle, year: movies.year,
+    movieId: movies.id, title: movies.displayTitle, year: movies.year,
     intention: movieFeedback.intention, seenAt: movieFeedback.seenAt,
     score: movieEvaluations.score, appreciation: movieFeedback.appreciation,
-  }).from(movieFeedback)
-    .innerJoin(movies, eq(movies.id, movieFeedback.movieId))
-    .leftJoin(movieEvaluations, eq(movieEvaluations.id, movieFeedback.scoreId));
+    selectedAt: plannedViewings.selectedAt,
+    hasHistoricalEvaluation: sql<number>`exists (
+      select 1 from movie_evaluations as historical
+      where historical.movie_id = ${movies.id} and historical.id IS NOT ${movieFeedback.scoreId}
+    )`,
+  }).from(movies)
+    .leftJoin(movieFeedback, eq(movieFeedback.movieId, movies.id))
+    .leftJoin(movieEvaluations, eq(movieEvaluations.id, movieFeedback.scoreId))
+    .leftJoin(movieStatuses, eq(movieStatuses.movieId, movies.id))
+    .leftJoin(plannedViewings, and(eq(plannedViewings.movieId, movies.id), eq(plannedViewings.status, "planned"),
+      sql`coalesce(${movieStatuses.status}, 'unknown') != 'seen'`));
 }
 
-function readEntry(row: Omit<FeedbackEntry, "score"> & { score: string | null }): FeedbackEntry {
-  return { ...row, score: row.score === null ? null : Number(row.score) };
+function readEntry(row: Awaited<ReturnType<ReturnType<typeof feedbackQuery>["all"]>>[number], startup?: string): FeedbackEntry {
+  const { selectedAt, hasHistoricalEvaluation, ...entry } = row;
+  return {
+    ...entry, intention: row.intention ?? "none", score: row.score === null ? null : Number(row.score),
+    ...(selectedAt ? { selectedAt, needsConfirmation: !!startup && selectedAt < startup } : {}),
+    ...(hasHistoricalEvaluation ? { hasHistoricalEvaluation: true } : {}),
+  };
 }
 
-export async function getCollection(db: CinemaDatabase): Promise<FeedbackEntry[]> {
-  return (await feedbackQuery(db).orderBy(desc(movieFeedback.seenAt), movies.displayTitle, movies.id).all()).map(readEntry);
+const hasEntry = or(isNotNull(movieFeedback.movieId), isNotNull(plannedViewings.id));
+
+export async function getCollection(db: CinemaDatabase, startup?: string): Promise<FeedbackEntry[]> {
+  const rows = await feedbackQuery(db).where(hasEntry).orderBy(desc(movieFeedback.seenAt), movies.displayTitle, movies.id).all();
+  return rows.map((row) => readEntry(row, startup));
 }
 
-export async function saveFeedback(db: CinemaDatabase, request: FeedbackRequest, now = new Date()) {
+export async function saveFeedback(db: CinemaDatabase, request: FeedbackRequest, now = new Date(), startup?: string) {
   return db.transaction(async (tx) => {
     const { movieId } = request;
     const movie = await tx.select().from(movies).where(eq(movies.id, movieId)).get();
     if (!movie) return { ok: false, error: "Ce film n’est plus dans le catalogue." } as const;
     const saved = await tx.select().from(movieFeedback).where(eq(movieFeedback.movieId, movieId)).get();
+    const status = await tx.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
+    const active = and(eq(plannedViewings.movieId, movieId), eq(plannedViewings.status, "planned"));
+    const stamp = now.toISOString();
+
+    async function entry() {
+      const row = await feedbackQuery(tx).where(and(eq(movies.id, movieId), hasEntry)).get();
+      return { ok: true, data: row ? readEntry(row, startup) : null } as const;
+    }
+
+    if (request.action === "launch") {
+      if (status?.status === "seen") return { ok: false, error: "Ce film est déjà marqué comme vu." } as const;
+      await tx.insert(plannedViewings).values({ movieId, selectedAt: stamp }).onConflictDoNothing().run();
+      if (saved?.intention === "tonight" || saved?.intention === "not_interested") {
+        await tx.delete(movieFeedback).where(eq(movieFeedback.movieId, movieId)).run();
+      }
+      return entry();
+    }
+    if (request.action === "cancel_viewing") {
+      await tx.update(plannedViewings).set({ status: "cancelled" }).where(active).run();
+      return entry();
+    }
+    if (request.action === "confirm_viewing") {
+      const viewing = await tx.select({ id: plannedViewings.id }).from(plannedViewings).where(active).get();
+      if (!viewing) return entry();
+    }
+    if (request.action === "evaluate" && !saved?.seenAt) {
+      return { ok: false, error: "Confirmez d’abord le visionnage de ce film." } as const;
+    }
     if (request.action === "undo_seen") {
-      if (!saved?.seenAt) return { ok: true, data: saved ? readEntry({
-        movieId, intention: saved.intention, seenAt: null, appreciation: null,
-        title: movie.displayTitle, year: movie.year, score: null,
-      }) : null } as const;
+      if (!saved?.seenAt) return entry();
       const otherEvaluation = await tx.select({ id: movieEvaluations.id }).from(movieEvaluations)
         .where(and(eq(movieEvaluations.movieId, movieId), saved.scoreId === null ? undefined : ne(movieEvaluations.id, saved.scoreId))).get();
       if (otherEvaluation || saved.previousStatus === "seen") {
         return { ok: false, error: "Ce film était déjà vu selon votre profil ou possède une autre évaluation." } as const;
       }
+      await tx.update(plannedViewings).set({ status: "cancelled", watchedAt: null }).where(and(
+        eq(plannedViewings.movieId, movieId), eq(plannedViewings.status, "watched"), eq(plannedViewings.watchedAt, saved.seenAt),
+      )).run();
       await tx.delete(movieFeedback).where(eq(movieFeedback.movieId, movieId)).run();
       if (saved.scoreId !== null) await tx.delete(movieEvaluations).where(eq(movieEvaluations.id, saved.scoreId)).run();
       await tx.update(movieStatuses).set({ status: saved.previousStatus ?? "unknown" })
         .where(eq(movieStatuses.movieId, movieId)).run();
       return { ok: true, data: null } as const;
     }
-    const status = await tx.select().from(movieStatuses).where(eq(movieStatuses.movieId, movieId)).get();
     if (request.action === "intention") {
       if (status?.status === "seen" && request.intention !== "none") {
         return { ok: false, error: "Ce film est déjà marqué comme vu." } as const;
       }
+      if (request.intention === "not_interested" || request.intention === "tonight") {
+        await tx.update(plannedViewings).set({ status: "cancelled" }).where(active).run();
+      }
       if (request.intention === "none" && !saved?.seenAt) {
         await tx.delete(movieFeedback).where(eq(movieFeedback.movieId, movieId)).run();
-        return { ok: true, data: null } as const;
+        return entry();
       }
       await tx.insert(movieFeedback).values({ movieId, intention: request.intention })
         .onConflictDoUpdate({ target: movieFeedback.movieId, set: { intention: request.intention } }).run();
     } else {
+      const seenAt = saved?.seenAt ?? stamp;
+      await tx.update(plannedViewings).set({ status: "watched", watchedAt: seenAt }).where(active).run();
       await tx.insert(movieStatuses).values({ movieId, status: "seen" })
         .onConflictDoUpdate({ target: movieStatuses.movieId, set: { status: "seen" } }).run();
       let scoreId = saved?.scoreId ?? null;
-      if (request.score === null && scoreId !== null) {
+      const value = request.action === "confirm_viewing" ? undefined : request;
+      if (value?.score === null && scoreId !== null) {
         await tx.delete(movieEvaluations).where(eq(movieEvaluations.id, scoreId)).run();
         scoreId = null;
-      } else if (request.score !== null) {
-        const score = String(request.score);
+      } else if (value?.score != null) {
+        const score = String(value.score);
         if (scoreId !== null) {
           await tx.update(movieEvaluations).set({ score }).where(eq(movieEvaluations.id, scoreId)).run();
         } else {
@@ -75,15 +124,13 @@ export async function saveFeedback(db: CinemaDatabase, request: FeedbackRequest,
         }
       }
       const changes = {
-        intention: "none" as const, seenAt: saved?.seenAt ?? now.toISOString(),
+        intention: "none" as const, seenAt,
         previousStatus: saved?.seenAt ? saved.previousStatus : status?.status ?? null,
-        scoreId, appreciation: request.appreciation,
+        scoreId, appreciation: value ? value.appreciation : saved?.appreciation ?? null,
       };
       await tx.insert(movieFeedback).values({ movieId, ...changes })
         .onConflictDoUpdate({ target: movieFeedback.movieId, set: changes }).run();
     }
-    const row = await feedbackQuery(tx).where(eq(movieFeedback.movieId, movieId)).get();
-    if (!row) throw new Error("Retour introuvable après sauvegarde.");
-    return { ok: true, data: readEntry(row) } as const;
+    return entry();
   });
 }

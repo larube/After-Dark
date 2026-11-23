@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { intentions } from "../shared/feedback";
 import type { Mood } from "../shared/profile";
 
@@ -100,6 +100,7 @@ export const plannedViewings = sqliteTable("planned_viewings", {
   status: text({ enum: ["planned", "watched", "cancelled"] }).notNull().default("planned"),
 }, (table) => [
   index("planned_viewings_movie").on(table.movieId),
+  uniqueIndex("planned_viewings_active_movie").on(table.movieId).where(sql`${table.status} = 'planned'`),
   check("viewing_status", sql`${table.status} IN ('planned', 'watched', 'cancelled')`),
   check("viewing_watched_date", sql`${table.watchedAt} IS NULL OR ${table.status} = 'watched'`),
 ]);

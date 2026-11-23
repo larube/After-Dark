@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { and, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
 import type { CinemaDatabase, CinemaTransaction } from "../db/client";
-import { favorites, movieEvaluations, movieFeedback, movieIdentifiers, movies, movieStatuses, movieTitles } from "../db/schema";
+import { favorites, movieEvaluations, movieFeedback, movieIdentifiers, movies, movieStatuses, movieTitles, plannedViewings } from "../db/schema";
 import { normalizeTitle } from "../domain/ratings";
 import type { ImportReport } from "../shared/ipc";
 import { profileSchema, type ProfileEntry } from "../shared/profile";
@@ -149,6 +149,9 @@ async function storeStatus(db: CinemaTransaction, movieId: number, incoming: Pro
   await db.insert(movieStatuses).values({ movieId, status })
     .onConflictDoUpdate({ target: movieStatuses.movieId, set: { status } }).run();
   if (status === "seen") {
+    await db.update(plannedViewings).set({ status: "cancelled" }).where(and(
+      eq(plannedViewings.movieId, movieId), eq(plannedViewings.status, "planned"),
+    )).run();
     await db.delete(movieFeedback).where(and(eq(movieFeedback.movieId, movieId), isNull(movieFeedback.seenAt))).run();
   }
   return true;

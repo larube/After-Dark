@@ -19,6 +19,8 @@ describe("contrats IPC", () => {
     expect(ipc.saveFeedback.request.safeParse([{ action: "intention", movieId: 2, intention: "invented" }]).success).toBe(false);
     expect(ipc.saveFeedback.request.safeParse([{ action: "undo_seen", movieId: 2 }]).success).toBe(true);
     expect(ipc.saveFeedback.request.safeParse([{ action: "undo_seen", movieId: 2, status: "unseen" }]).success).toBe(false);
+    expect(ipc.deferViewing.request.safeParse([2]).success).toBe(true);
+    expect(ipc.deferViewing.request.safeParse([0]).success).toBe(false);
     expect(ipc.saveFeedback.response.parse({ ok: false, error: "Requête refusée." })).toEqual({ ok: false, error: "Requête refusée." });
   });
 

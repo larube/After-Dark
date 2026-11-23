@@ -85,6 +85,9 @@ function createWindow() {
   });
 }
 
+const startup = new Date().toISOString();
+const deferredViewings = new Set<number>();
+
 void app.whenReady().then(async () => {
   try {
     const migrations = join(app.isPackaged ? process.resourcesPath : app.getAppPath(), "drizzle");
@@ -103,13 +106,20 @@ void app.whenReady().then(async () => {
   register(ipc.summary, async (db): ReturnType<DesktopApi["summary"]> => ({
     ok: true, data: await getProfileSummary(db),
   }));
-  register(ipc.collection, async (db): ReturnType<DesktopApi["collection"]> => ({ ok: true, data: await getCollection(db) }));
+  register(ipc.collection, async (db): ReturnType<DesktopApi["collection"]> => ({
+    ok: true, data: (await getCollection(db, startup)).map((entry) => deferredViewings.has(entry.movieId)
+      ? { ...entry, needsConfirmation: false } : entry),
+  }));
+  register(ipc.deferViewing, (_db, _owner, [movieId]) => {
+    deferredViewings.add(movieId);
+    return { ok: true, data: null } as const;
+  });
   register(ipc.saveFeedback, async (db, _owner, [request]): ReturnType<DesktopApi["saveFeedback"]> => {
     if (importing || recommending || savingFeedback) return { ok: false, error: "Une opération est déjà en cours." };
     savingFeedback = true;
     try {
       await enrichment?.settleWrite();
-      return await saveFeedback(db, request);
+      return await saveFeedback(db, request, new Date(), startup);
     } finally {
       savingFeedback = false;
       enrichment?.wake();
