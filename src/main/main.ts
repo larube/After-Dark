@@ -14,6 +14,7 @@ import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
 import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-posters";
+import { exportDiscoveryDiagnostic } from "./discovery-export";
 import { startEnrichment } from "./enrichment";
 import { findTonight, localTmdb } from "./recommend";
 import { attachPosters, posterCacheState, posterData } from "./posters";
@@ -206,18 +207,20 @@ void app.whenReady().then(async () => {
     return { ok: true, data: posters.flat() } as const;
   });
   register(ipc.discoveryExport, async (db, owner, [mode, id]): ReturnType<DesktopApi["discoveryExport"]> => {
-    const row = await currentDiscovery(db, mode);
-    if (!row || row.id !== id) return { ok: false, error: "Cette exploration n’est plus active." };
-    const result = await dialog.showSaveDialog(owner, {
+    let row;
+    try {
+      row = await currentDiscovery(db, mode);
+    } catch {
+      return { ok: true, data: "generation_failed" };
+    }
+    if (!row || row.id !== id) return { ok: true, data: "inactive" };
+    const directory = app.getPath("userData");
+    const data = await exportDiscoveryDiagnostic(() => dialog.showSaveDialog(owner, {
       title: "Exporter le diagnostic de Découvertes", defaultPath: "after-dark-decouvertes.json",
       filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (result.canceled || !result.filePath) return { ok: true, data: "cancelled" };
-    const directory = app.getPath("userData");
-    const report = await discoveryDiagnostic(db, row, async (poster, tmdbId) =>
-      posterCacheState(await cachedDiscoveryPosterPath(poster, tmdbId, directory), directory));
-    await writeFile(result.filePath, JSON.stringify(report, null, 2) + "\n", { mode: 0o600 });
-    return { ok: true, data: "saved" };
+    }), () => discoveryDiagnostic(db, row, async (poster, tmdbId) =>
+      posterCacheState(await cachedDiscoveryPosterPath(poster, tmdbId, directory), directory)));
+    return { ok: true, data };
   });
   register(ipc.labCurrent, async (db) => labView(await currentLab(db)));
   register(ipc.labStart, async (db, _owner, [criteria, repeats]) => labView(await startLab(db, criteria, repeats)));
