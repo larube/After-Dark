@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import type { Recommendation } from "../shared/recommendation";
+import { AllocineLink } from "./allocine";
 
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
 const categories = { safe: "Valeur sûre", gem: "Pépite", wildcard: "Wildcard" };
@@ -35,6 +36,7 @@ function RecommendationCard({ film, featured, personalized, actions }: {
         metadata.minutes ? `${metadata.minutes} min` : "Durée inconnue",
       ].filter(Boolean).join(" · ")}</p>
       {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
+      <AllocineLink title={title} year={year} />
       <details className="film-reasons" open={featured || undefined}><summary>Pourquoi ce film ?</summary>
         <ul>{reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
       </details>

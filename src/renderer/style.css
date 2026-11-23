@@ -300,6 +300,13 @@ summary:hover { color: var(--focus); }
   background: url("./art/ink.svg"), var(--raised);
 }
 .poster-empty span:first-child { font-size: 1.5rem; }
+.discovery-poster-placeholder { background: url("./art/ink.svg"), radial-gradient(ellipse at top, #38261d, var(--canvas) 75%); }
+.discovery-poster-placeholder span:first-child { color: var(--accent); }
+.allocine-link {
+  width: fit-content; min-height: 28px; padding: 2px 0; border: 0; background: none;
+  color: var(--paper); text-decoration: underline; text-underline-offset: .2em; font-size: .85rem;
+}
+.allocine-link:hover, .allocine-link span { color: var(--accent); }
 .film-copy { min-width: 0; }
 .badge {
   display: inline-block; padding: 3px 9px 5px; margin: 2px 0 6px; clip-path: var(--tear);

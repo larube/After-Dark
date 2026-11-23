@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -11,6 +11,25 @@ const jpeg = () => new Response(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9), {
 });
 
 describe("affiches de Découvertes", () => {
+  it("ignore un JPEG tronqué hors ligne et le remplace lorsqu’une copie valide est disponible", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "after-dark-poster-repair-"));
+    try {
+      const cache = join(directory, "posters");
+      await mkdir(cache);
+      await writeFile(join(cache, "cover.jpg"), Uint8Array.of(0xff, 0xd8, 0x01));
+      const fetcher = vi.fn(async () => jpeg());
+      const load = createPosterLoader(fetcher);
+      expect(await posterCacheState("/cover.jpg", directory)).toBe("invalid_file");
+      expect(await load("/cover.jpg", directory)).toBeUndefined();
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(await load("/cover.jpg", directory, true)).toMatch(/^data:image/);
+      expect(await posterCacheState("/cover.jpg", directory)).toBe("cached");
+      expect(await createPosterLoader(fetcher)("/cover.jpg", directory)).toMatch(/^data:image/);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
   it("sert le disque hors ligne, déduplique les tentatives et limite le réseau à deux images", async () => {
     const directory = await mkdtemp(join(tmpdir(), "after-dark-posters-"));
     try {
@@ -72,13 +91,15 @@ describe("affiches de Découvertes", () => {
       const client = new TmdbClient("test-token", details);
       // Inject the poster transport through the shared loader so this test never uses the network.
       const load = createDiscoveryPosters(async () => client, createPosterLoader(imageFetch));
+      expect(await load(undefined, null, directory)).toBeUndefined();
+      expect(details).not.toHaveBeenCalled();
       await Promise.all([load(undefined, 123, directory), load(undefined, 123, directory)]);
       expect(await cachedDiscoveryPosterPath(undefined, 123, directory)).toBe("/cover.jpg");
       expect(await load(undefined, 124, directory)).toBeUndefined();
       expect(await load(undefined, 124, directory)).toBeUndefined();
       expect(details).toHaveBeenCalledTimes(2);
       const offline = createDiscoveryPosters(async () => undefined, createPosterLoader(imageFetch));
-      expect(await offline(undefined, 123, directory)).toMatch(/^data:image/);
+      expect(await offline("/legacy-invalid.png", 123, directory)).toMatch(/^data:image/);
       expect(imageFetch).toHaveBeenCalledTimes(1);
     } finally {
       await rm(directory, { recursive: true, force: true });

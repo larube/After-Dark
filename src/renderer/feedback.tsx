@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { needsRating, type FeedbackEntry, type FeedbackRequest, type Intention } from "../shared/feedback";
+import { AllocineLink } from "./allocine";
 
 export type SaveFeedback = (request: FeedbackRequest) => Promise<void>;
 
@@ -194,6 +195,7 @@ export function FeedbackCollection({ entries, error, disabled, save }: {
           <h3>{film.title} {film.year && <small>{film.year}</small>}</h3>
           {film.score !== null && <p>{film.score}/10</p>}
           {film.appreciation && <p className="feedback-appreciation">{film.appreciation}</p>}
+          <AllocineLink title={film.title} year={film.year} />
           <FilmActions movieId={film.movieId} title={film.title} entry={film} disabled={disabled} save={save}
             rating={{ open: ratingMovie === film.movieId, setOpen: (open) => setRatingMovie(open ? film.movieId : undefined) }} />
         </li>)}</ul> : <p className="muted">{empty}</p>}

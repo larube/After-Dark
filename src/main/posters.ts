@@ -1,27 +1,39 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { Recommendation } from "../shared/recommendation";
 
 const maxBytes = 300_000;
 export const validPoster = (path?: string | null): path is string => !!path && /^\/[A-Za-z0-9_-]+\.jpg$/.test(path);
-const isJpeg = (image?: Buffer): image is Buffer => image?.[0] === 0xff && image[1] === 0xd8;
+const isJpeg = (image?: Buffer): image is Buffer => !!image && image.length >= 4 &&
+  image[0] === 0xff && image[1] === 0xd8 && image.at(-2) === 0xff && image.at(-1) === 0xd9;
 const imageData = (image: Buffer) => "data:image/jpeg;base64," + image.toString("base64");
 const directoryFor = (userData: string) => join(userData, "posters");
 
-async function cached(filename: string) {
+async function readCache(filename: string) {
   try {
     const saved = await stat(filename);
-    if (!saved.isFile() || saved.size > maxBytes) return;
+    if (!saved.isFile() || saved.size > maxBytes) return { status: "invalid_file" } as const;
     const image = await readFile(filename);
-    if (isJpeg(image)) return image;
-  } catch {
-    // Missing or unreadable cache entries can use the normal fallback.
+    return isJpeg(image) ? { status: "cached", image } as const : { status: "invalid_file" } as const;
+  } catch (error) {
+    return { status: (error as NodeJS.ErrnoException).code === "ENOENT" ? "missing_file" : "invalid_file" } as const;
   }
 }
 
 export async function posterCacheState(path: string | undefined, userData: string) {
   if (!validPoster(path)) return "missing_path";
-  return await cached(join(directoryFor(userData), basename(path))) ? "cached" : "missing_file";
+  return (await readCache(join(directoryFor(userData), basename(path)))).status;
+}
+
+async function storePoster(filename: string, data: Buffer) {
+  const temporary = filename + "." + randomUUID() + ".tmp";
+  try {
+    await writeFile(temporary, data, { mode: 0o600, flag: "wx" });
+    await rename(temporary, filename);
+  } finally {
+    await unlink(temporary).catch(() => undefined);
+  }
 }
 
 async function readImage(response: Response) {
@@ -54,8 +66,8 @@ export function createPosterLoader(fetcher = fetch, now = Date.now) {
     if (!validPoster(path)) return;
     const directory = directoryFor(userData);
     const filename = join(directory, basename(path));
-    const image = await cached(filename);
-    if (image) return imageData(image);
+    const cached = await readCache(filename);
+    if (cached.status === "cached") return imageData(cached.image);
     if (!online) return;
     const current = inFlight.get(filename);
     if (current) return current;
@@ -76,7 +88,7 @@ export function createPosterLoader(fetcher = fetch, now = Date.now) {
         const data = await readImage(response);
         if (isJpeg(data)) {
           await mkdir(directory, { recursive: true, mode: 0o700 });
-          await writeFile(filename, data, { mode: 0o600 });
+          await storePoster(filename, data);
           return imageData(data);
         }
         if (response.status !== 429) failed.set(filename, now() + (response.status === 404 ? 24 * 3600_000 : 60_000));

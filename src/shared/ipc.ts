@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { allocineFilmSchema } from "./allocine";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
 import { criteriaSchema, recommendationSchema } from "./recommendation";
@@ -42,6 +43,7 @@ const enrichmentSchema = z.strictObject({
 export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
 export const ipc = {
+  openAllocine: { channel: "film:open-allocine", request: z.tuple([allocineFilmSchema]), response: reply(z.null()) },
   discoveryCurrent: { channel: "discovery:current", request: z.tuple([discoveryModeSchema]), response: reply(discoveryViewSchema.nullable()) },
   discoveryGenerate: { channel: "discovery:generate", request: z.tuple([discoveryModeSchema, discoveryIdSchema.nullable()]), response: reply(discoveryViewSchema.nullable()) },
   discoveryPosters: { channel: "discovery:posters", request: z.tuple([discoveryModeSchema, discoveryIdSchema, z.array(discoveryIdSchema).min(1).max(2)]), response: reply(z.array(discoveryPosterSchema).max(2)) },

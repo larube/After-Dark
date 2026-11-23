@@ -161,7 +161,7 @@ function App() {
       <CatalogueSummary summary={summary} />
       <button className="button" onClick={() => navigate("profile")}>Importer un profil</button>
     </>}
-    <Discovery active={page === "discover"} disabled={!summary || importing || saving}
+    <Discovery active={page === "discover"} disabled={!summary || importing || saving} enriched={enrichment?.enriched}
       actions={(film) => <FilmActions movieId={film.id} title={film.title}
         entry={collection?.find((entry) => entry.movieId === film.id)}
         disabled={!collection || !!collectionError || importing || saving} save={save} />} />

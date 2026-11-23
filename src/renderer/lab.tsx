@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { labInterests, type LabAnswer, type LabResults, type LabState } from "../shared/lab";
 import { moods, type Criteria } from "../shared/recommendation";
+import { AllocineLink } from "./allocine";
 
 const criteriaFor = (mood: Criteria["mood"]): Criteria => ({
   mood, preferredCountries: [], preferredLanguages: [], requiredCountries: [], requiredLanguages: [],
@@ -184,6 +185,7 @@ export function Laboratory({ collectionChanged }: { collectionChanged: () => Pro
               {[state.film.year, state.film.minutes ? state.film.minutes + " min" : null].filter(Boolean).join(" · ")}
             </p>}
             {state.film.synopsis && <p className="lab-synopsis">{state.film.synopsis}</p>}
+            <AllocineLink key={state.position} title={state.film.title} year={state.film.year} />
           </div>
           <fieldset disabled={busy} className="lab-vote">
             <legend>Et vous, ça vous tente ?</legend>
