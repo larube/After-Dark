@@ -7,9 +7,10 @@ export const allocineFilmSchema = z.strictObject({
   year: z.number().int().nullable(),
 });
 
-export function allocineSearch({ title, year }: z.infer<typeof allocineFilmSchema>) {
+export function allocineSearch({ title }: z.infer<typeof allocineFilmSchema>) {
   const url = new URL(searchPath, origin);
-  url.searchParams.set("q", year !== null && year >= 1888 && year <= 2100 ? `${title} ${year}` : title);
+  // Allociné treats an appended year as part of the title and can return an empty list.
+  url.searchParams.set("q", title);
   return url.href;
 }
 
