@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 const pages = [
   ["tonight", "Ce soir", "◒"], ["collection", "Ma collection", "▤"], ["discover", "Découvertes", "✧"],
-  ["history", "Historique", "↶"], ["profile", "Profil", "◎"],
+  ["history", "Historique", "↶"], ["lab", "Laboratoire", "✦"], ["profile", "Profil", "◎"],
 ] as const;
 export type Page = typeof pages[number][0];
 

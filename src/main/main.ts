@@ -1,19 +1,20 @@
 import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import type { IpcMainInvokeEvent } from "electron";
 import { mkdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { z } from "zod";
 import { openDatabase } from "../db/client";
 import { getCollection, saveFeedback } from "../db/feedback";
+import { abandonLab, answerLab, currentLab, exportLab, finishLab, labResults, pauseLab, startLab } from "../db/lab";
 import { getProfileSummary } from "../db/profile";
 import { importProfile } from "../import/profile";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
 import { startEnrichment } from "./enrichment";
 import { findTonight, localTmdb } from "./recommend";
-import { attachPosters } from "./posters";
+import { attachPosters, posterData } from "./posters";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -83,6 +84,11 @@ function createWindow() {
   void load.catch(() => {
     dialog.showErrorBox("After Dark", "Impossible de charger l’interface locale.");
   });
+}
+
+async function labView({ public: view, poster }: Awaited<ReturnType<typeof currentLab>>): ReturnType<DesktopApi["labCurrent"]> {
+  if (view.status === "voting") view.film.posterData = await posterData(poster, app.getPath("userData"));
+  return { ok: true, data: view };
 }
 
 const startup = new Date().toISOString();
@@ -162,6 +168,22 @@ void app.whenReady().then(async () => {
     } finally {
       recommending = false;
     }
+  });
+  register(ipc.labCurrent, async (db) => labView(await currentLab(db)));
+  register(ipc.labStart, async (db, _owner, [criteria, repeats]) => labView(await startLab(db, criteria, repeats)));
+  register(ipc.labPause, async (db, _owner, [id, paused]) => labView(await pauseLab(db, id, paused)));
+  register(ipc.labAbandon, async (db, _owner, [id]) => labView(await abandonLab(db, id)));
+  register(ipc.labAnswer, async (db, _owner, [id, position, answer]) => labView(await answerLab(db, id, position, answer)));
+  register(ipc.labFinish, async (db, _owner, [id]): ReturnType<DesktopApi["labFinish"]> => await finishLab(db, id)
+    ? { ok: true, data: null } : { ok: false, error: "Répondez à toutes les propositions avant de terminer." });
+  register(ipc.labResults, async (db): ReturnType<DesktopApi["labResults"]> => ({ ok: true, data: await labResults(db) }));
+  register(ipc.labExport, async (db, owner): ReturnType<DesktopApi["labExport"]> => {
+    const result = await dialog.showSaveDialog(owner, {
+      title: "Exporter le Laboratoire", defaultPath: "after-dark-laboratoire.json", filters: [{ name: "JSON", extensions: ["json"] }],
+    });
+    if (result.canceled || !result.filePath) return { ok: true, data: "cancelled" };
+    await writeFile(result.filePath, JSON.stringify(await exportLab(db), null, 2) + "\n", { mode: 0o600 });
+    return { ok: true, data: "saved" };
   });
   createWindow();
   app.on("activate", () => { if (!window) createWindow(); });

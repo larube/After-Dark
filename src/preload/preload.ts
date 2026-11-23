@@ -1,7 +1,16 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { ipc, type DesktopApi } from "../shared/ipc";
 
+function invoke<A extends unknown[], T>(route: {
+  channel: string; request: { parse: (input: unknown) => unknown[] }; response: { parse: (input: unknown) => T };
+}) {
+  return async (...args: A): Promise<T> => route.response.parse(await ipcRenderer.invoke(route.channel, ...route.request.parse(args)));
+}
+
 const api: DesktopApi = {
+  labCurrent: invoke(ipc.labCurrent), labStart: invoke(ipc.labStart), labPause: invoke(ipc.labPause),
+  labAbandon: invoke(ipc.labAbandon), labAnswer: invoke(ipc.labAnswer), labFinish: invoke(ipc.labFinish), labResults: invoke(ipc.labResults),
+  labExport: invoke(ipc.labExport),
   collection: async () => ipc.collection.response.parse(await ipcRenderer.invoke(ipc.collection.channel)),
   deferViewing: async (...args) => ipc.deferViewing.response.parse(await ipcRenderer.invoke(
     ipc.deferViewing.channel, ...ipc.deferViewing.request.parse(args),

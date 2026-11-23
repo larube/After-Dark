@@ -59,3 +59,7 @@ Le fichier [production-v1.1.0.json](production-v1.1.0.json) a été obtenu avec 
 ## Affinités expérimentales
 
 Ajouter `--compare-affinity` pour évaluer les quatre modèles d’affinité sur le même instantané en politique classique. La commande produit `affinity-comparison.json`. L’option `--affinity current|normalized|rarity|hybrid` choisit le modèle utilisé dans le rapport HTML et JSON détaillé. Le modèle de l’application reste `current`. Voir les [formules, résultats et limites](affinity-v2.md).
+
+## Évaluation à l’aveugle
+
+Le [Laboratoire](blind-lab.md) complète les diagnostics par des réponses humaines à des propositions présentées une par une. Le document décrit l’attribution, l’export et l’interprétation du bilan.

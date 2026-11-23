@@ -133,7 +133,8 @@ describe("Interface Neon Underground", () => {
       page: "history", status: "Base locale prête", navigate() {}, children: "À venir",
     }));
     expect(html).toContain('aria-label="Navigation principale"');
-    expect(html.match(/<button type="button"/g)).toHaveLength(5);
+    expect(html.match(/<button type="button"/g)).toHaveLength(6);
+    expect(html).toContain("Laboratoire");
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
   });
 });

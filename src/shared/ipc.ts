@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
+import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
 import { criteriaSchema, recommendationSchema } from "./recommendation";
 
 const count = z.number().int().nonnegative();
@@ -40,6 +41,14 @@ const enrichmentSchema = z.strictObject({
 export type EnrichmentProgress = z.infer<typeof enrichmentSchema>;
 
 export const ipc = {
+  labCurrent: { channel: "lab:current", request: z.tuple([]), response: reply(labStateSchema) },
+  labStart: { channel: "lab:start", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(labStateSchema) },
+  labPause: { channel: "lab:pause", request: z.tuple([labSessionId, z.boolean()]), response: reply(labStateSchema) },
+  labAbandon: { channel: "lab:abandon", request: z.tuple([labSessionId]), response: reply(labStateSchema) },
+  labAnswer: { channel: "lab:answer", request: z.tuple([labSessionId, labPosition, labAnswerSchema]), response: reply(labStateSchema) },
+  labFinish: { channel: "lab:finish", request: z.tuple([labSessionId]), response: reply(z.null()) },
+  labResults: { channel: "lab:results", request: z.tuple([]), response: reply(labResultsSchema) },
+  labExport: { channel: "lab:export", request: z.tuple([]), response: reply(z.enum(["saved", "cancelled"])) },
   collection: { channel: "cinema:collection", request: z.tuple([]), response: reply(z.array(feedbackEntrySchema)) },
   deferViewing: { channel: "cinema:defer-viewing", request: z.tuple([z.number().int().positive()]), response: reply(z.null()) },
   saveFeedback: { channel: "cinema:feedback", request: z.tuple([feedbackRequestSchema]), response: reply(feedbackEntrySchema.nullable()) },
