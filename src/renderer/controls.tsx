@@ -38,15 +38,19 @@ function FilterChoices({ label, all, requiredLabel, preferenceHelp, options, sel
 }) {
   return <fieldset className="filter-choices" disabled={busy}>
     <legend>{label}</legend>
-    <p>{selected.length === 0 ? all : `${selected.length} sélectionné(s)`}</p>
-    <div className="filter-options">
-      {Object.entries(options).map(([code, name]) => <label key={code}>
-        <input type="checkbox" checked={selected.includes(code)} onChange={(event) => {
-          onSelect(event.target.checked ? [...selected, code] : selected.filter((item) => item !== code));
-        }} />
-        {name}
-      </label>)}
-    </div>
+    <details className="filter-picker" name="session-geography">
+      <summary>{selected.length === 0 ? all : `${selected.length} ${selected.length === 1 ? "choix retenu" : "choix retenus"}`}
+        <span>Choisir</span>
+      </summary>
+      <div className="filter-options">
+        {Object.entries(options).map(([code, name]) => <label key={code}>
+          <input type="checkbox" checked={selected.includes(code)} onChange={(event) => {
+            onSelect(event.target.checked ? [...selected, code] : selected.filter((item) => item !== code));
+          }} />
+          {name}
+        </label>)}
+      </div>
+    </details>
     <label className="filter-required">
       <input type="checkbox" checked={required} disabled={!selected.length} onChange={(event) => onRequire(event.target.checked)} />
       {requiredLabel}
@@ -59,7 +63,7 @@ export function FilterPanel({ busy, value, onChange, action }: {
   busy: boolean; value: SessionFilters; onChange: (value: SessionFilters) => void; action?: ReactNode;
 }) {
   const { duration, avoid, countries: selectedCountries, languages: selectedLanguages, countriesRequired, languagesRequired } = value;
-  const active = Number(!!duration) + Number(!!avoid) + Number(!!selectedCountries.length) + Number(!!selectedLanguages.length);
+  const active = Number(selectedCountries.length > 0) + Number(selectedLanguages.length > 0);
 
   return <>
     <fieldset className="session-ticket" disabled={busy} aria-label="Réglages rapides">
@@ -100,8 +104,11 @@ export function FilterPanel({ busy, value, onChange, action }: {
             onSelect={(selected) => onChange({ ...value, languages: selected, languagesRequired: !!selected.length && languagesRequired })}
             onRequire={(required) => onChange({ ...value, languagesRequired: required })} />
         </div>
-        <button type="button" className="button button-quiet filter-reset" disabled={busy}
-          onClick={() => onChange(defaultFilters)}>Réinitialiser les critères</button>
+        <div className="filter-footer">
+          <button type="button" className="button button-quiet filter-reset" disabled={busy}
+            onClick={() => onChange(defaultFilters)}>Réinitialiser les critères</button>
+          {action}
+        </div>
       </div>
     </details>
   </>;

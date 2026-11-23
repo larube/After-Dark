@@ -60,6 +60,18 @@ describe("Interface Neon Underground", () => {
     expect(html).not.toContain("Énergie disponible");
   });
 
+  it("compte les filtres avancés uniquement et propose deux boutons de soumission", () => {
+    const action = createElement("button", { type: "submit" }, "Trouve-moi un film");
+    const render = (value: typeof defaultFilters) =>
+      renderToStaticMarkup(createElement(FilterPanel, { value, busy: false, onChange() {}, action }));
+    const quickOnly = { ...defaultFilters, duration: "120", avoid: "tension" };
+    const html = render(quickOnly);
+    expect(html).not.toContain("critère actif");
+    expect(html.match(/<details class="filter-picker" name="session-geography">/g)).toHaveLength(2);
+    expect(html.match(/type="submit"/g)).toHaveLength(2);
+    expect(render({ ...quickOnly, countries: ["FR", "ES"], languages: ["es"] })).toContain("2 critères actifs");
+  });
+
   it("indique que choisir l’Argentine comme préférence laisse les autres pays possibles", () => {
     const html = renderToStaticMarkup(createElement(FilterPanel, {
       value: { ...defaultFilters, countries: ["AR"] }, busy: false, onChange() {},

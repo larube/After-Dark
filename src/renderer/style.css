@@ -204,10 +204,12 @@ summary:hover { color: var(--focus); }
 .geography { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .filter-choices { min-width: 0; }
 .filter-choices legend { font: 900 1.35rem/1.2 var(--display); text-transform: uppercase; }
-.filter-choices p { margin: 4px 0 6px; color: var(--muted); font-size: .86rem; }
+.filter-picker { margin-top: 5px; border: 1px solid var(--border); background: var(--surface); }
+.filter-picker > summary { width: 100%; min-height: 40px; padding: 8px 10px; }
+.filter-picker > summary span { float: right; margin-inline-start: 8px; color: var(--focus); font-size: .86rem; }
 .filter-options {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 104px), 1fr)); gap: 0 6px;
-  padding: 4px 8px; border-block: 1px solid var(--border); background: var(--surface);
+  max-height: 11rem; overflow: auto; padding: 4px 8px; border-top: 1px solid var(--border);
 }
 .filter-choices label { display: flex; align-items: center; gap: 6px; min-height: 28px; font-size: .87rem; }
 .filter-choices label:has(input:checked) { color: var(--focus); }
@@ -215,7 +217,8 @@ summary:hover { color: var(--focus); }
 .filter-choices .filter-required { margin-top: 6px; font-weight: 600; }
 .filter-help { display: block; margin-inline-start: 20px; color: var(--muted); font-size: .85rem; }
 .filter-required:has(input:disabled) { color: var(--muted); }
-.filter-reset { margin-top: 10px; min-height: 34px; }
+.filter-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.filter-reset { min-height: 36px; }
 
 .results { margin-top: 12px; }
 .results-header { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 14px; margin-bottom: 9px; }
