@@ -11,8 +11,9 @@ type Assignment<Model> = Pick & { model: Model };
 export const labHash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 const seeded = (seed: string, purpose: string, value: unknown) => labHash([seed, purpose, value]);
 
-export function rankLabModels(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>, referenceDate: string) {
-  const policy = { mode: "classic", referenceDate } as const;
+export function rankLabModels(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>, referenceDate: string,
+  excludedIds?: ReadonlySet<number>) {
+  const policy = { mode: "classic", referenceDate, excludedIds } as const;
   return Object.fromEntries(affinityModels.map((model) => [
     model, recommend(catalogue, signals, criteria, recent, policy, model).films.map(({ id }, index) => ({ movieId: id, rank: index + 1 })),
   ])) as LabSelections;

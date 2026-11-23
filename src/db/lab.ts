@@ -7,6 +7,7 @@ import type { LabAnswer, LabResults, LabState } from "../shared/lab";
 import type { Criteria } from "../shared/recommendation";
 import type { CinemaDatabase, CinemaTransaction } from "./client";
 import { writeFeedback } from "./feedback";
+import { franchiseExclusions } from "./franchises";
 import { readCatalogue, readHistory } from "./recommendations";
 import { labProposals, labSessions, movieEvaluations, movies, movieStatuses } from "./schema";
 
@@ -38,7 +39,8 @@ export function startLab(db: CinemaDatabase, criteria: Criteria, allowRepeats: b
     const previous = await active(tx);
     if (previous) return state(previous, await proposals(tx, previous.id));
 
-    const { catalogue, signals } = await readCatalogue(tx);
+    const { catalogue, signals, movies: identities } = await readCatalogue(tx);
+    const blocked = await franchiseExclusions(tx, identities);
     const { recent } = await readHistory(tx);
     const sessions = await tx.select({ id: labSessions.id }).from(labSessions)
       .where(isNotNull(labSessions.finishedAt)).orderBy(desc(labSessions.finishedAt), desc(labSessions.id)).limit(labRecentLimit);
@@ -48,7 +50,7 @@ export function startLab(db: CinemaDatabase, criteria: Criteria, allowRepeats: b
     }
     const createdAt = now.toISOString();
     const referenceDate = createdAt.slice(0, 10);
-    const selections = rankLabModels(catalogue, signals, criteria, recent, referenceDate);
+    const selections = rankLabModels(catalogue, signals, criteria, recent, referenceDate, blocked);
     const { entries, repeated, collisions } = assignLabFilms(selections, labRecent, seed);
     if (entries.length < 2) return { public: { status: "insufficient" } };
     if (repeated === entries.length && !allowRepeats) return { public: { status: "no-new" } };
@@ -58,6 +60,7 @@ export function startLab(db: CinemaDatabase, criteria: Criteria, allowRepeats: b
     const labHistory = [...labRecent];
     const fingerprint = labHash({
       catalogue, signals, criteria, classicHistory, referenceDate, policy: "classic", engineVersion,
+      excludedFranchises: blocked.size ? [...blocked].sort((a, b) => a - b) : undefined,
     });
     const session = await tx.insert(labSessions).values({
       id, open: 1, protocol: labProtocol, engine: engineVersion, seed, criteria, referenceDate,

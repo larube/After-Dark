@@ -123,10 +123,10 @@ export function compareCalibration(input: Experiment) {
       selected.filter((id) => baseline.modes[i].ids.includes(id)).length) })) };
 }
 
-export const calibrationVotes = ["Très envie de voir", "Pourquoi pas", "Pas intéressé", "Déjà vu"] as const;
+export const calibrationVotes = ["Très envie de voir", "Pourquoi pas", "Pas intéressé", "Déjà vu", "Pas assez d’informations pour me décider"] as const;
 
 
-export const blindCalibrationProtocol = "discovery-calibration-blind-v2";
+export const blindCalibrationProtocol = "discovery-calibration-blind-v3";
 export type CalibrationVote = typeof calibrationVotes[number];
 
 export function planBlindCalibration(input: Experiment, mode: DiscoveryMode, presented: ReadonlySet<number> = new Set()) {
@@ -141,8 +141,8 @@ export function planBlindCalibration(input: Experiment, mode: DiscoveryMode, pre
   const assignment = assignBlindFilms(arms, selections, recent, input.seed);
   const films = new Map(input.catalogue.map((film) => [film.id, film]));
   const proposals = assignment.entries.map(({ movieId, model: arm, rank }) => {
-    const { title, year, metadata: { minutes, synopsis } } = films.get(movieId)!;
-    return { movieId, title, arm, rank, card: { title, year, minutes, synopsis } };
+    const { title, year, metadata: { minutes, synopsis, fullSynopsis, directors, countries, genres } } = films.get(movieId)!;
+    return { movieId, title, arm, rank, card: { title, year, minutes, synopsis, fullSynopsis, directors, countries, genres } };
   });
   return {
     protocol: blindCalibrationProtocol, engine: engineVersion,

@@ -25,9 +25,9 @@ it("persists completed votes and avoids repeats across seeds and arms after reop
     .some((earlier) => earlier.movieId === movieId && earlier.arm !== arm))).toBe(true);
   const first = await withCalibrationHistory(file, (history, save) =>
     recordBlindSession(history, save, proposal, async (card, index, total) => {
-      expect(Object.keys(card).sort()).toEqual(["minutes", "synopsis", "title", "year"]);
+      expect(Object.keys(card).sort()).toEqual(["countries", "directors", "fullSynopsis", "genres", "minutes", "synopsis", "title", "year"]);
       expect(total).toBe(4);
-      return index === 1 ? calibrationVotes[3] : calibrationVotes[2];
+      return calibrationVotes[index === 1 ? 3 : index === 2 ? 4 : 2];
     }));
   expect(first?.status).toBe("completed");
   const history = await readCalibrationHistory(file);
@@ -38,7 +38,9 @@ it("persists completed votes and avoids repeats across seeds and arms after reop
   expect(planBlindCalibration(secondInput, "affinities", presentedFilms(await readCalibrationHistory(file)))).toEqual(second);
   const arms = summarizeCalibrationHistory(history).groups[0].arms;
   expect(arms.reduce((sum, row) => sum + row.responses["Déjà vu"], 0)).toBe(1);
-  expect(arms.reduce((sum, row) => sum + row.responses["Pas intéressé"], 0)).toBe(3);
+  expect(arms.reduce((sum, row) => sum + row.responses["Pas intéressé"], 0)).toBe(2);
+  expect(arms.reduce((sum, row) => sum + row.responses[calibrationVotes[4]], 0)).toBe(1);
+  expect(arms.reduce((sum, row) => sum + row.evaluable, 0)).toBe(2);
 });
 
 it("persists partial questionnaires without revealing a result or consuming films", async () => {
@@ -73,7 +75,8 @@ it("imports legacy reports once and accounts for a film assigned to two arms in 
     date: input.date, seed: "calibration-1", preferences: input.preferences, collisions: 1, coveredArms: 1, totalArms: 4,
     responses: [{ movieId: 19, title: "Film fictif", arm: "C", rank: 1, response: "Déjà vu" }],
   };
-  const second = { ...report, fingerprint: "old-2", seed: "calibration-2",
+  const second = { ...report, protocol: "discovery-calibration-blind-v2", status: "completed",
+    fingerprint: "old-2", seed: "calibration-2",
     responses: [{ ...report.responses[0], arm: "D", response: "Pourquoi pas" }] };
   await withCalibrationHistory(file, async (history, save) => {
     expect(importCalibrationReport(history, report)).toBe(true);

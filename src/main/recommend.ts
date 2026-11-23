@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { franchiseExclusions } from "../db/franchises";
 import type { CinemaDatabase } from "../db/client";
 import { cacheFilm, readCatalogue, readHistory, saveRecommendation } from "../db/recommendations";
 import { recommend } from "../domain/recommendation";
@@ -67,8 +68,9 @@ export async function findTonight(
     connection = error.connection;
   }
   state = await readCatalogue(db);
+  const blocked = await franchiseExclusions(db, state.movies);
   const result = { ...recommend(state.catalogue, state.signals, criteria, allowRecent ? new Set() : history.recent,
-    { referenceDate: now.toISOString().slice(0, 10) }), connection };
+    { referenceDate: now.toISOString().slice(0, 10), excludedIds: blocked }), connection };
   await saveRecommendation(db, criteria, result, now.toISOString());
   return result;
 }

@@ -54,7 +54,7 @@ function candidateEligibility(film: Film, criteria: Criteria, policy: CandidateP
 }
 
 export function eligible(film: Film, criteria: Criteria, policy: CandidatePolicy = { referenceDate: todayUtc() }) {
-  return !Object.values(candidateEligibility(film, criteria, policy).causes).some(Boolean);
+  return !policy.excludedIds?.has(film.id) && !Object.values(candidateEligibility(film, criteria, policy).causes).some(Boolean);
 }
 
 function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: AffinityModel, frequency?: ReturnType<typeof catalogueFrequency>) {
@@ -120,7 +120,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const frequency = model === "rarity" || model === "hybrid" ? catalogueFrequency(catalogue) : undefined;
   const candidates = catalogue.map((film) => candidateEligibility(film, criteria, policy));
   if (trace) trace.candidates = candidates;
-  const eligibleFilms = catalogue.filter((_, index) => !Object.values(candidates[index].causes).some(Boolean));
+  const eligibleFilms = catalogue.filter((film, index) => !policy.excludedIds?.has(film.id) && !Object.values(candidates[index].causes).some(Boolean));
   let ranked = eligibleFilms.filter((film) => !recent.has(film.id)).map((film) => scoreFilm(film, criteria, traits, model, frequency));
   if (trace) trace.base = [...ranked].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
   const selected: Ranked[] = [];

@@ -11,7 +11,7 @@ const proposal = z.object({
   response: z.enum(calibrationVotes).optional(),
 });
 const report = z.object({
-  protocol: z.enum(["discovery-calibration-v1", blindCalibrationProtocol]),
+  protocol: z.enum(["discovery-calibration-v1", "discovery-calibration-blind-v2", blindCalibrationProtocol]),
   engine: z.string(), mode: z.enum(discoveryModes), date: z.string(), seed: z.string(),
   fingerprint: z.string(), catalogueFingerprint: z.string().optional(),
   preferences: z.object({ lessIndianCinema: z.boolean(), preferFrUs1960To1979: z.boolean() }),
@@ -19,7 +19,8 @@ const report = z.object({
   poolLimit: z.number().int().positive().optional(),
   poolSizes: z.record(arm, z.number().int().nonnegative()).optional(),
   responses: z.array(proposal).max(4),
-}).refine(({ responses, coveredArms }) => responses.length <= coveredArms &&
+}).refine(({ responses, coveredArms, protocol }) => responses.length <= coveredArms &&
+  (protocol === blindCalibrationProtocol || responses.every(({ response }) => response !== calibrationVotes[4])) &&
   new Set(responses.map(({ movieId }) => movieId)).size === responses.length &&
   new Set(responses.map(({ arm }) => arm)).size === responses.length);
 
@@ -40,7 +41,7 @@ export function presentedFilms(history: History) {
 export function importCalibrationReport(history: History, data: unknown) {
   const envelope = z.object({ status: z.literal("completed").optional(), startedAt: z.string().nullish() }).parse(data);
   const legacy = report.parse(data);
-  if (legacy.protocol === blindCalibrationProtocol && envelope.status !== "completed") {
+  if (legacy.protocol !== "discovery-calibration-v1" && envelope.status !== "completed") {
     throw new Error("Seuls les bilans terminés peuvent être importés.");
   }
   const imported = session.parse({ ...legacy, id: `import:${legacy.fingerprint}:${legacy.mode}`,
@@ -64,7 +65,9 @@ export function summarizeCalibrationHistory(history: History) {
         .flatMap((entry) => entry.responses);
       return { group, arms: arm.options.map((model) => {
         const votes = responses.filter(({ arm }) => arm === model);
-        return { arm: model, total: votes.length, responses: Object.fromEntries(calibrationVotes
+        return { arm: model, total: votes.length,
+          evaluable: votes.filter(({ response }) => response && response !== calibrationVotes[3] && response !== calibrationVotes[4]).length,
+          responses: Object.fromEntries(calibrationVotes
           .map((label) => [label, votes.filter(({ response }) => response === label).length])) };
       }) };
     }),
