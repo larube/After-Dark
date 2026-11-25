@@ -1,3 +1,4 @@
+import { compareEditorial, editorialMarkdown } from "../src/diagnostics/editorial";
 import { auditSelection, selectionMarkdown } from "../src/diagnostics/selection";
 import { describe, expect, it } from "vitest";
 import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking, type Film, type Signal } from "../src/domain/recommendation";
@@ -129,4 +130,78 @@ describe("audit des catégories", () => {
       title: "Film 2", period: -0.8,
     }));
   });
+});
+
+describe("calibration éditoriale", () => {
+  it("laisse les scores et le classement de production inchangés pour les six catégories non éditoriales", () => {
+    const films = [film(1, ["Drama"], { matching: true }), film(2, ["Horror"]), film(3, ["Thriller"], { year: 1960 })];
+    const recent = new Set([2]);
+    const experiment = { classics: { period: "no-decade" as const, bonusScale: 0.25 }, gems: { minimumAffinity: null, affinityScale: 2 } };
+    for (const category of Object.keys(selectionCategories) as SelectionCategory[]) {
+      if (category === "classics" || category === "gems") continue;
+      expect(diagnoseRecommendation(films, signals, criteria(category), recent, policy,
+        tonightAffinityModel, tonightRanking, undefined, 10, experiment)).toEqual(
+        diagnoseRecommendation(films, signals, criteria(category), recent, policy, tonightAffinityModel, tonightRanking, undefined, 10));
+    }
+  });
+
+  it("teste la période et le bonus de Cultes sans contourner les exclusions", () => {
+    const classic = film(1, ["Drama"], { year: 1965 });
+    const films = [classic, { ...classic, id: 2, status: "seen" as const }, { ...classic, id: 3, dismissed: true },
+      { ...classic, id: 4 }, { ...classic, id: 5 }, { ...classic, id: 6, metadata: {
+        ...classic.metadata, release: { source: "TMDB" as const, primaryDate: "2050-01-01" },
+      } }];
+    const run = (period: "current" | "half" | "no-decade", bonusScale: number) =>
+      diagnoseRecommendation(films, signals, criteria("classics"), new Set([5]), { ...policy, excludedIds: new Set([4]) },
+        tonightAffinityModel, tonightRanking, undefined, 10, { classics: { period, bonusScale } });
+    const baseline = run("current", 1);
+    expect(ids(baseline)).toEqual([]);
+    expect(baseline).toEqual(diagnoseRecommendation(films, signals, criteria("classics"), new Set([5]),
+      { ...policy, excludedIds: new Set([4]) }, tonightAffinityModel, tonightRanking, undefined, 10));
+    const half = run("half", 0.5);
+    expect(ids(half)).toEqual([1]);
+    expect(half.base[0].contributions.period).toBe(-0.4);
+    expect(half.base[0].contributions.selectionCategory).toBeCloseTo(baseline.base[0].contributions.selectionCategory! / 2);
+    expect(half.base[0].contributions.reputation).toBe(baseline.base[0].contributions.reputation);
+    expect(run("no-decade", 0.5).base[0].contributions.period).toBe(0);
+  });
+
+  it("sépare le seuil de Pépites, le bonus expérimental et la pertinence générale", () => {
+    const films = [film(1, ["Drama"], { popularity: 1, average: 7.6 }),
+      film(2, ["Drama"], { matching: true, popularity: 2, average: 7.6 }),
+      film(3, ["Drama"], { popularity: 3 }), film(4, ["Drama"], { popularity: 4 })];
+    const run = (minimumAffinity: number | null, affinityScale?: number) => diagnoseRecommendation(films, signals, criteria("gems"),
+      new Set(), policy, tonightAffinityModel, tonightRanking, undefined, 10, { gems: { minimumAffinity, affinityScale } });
+    expect(run(1)).toEqual(diagnoseRecommendation(films, signals, criteria("gems"), new Set(), policy,
+      tonightAffinityModel, tonightRanking, undefined, 10));
+    const relaxed = run(null, 2);
+    const weak = relaxed.exclusions.find(({ id }) => id === 1)!;
+    expect(weak.causes).toMatchObject({ categoryEvidence: false, weakEvidence: true });
+    expect(relaxed.exclusions.find(({ id }) => id === 3)?.causes.categoryEvidence).toBe(true);
+    expect(relaxed.base.find(({ id }) => id === 2)?.contributions.editorialAffinity).toBeCloseTo(
+      relaxed.base.find(({ id }) => id === 2)!.contributions.affinity);
+    expect(ids(relaxed)).not.toContain(1);
+  });
+});
+
+it("génère une comparaison stable avec provenance d’affinité et historique simulé", () => {
+  const target = { ...film(1, ["Horror", "Drama"], { matching: true, popularity: 0.1 }), title: "Titre local" };
+  const catalogue = [target, film(2, ["Drama"], { popularity: 10 }), film(3, ["Drama"], { popularity: 20 })];
+  const snapshot = { catalogue, signals, round: 0, recent: new Set([2]), excludedIds: new Set<number>(), movies: [] };
+  const run = () => compareEditorial(snapshot, criteria("personal"), policy.referenceDate, [{ movieId: 1, title: "Cure" }], [2]);
+  const comparison = run();
+  expect(comparison).toEqual(run());
+  expect(comparison.variants).toHaveLength(26);
+  for (const row of comparison.variants) {
+    const first = new Set(row.report.selected.map(({ id }) => id));
+    expect(row.report.next?.selected.every(({ id }) => !first.has(id) && id !== 2)).toBe(true);
+  }
+  const cure = comparison.affinity.find(({ label }) => label === "Cure")!.matches[0];
+  expect(cure).toMatchObject({ title: "Titre local", selectedHorror: true });
+  expect(cure.matches.length).toBeGreaterThan(0);
+  for (const match of cure.matches) {
+    expect(match.signalSum).toBeCloseTo(match.sources.reduce((sum, { value }) => sum + value, 0));
+    expect(match.signalCount).toBe(match.sources.length);
+  }
+  expect(editorialMarkdown(comparison)).toContain("Variantes à examiner à l’aveugle");
 });

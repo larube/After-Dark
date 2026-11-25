@@ -4,17 +4,23 @@ import { createServer } from "vite";
 
 try {
   const { values } = parseArgs({ options: {
-    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" },
+    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" }, editorial: { type: "boolean" },
   } });
   if (!values.sqlite || !values.output || !values.date) {
-    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>]");
+    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>] [--editorial]");
   }
   const server = await createServer({ configFile: false, logLevel: "error",
     server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
   try {
-    const { writeSelectionAudit } = await server.ssrLoadModule("/src/diagnostics/selection.ts");
+
     const criteria = values.criteria ? JSON.parse(await readFile(values.criteria, "utf8")) : undefined;
-    await writeSelectionAudit({ ...values, criteria });
+    if (values.editorial) {
+      const { writeEditorialAudit } = await server.ssrLoadModule("/src/diagnostics/editorial.ts");
+      await writeEditorialAudit({ ...values, criteria });
+    } else {
+      const { writeSelectionAudit } = await server.ssrLoadModule("/src/diagnostics/selection.ts");
+      await writeSelectionAudit({ ...values, criteria });
+    }
     console.log("Rapports Markdown et JSON générés dans le dossier privé.");
   } finally {
     await server.close();

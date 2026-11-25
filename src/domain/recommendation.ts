@@ -1,7 +1,7 @@
 import type { Criteria, Metadata, Recommendation } from "../shared/recommendation";
 import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
 import { decadeOf, tonightDefaults, type TonightPreferences } from "./tonight-preferences";
-import { categoryEvidence, exposureRanks, matchesSelectionGenre, reputationPriorVotes } from "./selection-category";
+import { type EditorialExperiment, categoryEvidence, exposureRanks, matchesSelectionGenre, reputationPriorVotes } from "./selection-category";
 import { normalizeTitle } from "./ratings";
 
 import { affinityDetails, buildAffinity, catalogueFrequency, features, type TonightAffinityModel } from "./affinity";
@@ -77,7 +77,7 @@ function reputationContribution(reputation: Metadata["reputation"]) {
 }
 
 function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof buildAffinity>, model: TonightAffinityModel, ranking: RankingPolicy, preferences: TonightPreferences, referenceDate: string,
-  frequency?: ReturnType<typeof catalogueFrequency>, lessExposedThan?: number) {
+  frequency?: ReturnType<typeof catalogueFrequency>, lessExposedThan?: number, experiment?: EditorialExperiment) {
   const { metadata } = film;
   const affinity = affinityDetails(film, traits, model, frequency);
   const mood = criteria.mood === "surprise" ? undefined : moodEvidence(metadata, criteria.mood);
@@ -90,14 +90,16 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   const reputation = ranking === "legacy" ? 0 : reputationContribution(metadata.reputation);
   const period = usesTonightPreferences(ranking) ? preferences.period : null;
   const older = !!period && film.year !== null && film.year > 0 && film.year < period.fromYear;
-  const periodMismatch = older && affinity.score < period.minimumAffinity &&
+  const classicPeriod = criteria.selectionCategory === "classics" ? experiment?.classics?.period ?? "current" : "current";
+  const periodScale = classicPeriod === "half" ? 0.5 : Number(classicPeriod !== "none" && classicPeriod !== "no-decade");
+  const periodMismatch = classicPeriod === "current" && older && affinity.score < period.minimumAffinity &&
     !((mood?.weight ?? 0) >= 2 && reputation >= period.minimumReputationWithMood);
   const animation = usesTonightPreferences(ranking) && metadata.genres.some((genre) => normalizeTitle(genre) === "animation");
   // Keep the evidence gate on the original scale. Soft adjustments affect ordering.
   const reputationWeight = ranking !== "legacy" && ranking !== "relevance-initial" && reputation > 0
     ? 0.65 * (ranking === "relevance-personal" ? 1 - Math.min(1, Math.max(0, affinity.score)) : 1)
     : 1;
-  const category = categoryEvidence(criteria.selectionCategory, film, referenceDate, reputation, affinity.score, lessExposedThan);
+  const category = categoryEvidence(criteria.selectionCategory, film, referenceDate, reputation, affinity.score, lessExposedThan, experiment);
   const reasons = [
     ...(category.accepted && category.reason ? [category.reason] : []),
     ...(metadata.reputation && reputation >= 1.5 && reputationWeight > 0 ? [`Avis TMDB favorables, pondérés par le nombre de votes (${metadata.reputation.count}).`] : []),
@@ -125,7 +127,9 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
   const contributions = {
     ...evidence, reputation: reputation * reputationWeight,
     ...(category.boost && category.accepted ? { selectionCategory: category.boost } : {}),
-    period: older ? -period.penalty : 0,
+    ...(criteria.selectionCategory === "gems" && experiment?.gems?.affinityScale !== undefined
+      ? { editorialAffinity: evidence.affinity * (experiment.gems.affinityScale - 1) } : {}),
+    period: older && periodScale ? -period.penalty * periodScale : 0,
     animation: animation && preferences.animationPenalty ? -preferences.animationPenalty : 0,
   };
   const score = Object.values(contributions).reduce((total, value) => total + value, 0);
@@ -174,6 +178,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   preferences: TonightPreferences,
   size: number,
   trace?: Trace,
+  experiment?: EditorialExperiment,
 ) {
   const traits = buildAffinity(signals, undefined, model !== "current");
   const frequency = model === "rarity" || model === "hybrid" || model === "personal" ? catalogueFrequency(catalogue) : undefined;
@@ -182,7 +187,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const eligibleFilms = catalogue.filter((film, index) => !Object.values(candidates[index].causes).some(Boolean));
   const exposure = criteria.selectionCategory === "gems" ? exposureRanks(eligibleFilms) : undefined;
   const scored = eligibleFilms.map((film) => scoreFilm(film, criteria, traits, model, rankingPolicy, preferences,
-    policy.referenceDate, frequency, exposure?.get(film.id)));
+    policy.referenceDate, frequency, exposure?.get(film.id), experiment));
   const selectable = scored.filter(({ convincing, categoryAccepted, periodMismatch }) => convincing && categoryAccepted && !periodMismatch);
   const available = scored.filter(({ film }) => !recent.has(film.id));
   let ranked = selectable.filter(({ film }) => !recent.has(film.id));
@@ -195,12 +200,13 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const selected: Ranked[] = [];
   const films: Recommendation["films"] = [];
   const categories = ["safe", "gem", "wildcard", "safe", "gem"] as const;
-  const olderLimit = usesTonightPreferences(rankingPolicy) ? preferences.period?.maxExceptions ?? Infinity : Infinity;
+  const classicPeriod = criteria.selectionCategory === "classics" ? experiment?.classics?.period ?? "current" : "current";
+  const olderLimit = classicPeriod === "current" && usesTonightPreferences(rankingPolicy) ? preferences.period?.maxExceptions ?? Infinity : Infinity;
   let olderSelected = 0;
   for (let index = 0; index < size; index++) {
     const category = categories[index % categories.length];
     const ranking = ranked.filter(({ older }) => !older || olderSelected < olderLimit).map((candidate) => {
-      const decadePenalty = usesTonightPreferences(rankingPolicy) && candidate.decade !== null &&
+      const decadePenalty = classicPeriod !== "no-decade" && usesTonightPreferences(rankingPolicy) && candidate.decade !== null &&
         selected.some(({ decade }) => decade === candidate.decade) ? preferences.repeatedDecadePenalty : 0;
       const penalty = diversityPenalty(candidate, selected) * (rankingPolicy === "legacy" ? 1 : 0.2);
       const bonus = rankingPolicy !== "legacy" ? 0 : category === "gem" ? candidate.exploration * 2
@@ -243,9 +249,9 @@ export function recommend(catalogue: Film[], signals: Signal[], criteria: Criter
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
   policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
-  preferences: TonightPreferences = tonightDefaults, size = 5) {
+  preferences: TonightPreferences = tonightDefaults, size = 5, experiment?: EditorialExperiment) {
   const trace: Trace = { base: [], weak: new Set(), categoryMismatch: new Set(), periodMismatch: new Set(), periodLimit: new Set(), steps: [], candidates: [] };
-  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, size, trace);
+  const result = runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, size, trace, experiment);
   return {
     result, steps: trace.steps,
     exclusions: catalogue.map((film, index) => {
