@@ -31,7 +31,9 @@ export async function cacheFilm(db: CinemaDatabase, film: TmdbFilm, expectedMovi
     const savedYears = previous && typeof previous === "object" && "releaseYears" in previous && Array.isArray(previous.releaseYears)
       ? previous.releaseYears.filter((year): year is number => Number.isInteger(year)) : [];
     const releaseYears = [...new Set([...savedYears, ...film.releaseYears])].sort((a, b) => a - b);
-    const tmdb = { source: "TMDB", fetchedAt: film.fetchedAt, releaseYears, data: { ...Object(prior), ...defined(film.metadata) } };
+    const directorIds = film.directorIds ?? (previous && typeof previous === "object" && "directorIds" in previous
+      ? previous.directorIds : undefined);
+    const tmdb = { source: "TMDB", ...(directorIds === undefined ? {} : { directorIds }), fetchedAt: film.fetchedAt, releaseYears, data: { ...Object(prior), ...defined(film.metadata) } };
     if (!isDeepStrictEqual(previous, tmdb)) {
       await tx.update(movies).set({ metadata: { ...stored.metadata, tmdb } }).where(eq(movies.id, stored.id)).run();
     }

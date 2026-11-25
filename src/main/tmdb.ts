@@ -30,7 +30,7 @@ const details = listing.extend({
 
 export type TmdbFilm = {
   tmdbId: number; title: string; originalTitle?: string; year?: number;
-  imdbId?: string; aliases: string[]; releaseYears: number[]; metadata: Metadata; fetchedAt: string;
+  imdbId?: string; aliases: string[]; releaseYears: number[]; metadata: Metadata; directorIds?: number[]; fetchedAt: string;
 };
 type ConnectionError = "offline" | "limited" | "unauthorized" | "unavailable";
 
@@ -153,13 +153,18 @@ export class TmdbClient {
     });
   }
 
+  async discoverPage(parameters: Record<string, string>) {
+    return (await this.list("discover/movie", parameters)).slice(0, 20).map(({ id }) => id);
+  }
+
   async discover(criteria: Criteria, round: number,
-    onSource?: (source: { parameters: Record<string, string>; listed: number; forwarded: number }) => void) {
-    const batches = await Promise.all(discoveryQueries(criteria, round, this.now().getUTCFullYear())
+    onSource?: (source: { parameters: Record<string, string>; listed: number; forwarded: number; ids: number[] }) => void,
+    year = this.now().getUTCFullYear()) {
+    const batches = await Promise.all(discoveryQueries(criteria, round, year)
       .map(async (parameters, index) => {
         const films = await this.list("discover/movie", parameters);
         const forwarded = index === 3 ? films.slice(0, 2) : films;
-        onSource?.({ parameters, listed: films.length, forwarded: forwarded.length });
+        onSource?.({ parameters, listed: films.length, forwarded: forwarded.length, ids: forwarded.map(({ id }) => id) });
         return forwarded;
       }));
     const ids = new Set<number>();
@@ -225,6 +230,8 @@ export class TmdbClient {
         ...(movie.release_dates?.results.flatMap(({ release_dates }) => release_dates
           .filter(({ type }) => type >= 1 && type <= 3).map(({ release_date }) => yearOf(release_date))) ?? []),
       ].filter((year): year is number => year !== undefined))].sort((a, b) => a - b),
+      directorIds: movie.credits && [...new Set(movie.credits.crew.flatMap(({ id, job }) =>
+        job === "Director" && id !== undefined && id > 0 ? [id] : []))],
       fetchedAt: this.now().toISOString(),
       metadata: {
         minutes: movie.runtime && movie.runtime > 0 ? movie.runtime : undefined,

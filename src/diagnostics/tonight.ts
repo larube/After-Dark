@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { AcquisitionStrategy } from "../domain/acquisition-policy";
 import { filmFranchise } from "../domain/franchises";
 import { engineVersion, tonightAffinityModel, tonightRanking, type Film, type diagnoseRecommendation } from "../domain/recommendation";
 import { normalizeTitle } from "../domain/ratings";
@@ -11,9 +12,18 @@ export type Acquisition = {
   before: number;
   after: number;
   connection: Recommendation["connection"];
-  sources: { parameters: Record<string, string>; listed: number; forwarded: number }[];
+  sources: { kind?: string; parameters: Record<string, string>; listed: number; forwarded: number; ids?: number[] }[];
+  pool?: {
+    strategy: AcquisitionStrategy;
+    before: { beforeRotation: number; afterRotation: number };
+    after: { beforeRotation: number; afterRotation: number };
+    target: number;
+    stop: "target" | "budget" | "low-yield" | "no-new-candidates" | "tmdb-unavailable" | "unconfigured" | "plan-complete";
+    discoveryRequests: number;
+    detailRequests: number;
+  };
   discovered: number[];
-  lookups: { tmdbId: number; result: "fresh-cache" | "over-budget" | "interrupted" | "cached" | "unmatched" | "missing" | "failed" }[];
+  lookups: { tmdbId: number; result: "fresh-cache" | "over-budget" | "interrupted" | "cached" | "unmatched" | "missing" | "failed" | "excluded-local" | "director-mismatch" }[];
 };
 
 type Movie = Parameters<typeof filmFranchise>[0] & { id: number };
@@ -149,7 +159,11 @@ export function tonightMarkdown(report: TonightDiagnostic) {
     "## Acquisition et vivier", "",
     `Catalogue avant puis après acquisition : ${report.acquisition.before} → ${report.acquisition.after}. État TMDB : ${report.acquisition.connection}.`,
     `Identifiants renvoyés par Discover : ${report.acquisition.discovered.length}. Films correspondants dans le vivier réel : ${report.pool.foundByTmdb.count}. Films scorés après exclusions initiales : ${report.pool.scored.count}.`, "",
-    ...report.acquisition.sources.map(({ parameters, listed, forwarded }) => `- ${Object.entries(parameters).map(([key, value]) => `${key}=${value}`).join(" · ")} — ${listed} fiches valides, ${forwarded} transmises.`),
+    ...(report.acquisition.pool ? [
+      `Admissibles avant rotation : ${report.acquisition.pool.before.beforeRotation} → ${report.acquisition.pool.after.beforeRotation}. Après rotation : ${report.acquisition.pool.before.afterRotation} → ${report.acquisition.pool.after.afterRotation}.`,
+      `Appels Discover / détail : ${report.acquisition.pool.discoveryRequests} / ${report.acquisition.pool.detailRequests}. Stratégie : ${report.acquisition.pool.strategy}.`, "",
+    ] : []),
+    ...report.acquisition.sources.map(({ kind, parameters, listed, forwarded }) => `- ${kind ? kind + " · " : ""}${Object.entries(parameters).map(([key, value]) => `${key}=${value}`).join(" · ")} — ${listed} fiches valides, ${forwarded} transmises.`),
     "", "| Étape | Décennies (effectifs) | Genres les plus fréquents | Avis TMDB disponibles |",
     "| --- | --- | --- | ---: |",
     ...([["Catalogue après acquisition", report.pool.afterAcquisition], ["Correspondances Discover", report.pool.foundByTmdb],
