@@ -180,6 +180,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   size: number,
   trace?: Trace,
   experiment?: EditorialExperiment,
+  inspectPool?: (pool: { beforeRotation: number; afterRotation: number }) => void,
 ) {
   const editorial = { ...productionEditorialPolicy, ...experiment };
   const traits = buildAffinity(signals, undefined, model !== "current");
@@ -193,6 +194,7 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
   const selectable = scored.filter(({ convincing, categoryAccepted, periodMismatch }) => convincing && categoryAccepted && !periodMismatch);
   const available = scored.filter(({ film }) => !recent.has(film.id));
   let ranked = selectable.filter(({ film }) => !recent.has(film.id));
+  inspectPool?.({ beforeRotation: selectable.length, afterRotation: ranked.length });
   if (trace) {
     trace.base = [...available].sort((a, b) => b.score - a.score || a.film.id - b.film.id);
     trace.periodMismatch = new Set(scored.filter(({ periodMismatch }) => periodMismatch).map(({ film }) => film.id));
@@ -247,6 +249,14 @@ export function recommend(catalogue: Film[], signals: Signal[], criteria: Criter
   policy: CandidatePolicy = { referenceDate: todayUtc() }, model: TonightAffinityModel = "current", ranking: RankingPolicy = "relevance",
   preferences: TonightPreferences = tonightDefaults, size = 5) {
   return runRecommendation(catalogue, signals, criteria, recent, policy, model, ranking, preferences, size);
+}
+
+export function tonightPool(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,
+  policy: CandidatePolicy, preferences: TonightPreferences = tonightDefaults) {
+  let pool = { beforeRotation: 0, afterRotation: 0 };
+  runRecommendation(catalogue, signals, criteria, recent, policy, tonightAffinityModel, tonightRanking, preferences, 0,
+    undefined, undefined, (counts) => { pool = counts; });
+  return pool;
 }
 
 export function diagnoseRecommendation(catalogue: Film[], signals: Signal[], criteria: Criteria, recent: ReadonlySet<number>,

@@ -22,7 +22,7 @@ async function signature(path: string, optional = false) {
   }
 }
 
-export async function withLocalSnapshot<T>(filename: string, read: (db: CinemaDatabase) => Promise<T>): Promise<T> {
+export async function withSnapshotFile<T>(filename: string, use: (path: string) => Promise<T>): Promise<T> {
   const source = await realpath(filename);
   const snapshot = await mkdtemp(join(tmpdir(), "after-dark-diagnostic-"));
   try {
@@ -35,6 +35,14 @@ export async function withLocalSnapshot<T>(filename: string, read: (db: CinemaDa
     if (before.some((value, index) => value !== after[index])) {
       throw new Error("SQLite a changé pendant la copie. Quittez After Dark et relancez le diagnostic.");
     }
+    return await use(dbPath);
+  } finally {
+    await rm(snapshot, { recursive: true, force: true });
+  }
+}
+
+export async function withLocalSnapshot<T>(filename: string, read: (db: CinemaDatabase) => Promise<T>): Promise<T> {
+  return withSnapshotFile(filename, async (dbPath) => {
     const client = createClient({ url: pathToFileURL(dbPath).href });
     try {
       await client.execute("PRAGMA query_only = ON");
@@ -42,9 +50,7 @@ export async function withLocalSnapshot<T>(filename: string, read: (db: CinemaDa
     } finally {
       client.close();
     }
-  } finally {
-    await rm(snapshot, { recursive: true, force: true });
-  }
+  });
 }
 
 export function readLocalDatabase(filename: string): Promise<Input> {

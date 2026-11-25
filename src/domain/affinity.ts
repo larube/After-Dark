@@ -21,17 +21,22 @@ export type AffinityModel = typeof affinityModels[number];
 export type TonightAffinityModel = AffinityModel | "personal";
 type Trait = { sum: number; count: number; negativeCount?: number };
 
+export function signalValue(signal: Signal, qualitative = qualitativeWeights) {
+  const votes = signal.ratings.flatMap(({ numeric, qualitative: label }) => {
+    if (numeric !== undefined) return [(numeric - 6) / (numeric >= 6 ? 4 : 6)];
+    const weight = label && qualitative[normalizeTitle(label)];
+    return typeof weight === "number" ? [weight] : [];
+  });
+  const favorites = Number(signal.spontaneous) * 0.45 + Number(signal.memorable) * 0.25 + Number(signal.rewatch) * 0.2;
+  if (!votes.length && !favorites) return;
+  return (votes.length ? votes.reduce((sum, vote) => sum + vote, 0) / votes.length : 0) + favorites;
+}
+
 export function buildAffinity(signals: Signal[], qualitative = qualitativeWeights, trackNegative = false) {
   const traits = new Map<string, Trait>();
   for (const signal of signals) {
-    const votes = signal.ratings.flatMap(({ numeric, qualitative: label }) => {
-      if (numeric !== undefined) return [(numeric - 6) / (numeric >= 6 ? 4 : 6)];
-      const weight = label && qualitative[normalizeTitle(label)];
-      return typeof weight === "number" ? [weight] : [];
-    });
-    const favorites = Number(signal.spontaneous) * 0.45 + Number(signal.memorable) * 0.25 + Number(signal.rewatch) * 0.2;
-    if (!votes.length && !favorites) continue;
-    const value = (votes.length ? votes.reduce((sum, vote) => sum + vote, 0) / votes.length : 0) + favorites;
+    const value = signalValue(signal, qualitative);
+    if (value === undefined) continue;
     for (const id of new Set(features(signal.film.metadata).map((feature) => feature.id))) {
       const previous = traits.get(id) ?? { sum: 0, count: 0 };
       traits.set(id, {
