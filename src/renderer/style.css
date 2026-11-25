@@ -135,7 +135,7 @@ main { min-width: 0; max-width: 1380px; width: 100%; margin: 0 auto; padding: 0 
 .mood-fieldset legend {
   position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden;
 }
-.mood-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--gap); }
+.mood-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
 .mood {
   position: relative; isolation: isolate; display: flex; justify-content: center; align-items: end;
   min-height: 92px; padding: 27px 8px 8px; text-align: center; text-wrap: balance;
@@ -149,12 +149,14 @@ main { min-width: 0; max-width: 1380px; width: 100%; margin: 0 auto; padding: 0 
   filter: grayscale(1); transition: filter var(--motion);
 }
 .mood:hover::before { filter: grayscale(1) brightness(1.06); }
-.mood[data-mood="surprise"] { --still: url("./art/mood-surprise.webp"); }
-.mood[data-mood="tension"] { --still: url("./art/mood-tension.webp"); }
-.mood[data-mood="strange"] { --still: url("./art/mood-strange.webp"); }
-.mood[data-mood="laugh"] { --still: url("./art/mood-laugh.webp"); }
-.mood[data-mood="emotion"] { --still: url("./art/mood-emotion.webp"); }
-.mood[data-mood="immersion"] { --still: url("./art/mood-immersion.webp"); }
+.mood[data-category="personal"] { --still: url("./art/mood-surprise.webp"); }
+.mood[data-category="thriller"] { --still: url("./art/mood-tension.webp"); }
+.mood[data-category="horror"] { --still: url("./art/mood-strange.webp"); }
+.mood[data-category="comedy"] { --still: url("./art/mood-laugh.webp"); }
+.mood[data-category="drama"] { --still: url("./art/mood-emotion.webp"); }
+.mood[data-category="scifi"] { --still: url("./art/mood-immersion.webp"); }
+.mood[data-category="classics"] { --still: url("./art/cinema.webp"); }
+.mood[data-category="gems"] { --still: url("./art/margin.webp"); }
 .mood:hover { border-color: var(--paper); }
 .mood:has(input:checked) { border-color: var(--focus); }
 .mood:has(input:checked)::after {
@@ -347,9 +349,6 @@ summary:hover { color: var(--focus); }
 .enrichment progress { width: 100%; accent-color: var(--accent); display: block; margin: 8px 0 4px; }
 .enrichment p { font-size: .88rem; }
 
-@media (max-width: 950px) {
-  .mood-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 @media (max-width: 650px) {
   .shell { display: flex; flex-direction: column; }
   .sidebar { display: grid; gap: 7px; position: static; height: auto; padding: 8px 13px 7px; border-right: 0; border-bottom: 1px solid var(--border); }
@@ -372,6 +371,7 @@ summary:hover { color: var(--focus); }
     background-size: auto, auto, auto 100%;
   }
   .programme { grid-template-columns: minmax(0, 1fr); }
+  .mood-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mood { min-height: 65px; padding: 22px 5px 6px; font-size: .96rem; }
   .page-heading {
     background:
