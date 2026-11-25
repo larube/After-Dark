@@ -159,9 +159,10 @@ export class TmdbClient {
 
   async discover(criteria: Criteria, round: number,
     onSource?: (source: { parameters: Record<string, string>; listed: number; forwarded: number; ids: number[] }) => void,
-    year = this.now().getUTCFullYear()) {
-    const batches = await Promise.all(discoveryQueries(criteria, round, year)
+    year = this.now().getUTCFullYear(), budget?: { pages: number; onAttempt: () => void }) {
+    const batches = await Promise.all(discoveryQueries(criteria, round, year).slice(0, budget?.pages)
       .map(async (parameters, index) => {
+        budget?.onAttempt();
         const films = await this.list("discover/movie", parameters);
         const forwarded = index === 3 ? films.slice(0, 2) : films;
         onSource?.({ parameters, listed: films.length, forwarded: forwarded.length, ids: forwarded.map(({ id }) => id) });

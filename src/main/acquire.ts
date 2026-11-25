@@ -10,6 +10,8 @@ import type { Criteria } from "../shared/recommendation";
 import { acquisitionPlan, type AcquisitionQuery } from "./acquisition-plan";
 import { discoveryQueries, TmdbClient, TmdbError } from "./tmdb";
 
+export type AcquisitionBudget = Readonly<{ pages: number; details: number }>;
+
 type Catalogue = Awaited<ReturnType<typeof readCatalogue>>;
 const isFresh = (metadata: Record<string, unknown> | null, now: Date) => {
   const tmdb = metadata?.tmdb;
@@ -19,9 +21,10 @@ const isFresh = (metadata: Record<string, unknown> | null, now: Date) => {
 
 export async function acquireTonight(db: CinemaDatabase, state: Catalogue, criteria: Criteria, recent: ReadonlySet<number>,
   round: number, now: Date, getClient: () => Promise<TmdbClient | undefined>, preferences?: TonightPreferences,
-  options: { strategy?: AcquisitionStrategy; measure?: boolean } = {}) {
+  options: { strategy?: AcquisitionStrategy; measure?: boolean; budget?: AcquisitionBudget } = {}) {
   const strategy = options.strategy ?? "baseline";
-  const discoveryBudget = policy.discoveryRequests;
+  const discoveryBudget = options.budget?.pages ?? policy.discoveryRequests;
+  const detailBudget = options.budget?.details ?? policy.details;
   const observe = strategy === "profile" || options.measure !== false;
   const referenceDate = now.toISOString().slice(0, 10);
   let blocked = await franchiseExclusions(db, state.movies);
@@ -81,10 +84,11 @@ export async function acquireTonight(db: CinemaDatabase, state: Catalogue, crite
       };
 
       if (strategy === "baseline") {
-        lists = discoveryQueries(criteria, round, now.getUTCFullYear()).length;
-        const ids = await client.discover(criteria, round, (source) => report.sources.push(source), now.getUTCFullYear());
+        const budget = options.budget && { pages: discoveryBudget, onAttempt: () => { lists++; } };
+        if (!budget) lists = discoveryQueries(criteria, round, now.getUTCFullYear()).length;
+        const ids = await client.discover(criteria, round, (source) => report.sources.push(source), now.getUTCFullYear(), budget);
         ids.forEach(consider);
-        await hydrate(ids, policy.details);
+        await hydrate(ids, detailBudget);
         await reload(true);
       } else {
         const plan = acquisitionPlan(criteria, acquisitionProfile(state.catalogue, state.signals, state.movies), round, now.getUTCFullYear());
@@ -114,15 +118,15 @@ export async function acquireTonight(db: CinemaDatabase, state: Catalogue, crite
         const ordered = () => new Set(Array.from({ length: policy.pageSize }, (_, index) =>
           batches.flatMap((batch) => batch[index] === undefined ? [] : [batch[index]])).flat());
         await load(plan.initial);
-        await hydrate(ordered(), policy.firstDetails);
+        await hydrate(ordered(), Math.min(policy.firstDetails, detailBudget));
         if (after!.afterRotation < policy.poolTarget) {
           await load(plan.reserve);
-          await hydrate(ordered(), policy.details - attempted.size);
+          await hydrate(ordered(), detailBudget - attempted.size);
         }
       }
       stop = strategy === "profile" && after!.afterRotation >= policy.poolTarget ? "target"
         : !attempted.size ? "no-new-candidates"
-        : attempted.size === policy.details || lists === discoveryBudget ? "budget"
+        : attempted.size === detailBudget || lists === discoveryBudget ? "budget"
         : after && before && after.afterRotation <= before.afterRotation ? "low-yield" : "plan-complete";
       report.connection = attempted.size ? "online" : "cached";
     }

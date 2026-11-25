@@ -9,6 +9,7 @@ import { cacheFilm, readCatalogue, readHistory } from "../src/db/recommendations
 import { acquisitionMarkdown, compareAcquisition } from "../src/diagnostics/acquisition";
 import { acquisitionProfile } from "../src/domain/acquisition-profile";
 import { recommend, tonightAffinityModel, tonightRanking, type Film, type Signal } from "../src/domain/recommendation";
+import { finishBlindAcquisition, prepareBlindAcquisition } from "../src/diagnostics/acquisition-blind";
 import { acquireTonight } from "../src/main/acquire";
 import { acquisitionPlan } from "../src/main/acquisition-plan";
 import { TmdbClient, TmdbError, type TmdbFilm } from "../src/main/tmdb";
@@ -158,7 +159,7 @@ describe("acquisition guidée par le profil", () => {
       expect(profile.rounds.map(({ newFilms }) => newFilms)).toEqual([2, 0]);
       expect(profile.rounds[1].report.pool?.before).toEqual({ afterRotation: 0, beforeRotation: 2 });
       expect(profile.rounds[1].selected).toEqual([]);
-      expect(profile.summary).toMatchObject({ newFilms: 2, newAdmissible: 2, selectedFromAcquisition: 2, incomplete: 2 });
+      expect(profile.summary).toMatchObject({ newFilms: 2, newAdmissible: 2, selectedFromAcquisition: 2, uniqueSelectedAcquisitions: 2, incomplete: 2 });
       expect(profile.summary.newAffinity.count).toBe(2);
       expect(profile.summary.yieldPerRequest).toBe(2 / profile.summary.requests);
       expect((await readCatalogue(db)).catalogue).toEqual([]);
@@ -222,6 +223,79 @@ describe("acquisition guidée par le profil", () => {
         expect(rounds[2].selected).toEqual([]);
         expect(summary).toMatchObject({ newFilms: 12, newAdmissible: 12, selectedFromAcquisition: 12, incomplete: 2 });
       }
+    } finally {
+      close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+
+  it("borne les deux stratégies et distingue appels tentés, cache et échecs", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "after-dark-equal-budget-"));
+    const snapshot = join(directory, "test.sqlite");
+    const { db, close } = await openDatabase(snapshot, "drizzle");
+    try {
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/discover/movie")) {
+          return Response.json({ results: [{ id: 500, title: "Fiction" }, { id: 501, title: "Suite" }] });
+        }
+        return Response.json({ id: 500, title: "Fiction", genres: [{ id: 27, name: "Horreur" }],
+          release_date: "2005-01-01", vote_average: 8.2, vote_count: 150 });
+      });
+      const tmdb = new TmdbClient("test", fetcher, () => date);
+      const report = await compareAcquisition({
+        snapshot, date, client: async () => tmdb, categories: ["horror"], sessions: 1, budget: { pages: 1, details: 1 },
+      });
+      expect(report.perSessionBudget).toEqual({ pages: 1, details: 1 });
+      expect(report.budget).toEqual({ maximumDiscover: 2, maximumDetails: 2 });
+      expect(fetcher).toHaveBeenCalledTimes(4);
+      for (const { summary } of report.results[0].arms) {
+        expect(summary).toMatchObject({ discover: 1, details: 1, newAdmissible: 1, incomplete: 1,
+          costPerAdmissible: 2, costPerSelectedAcquisition: 2 });
+      }
+      fetcher.mockResolvedValue(new Response(null, { status: 429, headers: { "retry-after": "60" } }));
+      const initial = await readCatalogue(db);
+      for (const strategy of ["baseline", "profile"] as const) {
+        const { report } = await acquireTonight(db, initial, horror, new Set(), 0, date, async () => tmdb, undefined,
+          { strategy, budget: { pages: 1, details: 1 } });
+        expect(report).toMatchObject({ connection: "limited", pool: { discoveryRequests: 1, detailRequests: 0, stop: "tmdb-unavailable" } });
+      }
+      expect(fetcher).toHaveBeenCalledTimes(5);
+      expect((await readCatalogue(db)).catalogue).toEqual([]);
+      expect((await readHistory(db)).round).toBe(0);
+    } finally {
+      close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("prépare un questionnaire aveugle reproductible, exclut les titres communs et révèle seulement après les réponses", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "after-dark-blind-acquisition-"));
+    const snapshot = join(directory, "test.sqlite");
+    const { db, close } = await openDatabase(snapshot, "drizzle");
+    try {
+      const tmdb = client();
+      vi.spyOn(tmdb, "discover").mockResolvedValue([100, 101]);
+      vi.spyOn(tmdb, "discoverPage").mockResolvedValue([100, 102]);
+      vi.spyOn(tmdb, "film").mockImplementation(async (id) => remote(id));
+      const report = await compareAcquisition({ snapshot, date, client: async () => tmdb, categories: ["horror"], sessions: 2 });
+      const packet = prepareBlindAcquisition(report, "fixture-secret");
+      expect(prepareBlindAcquisition(report, "fixture-secret")).toEqual(packet);
+      expect(packet.markdown).not.toMatch(/baseline|profile|Film 100|fixture-secret/);
+      expect(packet.markdown).toContain("Film 101");
+      expect(packet.markdown).toContain("Film 102");
+      expect(Object.values(packet.responses.answers)).toEqual([null, null]);
+      expect(() => finishBlindAcquisition(packet.manifest, packet.responses)).toThrow("réponses complètes");
+      const answers = Object.fromEntries(Object.entries(packet.manifest.cards).map(([id, film]) =>
+        [id, film.title === "Film 101" ? "envie" : "informations"]));
+      const result = finishBlindAcquisition(packet.manifest, { ...packet.responses, answers });
+      expect(result.results.find(({ strategy }) => strategy === "baseline")?.byCategory.horror.envie).toBe(1);
+      expect(result.results.find(({ strategy }) => strategy === "profile")?.counts).toMatchObject({ informations: 1, non: 0 });
+      expect(() => finishBlindAcquisition(packet.manifest, { ...packet.responses, session: "0000000000000000", answers }))
+        .toThrow("correspondre");
+      expect((await readCatalogue(db)).catalogue).toEqual([]);
+      expect((await readHistory(db)).round).toBe(0);
     } finally {
       close();
       await rm(directory, { recursive: true, force: true });
