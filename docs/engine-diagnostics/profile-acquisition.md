@@ -46,3 +46,37 @@ Le JSON versionné `after-dark-acquisition-v2` contient les métriques cumulées
 Le verdict par catégorie compare le volume de nouveaux admissibles, le nombre de propositions, les répétitions, les séances incomplètes et le nombre d’appels. Il signale un bénéfice lorsque ces mesures évoluent uniquement dans un sens favorable et une régression lorsqu’elles évoluent uniquement dans un sens défavorable. Il reste indécis en présence d’un compromis, d’un résultat identique, d’une panne ou d’une exécution sans appels. Les écarts de durée, les distributions d’affinité et la diversité complètent le verdict. L’affinité calculée ne mesure pas la satisfaction.
 
 La comparaison alterne l’ordre des deux bras selon la catégorie. Les mêmes critères, le même instantané et la même date s’appliquent aux deux stratégies. Le budget de détail est identique. Le coût Discover peut différer car il fait partie de la stratégie testée. Les réponses réelles peuvent évoluer entre deux appels. Un cache sans crédits réalisateur ne permet pas d’isoler les effets du flux réalisateur. Les mesures sur un unique profil ne valident ni la pertinence utilisateur ni une activation générale.
+
+## Comparer à plafond commun
+
+La PR31 compare Pépites et Horreur sur le même instantané, aux plafonds de quatre et six pages. Quatre correspond au maximum historique. La référence garde ses sources habituelles et peut donc utiliser moins de pages que son plafond. Le nombre de détails est borné séparément, avec 18 par défaut. Un appel logique est compté à son lancement par la stratégie, y compris lorsque le client le refuse en période de limitation. Les requêtes HTTP et les appels logiques peuvent donc différer en cas d’erreur ou de quota.
+
+```sh
+audit="$(mktemp -d)"
+npm run diagnose:acquisition -- \
+  --sqlite "$HOME/Library/Application Support/After Dark/after-dark.sqlite" \
+  --date 2026-11-25 --output "$audit" \
+  --categories gems,horror --pages 4,6 --details 18 --sessions 6 --network
+```
+
+Chaque plafond produit un rapport JSON v3 et un Markdown distincts à partir de la même copie initiale. Les mesures de coût utilisent les appels effectivement tentés. Le coût par titre acquis et proposé compte les films distincts. Le total des propositions acquises compte aussi leurs réapparitions. Les renouvellements par rapport à la séance précédente et les réapparitions depuis le début du bras ont leurs propres compteurs.
+
+Pour les six catégories de contrôle, relancer sans `--network` avec `--categories personal,classics,comedy,thriller,drama,scifi --pages 4` et un nouveau dossier. Le contrôle hors ligne vérifie que le classement et la rotation restent identiques quand le vivier est commun. Les tests exploitent en plus un TMDB simulé avec réponses fixes, détail borné et refus HTTP 429. Un essai réel ne peut figer ni les réponses TMDB ni leurs latences.
+
+## Évaluation qualitative à l’aveugle
+
+```sh
+questionnaire="$(mktemp -d)"
+npm run diagnose:acquisition-blind -- \
+  --report "$audit/acquisition-audit-pages-4.json" --output "$questionnaire"
+```
+
+Lire seulement `questionnaire.md` et remplir `reponses.json`. Les réponses peuvent être complétées en plusieurs fois. Le fichier caché `.cle-privee.json` contient la correspondance. La personne qui donne son avis doit éviter ce fichier et les rapports techniques avant la fin. Le masquage est prévu pour un protocole local coopératif. Une graine privée peut être fournie avec `--seed` pour reproduire le même ordre et la même attribution à partir du même rapport. Si elle est absente, la commande génère une graine aléatoire.
+
+Le questionnaire inclut un seul vote par film. Les titres présents dans les deux bras sur n’importe quelle séance du rapport sont écartés, même si leurs rangs ou catégories diffèrent. Les groupes peuvent avoir des tailles différentes. Pour éviter les doubles votes en comparant plusieurs plafonds, utiliser un seul questionnaire comme évaluation principale. Le synopsis et les raisons proviennent de la sélection elle-même.
+
+```sh
+npm run diagnose:acquisition-blind -- --output "$questionnaire" --reveal
+```
+
+La révélation exige une réponse valide pour chaque fiche. Elle écrit un bilan par groupe et catégorie dans le dossier privé et laisse la décision d’activation à la revue humaine. Les réponses « Déjà vu » et « Informations insuffisantes » sont comptabilisées séparément. Les fichiers restent locaux et ne sont pas lus par l’application.
