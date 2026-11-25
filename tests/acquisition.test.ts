@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import { openDatabase } from "../src/db/client";
 import { saveFeedback } from "../src/db/feedback";
 import { setFranchisePreference } from "../src/db/franchises";
-import { cacheFilm, readCatalogue } from "../src/db/recommendations";
-import { compareAcquisition } from "../src/diagnostics/acquisition";
+import { cacheFilm, readCatalogue, readHistory } from "../src/db/recommendations";
+import { acquisitionMarkdown, compareAcquisition } from "../src/diagnostics/acquisition";
 import { acquisitionProfile } from "../src/domain/acquisition-profile";
 import { recommend, tonightAffinityModel, tonightRanking, type Film, type Signal } from "../src/domain/recommendation";
 import { acquireTonight } from "../src/main/acquire";
@@ -152,16 +152,80 @@ describe("acquisition guidée par le profil", () => {
       vi.spyOn(tmdb, "discoverPage").mockResolvedValue([40, 41]);
       vi.spyOn(tmdb, "film").mockImplementation(async (id) => remote(id));
       const { results: [{ arms: [baseline, profile] }] } = await compareAcquisition({
-        snapshot, date, client: async () => tmdb, categories: ["horror"],
+        snapshot, date, client: async () => tmdb, categories: ["horror"], sessions: 2,
       });
       expect(baseline.rounds.map(({ newFilms }) => newFilms)).toEqual([1, 0]);
       expect(profile.rounds.map(({ newFilms }) => newFilms)).toEqual([2, 0]);
       expect(profile.rounds[1].report.pool?.before).toEqual({ afterRotation: 0, beforeRotation: 2 });
       expect(profile.rounds[1].selected).toEqual([]);
+      expect(profile.summary).toMatchObject({ newFilms: 2, newAdmissible: 2, selectedFromAcquisition: 2, incomplete: 2 });
+      expect(profile.summary.newAffinity.count).toBe(2);
+      expect(profile.summary.yieldPerRequest).toBe(2 / profile.summary.requests);
       expect((await readCatalogue(db)).catalogue).toEqual([]);
+      expect(await readHistory(db)).toEqual({ round: 0, recent: new Set() });
     } finally {
       close();
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("conserve la rotation sur six séances et compte les retours au-delà de l’historique récent", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "after-dark-long-acquisition-"));
+    const snapshot = join(directory, "test.sqlite");
+    const { db, close } = await openDatabase(snapshot, "drizzle");
+    try {
+      for (let id = 100; id < 140; id++) await cacheFilm(db, remote(id));
+      const options = { snapshot, date, client: async () => undefined, categories: ["horror"] as const };
+      const args = { ...options, categories: [...options.categories] };
+      const report = await compareAcquisition(args);
+      const { arms, decision, differences } = report.results[0];
+      expect(report.sessions).toBe(6);
+      expect(report.budget).toEqual({ maximumDiscover: 60, maximumDetails: 216 });
+      expect(decision.verdict).toBe("indecis");
+      for (const { rounds, summary } of arms) {
+        expect(rounds.map((round) => round.selected.length)).toEqual([10, 10, 10, 10, 10, 10]);
+        expect(summary).toMatchObject({ newFilms: 0, selectedFromAcquisition: 0, repeated: 20,
+          recentSelected: 0, incomplete: 0, yieldPerRequest: null, eligibleHiddenByRotation: 120 });
+        expect(summary.selectionDiversity).toMatchObject({ decades: 1, languages: 1, genres: 1 });
+      }
+      expect(differences.every(({ profileOnly, baselineOnly }) => !profileOnly.length && !baselineOnly.length)).toBe(true);
+      const replay = await compareAcquisition(args);
+      expect(replay.results.map(({ arms }) => arms.map(({ rounds }) => rounds.map(({ selected }) => selected))))
+        .toEqual([arms.map(({ rounds }) => rounds.map(({ selected }) => selected))]);
+      expect(acquisitionMarkdown(report, false)).toContain("6 séances par catégorie et stratégie");
+      expect((await readCatalogue(db)).catalogue).toHaveLength(40);
+      expect((await readHistory(db)).round).toBe(0);
+      for (const sessions of [0, 1.5, 21]) await expect(compareAcquisition({ ...args, sessions })).rejects.toThrow("entre 1 et 20");
+    } finally {
+      close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("distingue les acquisitions sélectionnées plus tard du catalogue initial", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "after-dark-acquisition-origin-"));
+    const snapshot = join(directory, "test.sqlite");
+    const { db, close } = await openDatabase(snapshot, "drizzle");
+    try {
+      await cacheFilm(db, remote(9));
+      const tmdb = client();
+      const ids = Array.from({ length: 12 }, (_, index) => 100 + index);
+      vi.spyOn(tmdb, "discover").mockResolvedValue(ids);
+      vi.spyOn(tmdb, "discoverPage").mockResolvedValue(ids);
+      vi.spyOn(tmdb, "film").mockImplementation(async (id) => remote(id));
+      const { results: [{ arms }] } = await compareAcquisition({
+        snapshot, date, client: async () => tmdb, categories: ["horror"], sessions: 3,
+      });
+      for (const { rounds, summary } of arms) {
+        expect(rounds[0].selected.filter(({ origin }) => origin === "initial")).toHaveLength(1);
+        expect(rounds[1].selected.map(({ origin }) => origin)).toEqual(Array(3).fill("acquired-earlier"));
+        expect(rounds[2].selected).toEqual([]);
+        expect(summary).toMatchObject({ newFilms: 12, newAdmissible: 12, selectedFromAcquisition: 12, incomplete: 2 });
+      }
+    } finally {
+      close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
 });
