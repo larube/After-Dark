@@ -1,4 +1,4 @@
-import { criteriaSchema, type Criteria } from "../shared/recommendation";
+import { criteriaSchema, type SelectionCategory } from "../shared/recommendation";
 
 export const durations = [
   [90, "1 h 30"], [105, "1 h 45"], [120, "2 h"],
@@ -19,10 +19,10 @@ export const defaultFilters: SessionFilters = {
   countriesRequired: false, languagesRequired: false,
 };
 
-export function readCriteria(filters: SessionFilters, mood: Criteria["mood"]) {
+export function readCriteria(filters: SessionFilters, selectionCategory: SelectionCategory) {
   const { duration, avoid, countries, languages, countriesRequired, languagesRequired } = filters;
   return criteriaSchema.safeParse({
-    mood,
+    mood: "surprise", selectionCategory,
     maxMinutes: duration ? durations.find(([minutes]) => String(minutes) === duration)?.[0] ?? NaN : undefined,
     avoid: avoid || undefined,
     preferredCountries: countriesRequired ? [] : countries,

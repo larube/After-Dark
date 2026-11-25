@@ -113,7 +113,7 @@ export const plannedViewings = sqliteTable("planned_viewings", {
 export const moodSessions = sqliteTable("mood_sessions", {
   id: integer().primaryKey(),
   date: text().notNull(),
-  criteria: text({ mode: "json" }).$type<Omit<Mood, "date">>().notNull(),
+  criteria: text({ mode: "json" }).$type<Omit<Mood, "date"> & Pick<Criteria, "selectionCategory">>().notNull(),
 });
 
 export const recommendationHistory = sqliteTable("recommendation_history", {

@@ -66,6 +66,9 @@ export function tonightDiagnostic(input: {
     return {
       id: film.id, tmdbId, title: film.title, year: film.year, genres: film.metadata.genres,
       reputation: film.metadata.reputation ?? null,
+      ...(input.criteria.selectionCategory === "gems" ? {
+        popularity: film.metadata.popularity ?? null, lessExposedThan: row.lessExposedThan ?? null,
+      } : {}),
       acquisition: tmdbId === null ? "local-only" : acquisitionById.get(tmdbId) ?? (movie?.metadata?.tmdb ? "previously-cached" : "local-tmdb-id"),
       baseRank: row.rank, score: row.score, contributions: row.contributions, affinity: row.affinity,
       mood: row.mood ?? null, avoided: row.avoided ?? null, steps,
@@ -113,6 +116,7 @@ const causesFr: Record<string, string> = {
   seen: "déjà vu", dismissed: "refus explicite", country: "pays requis", language: "langue requise",
   duration: "durée maximale", content: "politique de contenu", blocked: "franchise exclue",
   recent: "historique récent", weakEvidence: "indices insuffisants", periodMismatch: "exception de période insuffisamment étayée",
+  genre: "hors genre", categoryEvidence: "indices de catégorie insuffisants",
   periodLimit: "limite d’exceptions de période",
 };
 const cell = (value: string | number) => String(value).replace(/[\r\n]+/g, " ")
@@ -141,7 +145,7 @@ export function tonightMarkdown(report: TonightDiagnostic) {
   ].join("\n");
   return [
     "# Diagnostic de la séance « Ce soir »", "",
-    `Séance UTC ${report.date} · moteur ${report.engineVersion} · humeur ${report.criteria.mood}`, "",
+    `Séance UTC ${report.date} · moteur ${report.engineVersion} · ${report.criteria.selectionCategory ? `catégorie ${report.criteria.selectionCategory}` : `humeur ${report.criteria.mood}`}`, "",
     "## Acquisition et vivier", "",
     `Catalogue avant puis après acquisition : ${report.acquisition.before} → ${report.acquisition.after}. État TMDB : ${report.acquisition.connection}.`,
     `Identifiants renvoyés par Discover : ${report.acquisition.discovered.length}. Films correspondants dans le vivier réel : ${report.pool.foundByTmdb.count}. Films scorés après exclusions initiales : ${report.pool.scored.count}.`, "",

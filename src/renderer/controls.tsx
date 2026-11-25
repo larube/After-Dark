@@ -1,17 +1,19 @@
 import { useId, useRef, useState } from "react";
-import { moods, type Criteria } from "../shared/recommendation";
+import { moods, selectionCategories, type SelectionCategory } from "../shared/recommendation";
 
 import { defaultFilters, durations, type SessionFilters } from "./criteria";
 
-export const moodOrder = ["surprise", "tension", "strange", "laugh", "emotion", "immersion"] as const;
-export function MoodSelector({ value, onChange, busy }: {
-  value: Criteria["mood"]; onChange: (value: Criteria["mood"]) => void; busy: boolean;
+const moodOrder = ["surprise", "tension", "strange", "laugh", "emotion", "immersion"] as const;
+export const selectionCategoryOrder = Object.keys(selectionCategories) as SelectionCategory[];
+
+export function CategorySelector({ value, onChange, busy }: {
+  value: SelectionCategory; onChange: (value: SelectionCategory) => void; busy: boolean;
 }) {
   return <fieldset className="mood-fieldset" disabled={busy}>
-    <legend>Votre humeur</legend>
-    <div className="mood-grid">{moodOrder.map((mood) => <label className="mood" data-mood={mood} key={mood}>
-      <input name="mood" type="radio" value={mood} checked={value === mood} onChange={() => onChange(mood)} />
-      <span>{mood === "immersion" ? "Immersif" : moods[mood]}</span>
+    <legend>Catégorie de sélection</legend>
+    <div className="mood-grid">{selectionCategoryOrder.map((category) => <label className="mood" data-category={category} key={category}>
+      <input name="selection-category" type="radio" value={category} checked={value === category} onChange={() => onChange(category)} />
+      <span>{selectionCategories[category]}</span>
       <span className="mood-check" aria-hidden="true">✓</span>
     </label>)}</div>
   </fieldset>;

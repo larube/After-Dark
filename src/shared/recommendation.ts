@@ -6,15 +6,26 @@ export const moods = {
   strange: "Étrange / dérangeant", emotion: "Émotion", immersion: "Film prenant et immersif",
 } as const;
 
+export const selectionCategories = {
+  personal: "Pour moi", classics: "Cultes", gems: "Pépites", comedy: "Comédie",
+  thriller: "Thriller", drama: "Drame", horror: "Horreur", scifi: "SF / Fantastique",
+} as const;
+export type SelectionCategory = keyof typeof selectionCategories;
+
 const mood = z.enum(["surprise", "laugh", "tension", "strange", "emotion", "immersion"]);
 const codes = z.array(z.string().regex(/^[A-Z]{2}$/)).max(20);
 const languages = z.array(z.string().regex(/^[a-z]{2}$/)).max(20);
-export const criteriaSchema = z.strictObject({
+export const legacyCriteriaSchema = z.strictObject({
   mood, maxMinutes: z.number().int().min(1).max(600).optional(),
   energy: z.enum(["low", "high"]).optional(),
   avoid: mood.exclude(["surprise"]).optional(),
   preferredCountries: codes, requiredCountries: codes,
   preferredLanguages: languages, requiredLanguages: languages,
+});
+export const criteriaSchema = legacyCriteriaSchema.extend({
+  selectionCategory: z.enum(Object.keys(selectionCategories) as SelectionCategory[]).optional(),
+}).refine(({ mood, selectionCategory }) => !selectionCategory || mood === "surprise", {
+  path: ["mood"], message: "Une catégorie de Sélection utilise le classement personnalisé sans bonus d’ambiance.",
 });
 export type Criteria = z.infer<typeof criteriaSchema>;
 

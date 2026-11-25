@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { z } from "zod";
 import { tmdbReputationSchema, type Criteria, type Metadata } from "../shared/recommendation";
 import { tmdbCollectionSchema } from "../shared/franchises";
+import { classicMinimumAge, reputationPriorVotes, selectionGenre } from "../domain/selection-category";
 import { normalizeTitle } from "../domain/ratings";
 
 const idSchema = z.number().int().positive();
@@ -53,7 +54,27 @@ export function discoveryQueries(criteria: Criteria, round: number, year: number
   const page = String(1 + Math.floor(round / eras.length) % 4);
   const moodGenres: Record<string, string> = criteria.mood === "surprise" ? {} : { with_genres: discoveryGenres[criteria.mood] };
 
-  const base = { ...bounds, ...moodGenres, page, "vote_count.gte": "35" };
+  const genre = selectionGenre(criteria.selectionCategory);
+  const genreBounds: Record<string, string> = genre ? { with_genres: genre.ids.join("|") } : {};
+  const base = { ...bounds, ...moodGenres, ...genreBounds, page, "vote_count.gte": "35" };
+  if (criteria.selectionCategory === "classics") {
+    const lastYear = year - classicMinimumAge;
+    const era = [1970, 1980, 1990, 2000, 2010, 1900][round % eras.length];
+    const eraEnd = Math.min(era === 1900 ? 1969 : era + 9, lastYear);
+    const repertoire = { ...base, "vote_count.gte": String(reputationPriorVotes) };
+    return [
+      { ...repertoire, sort_by: "vote_count.desc", "primary_release_date.lte": lastYear + "-12-31" },
+      ...(eraEnd >= era ? [{ ...repertoire, sort_by: "vote_average.desc",
+        "primary_release_date.gte": era + "-01-01", "primary_release_date.lte": eraEnd + "-12-31" }] : []),
+    ];
+  }
+  if (criteria.selectionCategory === "gems") {
+    return [
+      { ...base, sort_by: "popularity.asc", "vote_count.gte": String(reputationPriorVotes), "vote_average.gte": "6.5" },
+      { ...base, sort_by: "vote_average.desc", "vote_count.gte": String(reputationPriorVotes), "vote_count.lte": "1500",
+        "primary_release_date.gte": start + "-01-01", "primary_release_date.lte": (start === 2020 ? year : start + 9) + "-12-31" },
+    ];
+  }
   const regions = [...new Set([...criteria.requiredCountries, ...criteria.preferredCountries])];
   const languages = [...new Set([...criteria.requiredLanguages, ...criteria.preferredLanguages])];
   const modernFloor = { "primary_release_date.gte": "1970-01-01" };
@@ -61,7 +82,7 @@ export function discoveryQueries(criteria: Criteria, round: number, year: number
   return [
     { ...base, ...modernFloor, sort_by: "popularity.desc" },
     { ...base, sort_by: "vote_average.desc", "primary_release_date.gte": start + "-01-01", "primary_release_date.lte": (start === 2020 ? year : start + 9) + "-12-31" },
-    { ...bounds, ...modernFloor, page, sort_by: "vote_average.desc", "vote_count.gte": "25", "vote_count.lte": "1500",
+    { ...bounds, ...genreBounds, ...modernFloor, page, sort_by: "vote_average.desc", "vote_count.gte": "25", "vote_count.lte": "1500",
       ...(regions.length ? { with_origin_country: regions[round % regions.length] } : {}),
       ...(languages.length ? { with_original_language: languages[round % languages.length] } : {}),
     },

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode, type FormEvent } from "react";
-import { selectionSize, type Criteria, type Recommendation } from "../shared/recommendation";
-import { FilterPanel, MoodSelector } from "./controls";
+import { selectionSize, type Criteria, type Recommendation, type SelectionCategory } from "../shared/recommendation";
+import { CategorySelector, FilterPanel } from "./controls";
 import { defaultFilters, readCriteria } from "./criteria";
 import { Results } from "./results";
 
 export function Tonight({ ready, onComplete, filmActions }: {
   ready: boolean; onComplete: () => void; filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
 }) {
-  const [mood, setMood] = useState<Criteria["mood"]>("surprise");
+  const [category, setCategory] = useState<SelectionCategory>("personal");
   const [filters, setFilters] = useState(defaultFilters);
   const [result, setResult] = useState<Recommendation>();
   const [selectionNumber, setSelectionNumber] = useState(0);
@@ -63,7 +63,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = readCriteria(filters, mood);
+    const parsed = readCriteria(filters, category);
     if (!parsed.success) {
       setError("Les critères de séance sont invalides. Essayez de les réinitialiser.");
       return;
@@ -77,7 +77,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
       <header className="hero">
         <h1>Sélection</h1>
       </header>
-      <MoodSelector value={mood} onChange={setMood} busy={loading} />
+      <CategorySelector value={category} onChange={setCategory} busy={loading} />
       <button className="button button-primary" type="submit" disabled={loading || !ready}>
         <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : `Découvrir ${selectionSize} films`}
       </button>
@@ -86,7 +86,7 @@ export function Tonight({ ready, onComplete, filmActions }: {
         <FilterPanel busy={loading} value={filters} onChange={setFilters} />
       </details>
     </form>
-    <Results headingRef={resultsHeading} result={result} posters={posters} selectionNumber={selectionNumber} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
+    <Results category={submitted?.selectionCategory} headingRef={resultsHeading} result={result} posters={posters} selectionNumber={selectionNumber} loading={loading} ready={ready} error={error} filmActions={filmActions} repeat={(allowRecent) => {
       if (submitted) void request(submitted, allowRecent);
     }} />
   </>;

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ipc } from "../src/shared/ipc";
 import { recommendationSchema } from "../src/shared/recommendation";
-import { FilterPanel, MoodSelector, moodOrder } from "../src/renderer/controls";
+import { CategorySelector, FilterPanel, selectionCategoryOrder } from "../src/renderer/controls";
 import { defaultFilters, durations, readCriteria } from "../src/renderer/criteria";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "../src/renderer/feedback";
 import { Discovery } from "../src/renderer/discovery";
@@ -12,17 +12,17 @@ import { Tonight } from "../src/renderer/tonight";
 import { AppShell } from "../src/renderer/shell";
 
 describe("Interface Neon Underground", () => {
-  it("préserve les six radios natives et leur sélection", () => {
-    const html = renderToStaticMarkup(createElement(MoodSelector, { value: "strange", onChange() {}, busy: false }));
-    for (const mood of moodOrder) expect(html).toContain(`value="${mood}"`);
-    expect(html.match(/type="radio"/g)).toHaveLength(6);
-    expect(html).toMatch(/checked="" value="strange"/);
+  it("préserve les huit radios natives et leur sélection", () => {
+    const html = renderToStaticMarkup(createElement(CategorySelector, { value: "horror", onChange() {}, busy: false }));
+    for (const category of selectionCategoryOrder) expect(html).toContain(`value="${category}"`);
+    expect(html.match(/type="radio"/g)).toHaveLength(8);
+    expect(html).toMatch(/checked="" value="horror"/);
   });
 
   it("ouvre la Sélection avec un seul bouton principal et les filtres repliés", () => {
     const html = renderToStaticMarkup(createElement(Tonight, { ready: true, onComplete() {}, filmActions: () => null }));
     expect(html).toContain("<h1>Sélection</h1>");
-    expect(html).toMatch(/checked="" value="surprise"\/><span>Surprends-moi<\/span>/);
+    expect(html).toMatch(/checked="" value="personal"\/><span>Pour moi<\/span>/);
     expect(html.match(/type="submit"/g)).toHaveLength(1);
     expect(html).toMatch(/<fieldset class="mood-fieldset".*<\/fieldset><button[^>]*type="submit"[^>]*>.*Découvrir 10 films.*<details class="selection-refine"><summary>Affiner/);
     const shell = renderToStaticMarkup(createElement(AppShell, {
@@ -45,31 +45,31 @@ describe("Interface Neon Underground", () => {
   it.each(durations)("convertit la durée %i vers un plafond en minutes", (minutes, label) => {
     const html = renderToStaticMarkup(createElement(FilterPanel, { value: defaultFilters, busy: false, onChange() {} }));
     expect(html).toMatch(new RegExp(`type="radio"[^>]*value="${minutes}"[^>]*>[^<]*${label}`));
-    expect(readCriteria({ ...defaultFilters, duration: String(minutes) }, "laugh").data?.maxMinutes).toBe(minutes);
+    expect(readCriteria({ ...defaultFilters, duration: String(minutes) }, "comedy").data?.maxMinutes).toBe(minutes);
   });
 
   it("laisse la séance sans restriction par défaut et ne transmet pas d’énergie", () => {
-    expect(readCriteria(defaultFilters, "surprise").data).toEqual({
-      mood: "surprise", maxMinutes: undefined, avoid: undefined,
+    expect(readCriteria(defaultFilters, "personal").data).toEqual({
+      mood: "surprise", selectionCategory: "personal", maxMinutes: undefined, avoid: undefined,
       preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
     });
-    expect(readCriteria({ ...defaultFilters, duration: "110" }, "surprise").success).toBe(false);
+    expect(readCriteria({ ...defaultFilters, duration: "110" }, "personal").success).toBe(false);
   });
 
   it("sérialise plusieurs pays et langues dans leurs champs respectifs et garde les choix entre recherches", () => {
     const selection = { ...defaultFilters, countries: ["FR", "ES"], languages: ["en", "ja"], duration: "120", avoid: "tension" };
-    const preferred = readCriteria(selection, "laugh");
+    const preferred = readCriteria(selection, "comedy");
     expect(preferred.data).toMatchObject({
       preferredCountries: ["FR", "ES"], requiredCountries: [],
       preferredLanguages: ["en", "ja"], requiredLanguages: [], maxMinutes: 120, avoid: "tension",
     });
-    const required = readCriteria({ ...selection, countriesRequired: true, languagesRequired: true }, "laugh");
+    const required = readCriteria({ ...selection, countriesRequired: true, languagesRequired: true }, "comedy");
     expect(required.data).toMatchObject({
       preferredCountries: [], requiredCountries: ["FR", "ES"],
       preferredLanguages: [], requiredLanguages: ["en", "ja"],
     });
     expect(ipc.recommend.request.safeParse([required.data, false]).success).toBe(true);
-    expect(readCriteria(selection, "laugh").data).toEqual(preferred.data);
+    expect(readCriteria(selection, "comedy").data).toEqual(preferred.data);
   });
 
   it("rend les filtres multiples et les puces amovibles", () => {
@@ -155,6 +155,17 @@ describe("Interface Neon Underground", () => {
     for (const value of ["TMDB est inaccessible", "Propositions récentes épuisées", "Revoir des propositions récentes"]) {
       expect(html).toContain(value);
     }
+  });
+
+  it("annonce une catégorie sans candidats et une sélection incomplète", () => {
+    const common = { connection: "cached", personalized: true };
+    const props = { category: "horror" as const, ready: true, loading: false, error: "", repeat() {}, filmActions: () => null };
+    const empty = recommendationSchema.parse({ ...common, status: "no-match", films: [] });
+    expect(renderToStaticMarkup(createElement(Results, { ...props, result: empty }))).toContain("Aucun film admissible pour « Horreur »");
+    const partial = recommendationSchema.parse({ ...common, status: "ready", films: [{
+      id: 1, title: "Cure", year: 1997, category: "safe", metadata: {}, reasons: [], warnings: [],
+    }] });
+    expect(renderToStaticMarkup(createElement(Results, { ...props, result: partial }))).toContain("sur 10 proposés pour « Horreur »");
   });
 
   it("rend les actions natives et annonce l’intention sélectionnée", () => {

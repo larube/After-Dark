@@ -72,6 +72,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
       captureDate: capture.date, capturedCatalogueSize: capture.acquisition.after, snapshotCatalogueSize: catalogue.length,
       catalogueWithVotes: catalogue.filter(({ id }) => hasVotes(id)).length, trainingSignals: signals.length,
       capturedTitles: capture.selected.map(({ title }) => title),
+      ...(capture.criteria.selectionCategory ? { selectionCategory: capture.criteria.selectionCategory } : {}),
       variants: variants.map(({ model, ranking }) => {
         const run = (pool: typeof catalogue) => diagnoseRecommendation(pool, signals, capture.criteria, recent, policy, model, ranking, capture.preferences, capture.size);
         const trace = run(catalogue);

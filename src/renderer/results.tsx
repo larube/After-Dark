@@ -1,5 +1,5 @@
+import { selectionCategories, selectionSize, type SelectionCategory, type Recommendation } from "../shared/recommendation";
 import { useRef, useState, type ReactNode, type Ref } from "react";
-import type { Recommendation } from "../shared/recommendation";
 import { FilmFranchise } from "./franchises";
 import { AllocineLink } from "./allocine";
 
@@ -85,7 +85,8 @@ function RecommendationCard({ film, actions, image }: {
   </article>;
 }
 
-export function Results({ headingRef, result, posters, selectionNumber, loading, ready, error, repeat, filmActions }: {
+export function Results({ category, headingRef, result, posters, selectionNumber, loading, ready, error, repeat, filmActions }: {
+  category?: SelectionCategory;
   headingRef?: Ref<HTMLHeadingElement>; result?: Recommendation; posters?: Record<number, string>; selectionNumber?: number; loading: boolean; ready: boolean; error: string; repeat: (allowRecent: boolean) => void;
   filmActions: (film: Recommendation["films"][number], loading: boolean) => ReactNode;
 }) {
@@ -100,7 +101,12 @@ export function Results({ headingRef, result, posters, selectionNumber, loading,
     {loading && <div className="loading-bar" aria-hidden="true" />}
     {result && <div aria-busy={loading}>
       {!result.personalized && <p className="profile-note">Votre profil a encore peu de signaux exploitables. La sélection s’appuie sur le catalogue et vos critères.</p>}
-      {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3><p>{empty[result.status][1]}</p></div>}
+      {result.status !== "ready" && <div className="empty"><h3>{empty[result.status][0]}</h3>
+        <p>{result.status === "no-match" && category && category !== "personal"
+          ? `Aucun film admissible pour « ${selectionCategories[category]} » avec les données et les filtres actuels.` : empty[result.status][1]}</p>
+      </div>}
+      {category && category !== "personal" && result.films.length > 0 && result.films.length < selectionSize &&
+        <p className="profile-note">{result.films.length} sur {selectionSize} proposés pour « {selectionCategories[category]} » avec les critères actuels et l’historique récent.</p>}
       {result.films.length > 0 && <div className="film-list" key={selectionNumber}>
         <div className="featured">
           <RecommendationCard key={result.films[0].id} film={result.films[0]} image={posters?.[result.films[0].id]} actions={filmActions(result.films[0], loading)} />

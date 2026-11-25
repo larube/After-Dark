@@ -3,7 +3,7 @@ import { franchiseKey, franchiseSchema } from "./franchises";
 import { allocineFilmSchema } from "./allocine";
 import { feedbackEntrySchema, feedbackRequestSchema } from "./feedback";
 import { labAnswerSchema, labPosition, labResultsSchema, labSessionId, labStateSchema } from "./lab";
-import { criteriaSchema, posterDataSchema, recommendationSchema } from "./recommendation";
+import { criteriaSchema, legacyCriteriaSchema, posterDataSchema, recommendationSchema } from "./recommendation";
 import { discoveryIdSchema, discoveryModeSchema, discoveryPosterSchema, discoveryViewSchema } from "./discovery";
 
 const count = z.number().int().nonnegative();
@@ -55,7 +55,7 @@ export const ipc = {
   discoveryExport: { channel: "discovery:export", request: z.tuple([discoveryModeSchema, discoveryIdSchema]),
     response: reply(z.enum(["saved", "cancelled", "inactive", "dialog_failed", "generation_failed", "write_failed"])) },
   labCurrent: { channel: "lab:current", request: z.tuple([]), response: reply(labStateSchema) },
-  labStart: { channel: "lab:start", request: z.tuple([criteriaSchema, z.boolean()]), response: reply(labStateSchema) },
+  labStart: { channel: "lab:start", request: z.tuple([legacyCriteriaSchema, z.boolean()]), response: reply(labStateSchema) },
   labPause: { channel: "lab:pause", request: z.tuple([labSessionId, z.boolean()]), response: reply(labStateSchema) },
   labAbandon: { channel: "lab:abandon", request: z.tuple([labSessionId]), response: reply(labStateSchema) },
   labAnswer: { channel: "lab:answer", request: z.tuple([labSessionId, labPosition, labAnswerSchema]), response: reply(labStateSchema) },
