@@ -4,12 +4,13 @@ import { franchiseExclusions } from "../db/franchises";
 import { readCatalogue } from "../db/recommendations";
 import { moodSessions, recommendationHistory } from "../db/schema";
 import { affinityModels, catalogueFrequency, type TonightAffinityModel } from "../domain/affinity";
-import { diagnoseRecommendation, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
+import { diagnoseRecommendation, engineVersion, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
+import { previousEditorialPolicy } from "../domain/selection-category";
 import { criteriaSchema, recentSelectionLimit, selectionSize } from "../shared/recommendation";
 import { withLocalSnapshot } from "./cli";
 
 const captureSchema = z.object({
-  format: z.literal("after-dark-tonight-v1"), date: z.iso.datetime(), criteria: criteriaSchema,
+  format: z.literal("after-dark-tonight-v1"), engineVersion: z.string().optional(), date: z.iso.datetime(), criteria: criteriaSchema,
   allowRecent: z.boolean(), acquisition: z.object({ after: z.number().int().nonnegative() }),
   selected: z.array(z.object({ id: z.number().int(), title: z.string() })).max(selectionSize),
   size: z.number().int().min(1).max(selectionSize).default(5),
@@ -24,6 +25,7 @@ const captureSchema = z.object({
 
 export async function compareTonightAffinity(sqlite: string, rawCapture: unknown) {
   const capture = captureSchema.parse(rawCapture);
+  const editorial = capture.engineVersion === engineVersion ? undefined : previousEditorialPolicy;
   return withLocalSnapshot(sqlite, async (db) => {
     const session = await db.select({ id: moodSessions.id }).from(moodSessions).where(eq(moodSessions.date, capture.date)).get();
     if (!session) throw Error("Séance absente de cette base.");
@@ -74,7 +76,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
       capturedTitles: capture.selected.map(({ title }) => title),
       ...(capture.criteria.selectionCategory ? { selectionCategory: capture.criteria.selectionCategory } : {}),
       variants: variants.map(({ model, ranking }) => {
-        const run = (pool: typeof catalogue) => diagnoseRecommendation(pool, signals, capture.criteria, recent, policy, model, ranking, capture.preferences, capture.size);
+        const run = (pool: typeof catalogue) => diagnoseRecommendation(pool, signals, capture.criteria, recent, policy, model, ranking, capture.preferences, capture.size, editorial);
         const trace = run(catalogue);
         const withoutVotes = run(masked);
         const top = trace.base.slice(0, 35);

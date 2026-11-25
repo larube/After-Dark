@@ -1,6 +1,6 @@
 # Auditer les catégories de Sélection
 
-L’audit compare les huit catégories sur une copie temporaire du même catalogue et du même profil. Il utilise le classement de Sélection 1.5.0, les mêmes exclusions et la même taille maximale de dix films. Les diagnostics consomment les traces de production, notamment les décisions éditoriales de Cultes et Pépites. Aucun accès réseau.
+L’audit compare les huit catégories sur une copie temporaire du même catalogue et du même profil. Il utilise le classement de Sélection en production, les mêmes exclusions et la même taille maximale de dix films. Les diagnostics consomment les traces de production, notamment les décisions éditoriales de Cultes et Pépites. Aucun accès réseau.
 
 ## Exécution locale
 
@@ -16,6 +16,8 @@ npm run diagnose:selection -- \
 La commande génère `selection-audit.md` et `selection-audit.json`. Ces fichiers contiennent des titres et des scores dérivés du profil. Gardez-les localement. Ils n’incluent ni les notes sources ni les secrets. La commande copie la base et son journal WAL, vérifie que la source n’a pas changé pendant la copie, puis ouvre la copie avec `PRAGMA query_only`. Si le contrôle détecte des écritures, quittez After Dark et réessayez. Les rapports existants sont protégés contre l’écrasement.
 
 Les critères par défaut sont ceux d’une Sélection sans filtre. Pour tester des filtres communs aux huit catégories, fournissez `--criteria <fichier.json>`, avec par exemple `{"mood":"surprise","preferredCountries":["FR"],"requiredCountries":[],"preferredLanguages":["fr"],"requiredLanguages":[]}`. Les options `maxMinutes` et `avoid` sont acceptées. La catégorie est remplacée pour chaque simulation.
+
+Pour comparer la politique éditoriale 1.5.0 à la production sur le même instantané, ajoutez `--editorial-production`. Ce mode écrit le rapport PR28 et l’audit Markdown de Sélection. Les variantes PR27 restent disponibles via `--editorial`. [Calibration et rejeu](editorial-calibration.md)
 
 ## Lecture du rapport
 

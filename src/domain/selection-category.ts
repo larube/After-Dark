@@ -40,22 +40,34 @@ export function exposureRanks(films: Film[]) {
   return ranks;
 }
 
-export type EditorialExperiment = {
-  classics?: { bonusScale: number; period: "current" | "admit" | "half" | "none" | "no-decade" };
-  gems?: { minimumAffinity: number | null; affinityScale?: number };
+export type EditorialPolicy = Readonly<{
+  classics: Readonly<{ bonusScale: number; period: "current" | "admit" | "half" | "none" | "no-decade" }>;
+  gems: Readonly<{ minimumAffinity: number | null; affinityScale?: number }>;
+}>;
+
+export type EditorialExperiment = Partial<EditorialPolicy>;
+
+export const previousEditorialPolicy: EditorialPolicy = {
+  classics: { bonusScale: 1, period: "current" },
+  gems: { minimumAffinity: 1 },
+};
+
+export const productionEditorialPolicy: EditorialPolicy = {
+  classics: { bonusScale: 0.25, period: "admit" },
+  gems: { minimumAffinity: 0.8 },
 };
 
 export function categoryEvidence(category: SelectionCategory | undefined, film: Film, referenceDate: string,
-  reputation: number, affinity: number, lessExposedThan: number | undefined, experiment?: EditorialExperiment) {
+  reputation: number, affinity: number, lessExposedThan: number | undefined, policy: EditorialPolicy) {
   const supported = (film.metadata.reputation?.count ?? 0) >= reputationPriorVotes;
   if (category === "classics") {
     const established = film.year !== null && film.year > 0 && Number(referenceDate.slice(0, 4)) - film.year >= classicMinimumAge;
     const checks = { established, votes: supported, reputation: reputation >= 1.5 };
-    return { accepted: Object.values(checks).every(Boolean), checks, boost: reputation * (experiment?.classics?.bonusScale ?? 1),
+    return { accepted: Object.values(checks).every(Boolean), checks, boost: reputation * policy.classics.bonusScale,
       reason: "Film sorti depuis au moins dix ans, avec des avis TMDB favorables et suffisamment nombreux." };
   }
   if (category === "gems") {
-    const checks = { votes: supported, reputation: reputation > 0, affinity: experiment?.gems?.minimumAffinity === null || affinity >= (experiment?.gems?.minimumAffinity ?? 1), popularity: (lessExposedThan ?? 0) >= 0.5 };
+    const checks = { votes: supported, reputation: reputation > 0, affinity: policy.gems.minimumAffinity === null || affinity >= policy.gems.minimumAffinity, popularity: (lessExposedThan ?? 0) >= 0.5 };
     return { accepted: Object.values(checks).every(Boolean), checks,
       boost: lessExposedThan ?? 0,
       reason: "Popularité TMDB dans la moitié basse du vivier renseigné, avec des avis favorables et des signaux personnels positifs." };

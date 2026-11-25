@@ -13,7 +13,7 @@ Les sorties privées `editorial-calibration.md` et `editorial-calibration.json` 
 
 ## Protocole
 
-Les poids et exclusions de production restent la référence. Le rapport calcule cette référence sans options expérimentales. Les variantes sont passées exclusivement à `diagnoseRecommendation`.
+Le mode PR27 utilise explicitement la politique 1.5.0 comme référence historique. Les variantes expérimentales sont passées à `diagnoseRecommendation`. Depuis la PR28, deux variantes servent aussi de politique par défaut du moteur 1.6.0.
 
 ### Cultes
 
@@ -40,3 +40,11 @@ La sélection suivante simulée ajoute les titres proposés à l’historique, t
 Les titres demandés servent uniquement à retrouver les fiches à inspecter. Les homonymes restent distincts. Les preuves proviennent des caractéristiques présentes localement, des statistiques de fréquence du catalogue et des valeurs d’apprentissage calculées par le moteur pour les films sources. Le rapport sépare le rang éditorial, les exclusions et le score d’affinité. Il ne valide pas l’exactitude des mots-clés ni l’indépendance de traits proches comme `friends` et `friendship`.
 
 Une différence sur quelques films peut découler de l’accumulation de traits proches, d’un étiquetage asymétrique ou d’un vivier trop étroit. La distinguer d’une préférence générale demande plusieurs instantanés et des jugements d’intérêt à l’aveugle. Les variantes restent expérimentales.
+
+## Production et rejeu historique · PR28
+
+La configuration 1.6.0 applique `admit / 25 %` à Cultes et le seuil 0,8 à Pépites. Les autres paramètres restent identiques. Le rollback consiste à restaurer `productionEditorialPolicy` à partir de `previousEditorialPolicy` et à versionner le changement. Les captures 1.5.0 se rejouent avec la politique historique. Les historiques existants gardent leur version enregistrée.
+
+Pour comparer la politique historique et la production sur un seul instantané, remplacez `--editorial` par `--editorial-production` et choisissez un nouveau dossier privé. Le rapport contient les listes et contributions avant/après, avec et sans rotation, ainsi qu’au tour suivant. Il inclut un contrôle avec les variantes retenues de PR27.
+
+Sur le profil réel, la nouvelle production a reproduit les résultats archivés des deux variantes. Ce contrôle porte sur le classement et la rotation, à catalogue local fixe. La validation de l’intérêt des titres en usage reste ouverte.

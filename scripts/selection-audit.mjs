@@ -4,19 +4,20 @@ import { createServer } from "vite";
 
 try {
   const { values } = parseArgs({ options: {
-    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" }, editorial: { type: "boolean" },
+    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" }, editorial: { type: "boolean" }, "editorial-production": { type: "boolean" },
   } });
   if (!values.sqlite || !values.output || !values.date) {
-    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>] [--editorial]");
+    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>] [--editorial | --editorial-production]");
   }
+  if (values.editorial && values["editorial-production"]) throw Error("Choisissez un seul mode éditorial.");
   const server = await createServer({ configFile: false, logLevel: "error",
     server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
   try {
 
     const criteria = values.criteria ? JSON.parse(await readFile(values.criteria, "utf8")) : undefined;
-    if (values.editorial) {
+    if (values.editorial || values["editorial-production"]) {
       const { writeEditorialAudit } = await server.ssrLoadModule("/src/diagnostics/editorial.ts");
-      await writeEditorialAudit({ ...values, criteria });
+      await writeEditorialAudit({ ...values, criteria, production: values["editorial-production"] });
     } else {
       const { writeSelectionAudit } = await server.ssrLoadModule("/src/diagnostics/selection.ts");
       await writeSelectionAudit({ ...values, criteria });
