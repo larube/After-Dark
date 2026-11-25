@@ -1,10 +1,11 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import type { CinemaDatabase } from "../db/client";
 import { franchiseExclusions } from "../db/franchises";
 import { readCatalogue, readHistory } from "../db/recommendations";
 import { diagnoseRecommendation, engineVersion, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
-import { matchesSelectionGenre } from "../domain/selection-category";
+import { matchesSelectionGenre, type EditorialExperiment } from "../domain/selection-category";
 import { decadeOf, tonightDefaults } from "../domain/tonight-preferences";
 import { discoveryQueries } from "../main/tmdb";
 import { criteriaSchema, recentSelectionLimit, selectionCategories, selectionSize, type Criteria, type SelectionCategory } from "../shared/recommendation";
@@ -29,16 +30,17 @@ function distribution(values: (number | undefined)[]) {
   return { known: known.length, total: values.length, min: quantile(0), median: quantile(0.5), max: quantile(1) };
 }
 
-export function auditSelection(snapshot: Snapshot, criteria: Criteria, referenceDate: string) {
+export function auditSelection(snapshot: Snapshot, criteria: Criteria, referenceDate: string,
+  options?: { experiment?: EditorialExperiment; category?: "classics" | "gems"; recentEntries?: number[] }) {
   const { catalogue, signals, recent, excludedIds, round } = snapshot;
   const policy = { referenceDate, excludedIds };
   const run = (input: Criteria, history: ReadonlySet<number>) =>
-    diagnoseRecommendation(catalogue, signals, input, history, policy, tonightAffinityModel, tonightRanking, tonightDefaults, selectionSize);
+    diagnoseRecommendation(catalogue, signals, input, history, policy, tonightAffinityModel, tonightRanking, tonightDefaults, selectionSize, options?.experiment);
   const byId = new Map(catalogue.map((film) => [film.id, film]));
   const neutral = { ...criteria, mood: "surprise" as const, selectionCategory: undefined };
   const year = Number(referenceDate.slice(0, 4));
   const overlap = (a: number[], b: number[]) => a.filter((id) => b.includes(id)).length;
-  const reports = categories.map((category) => {
+  const reports = (options?.category ? [options.category] : categories).map((category) => {
     const input = { ...neutral, selectionCategory: category };
     const unrotated = run(input, new Set());
     const rotated = run(input, recent);
@@ -67,13 +69,19 @@ export function auditSelection(snapshot: Snapshot, criteria: Criteria, reference
     const selections = (trace: Trace) => trace.result.films.map(({ id, title, year, metadata }, index) => {
       const score = base.get(id)!;
       return { id, title, year, genres: metadata.genres, reputation: metadata.reputation ?? null, popularity: metadata.popularity ?? null,
-        affinity: score.affinity.score, baseRankWithoutRotation: score.rank, contributions: score.contributions, score: score.score,
+        affinity: score.affinity.score, decadePenalty: trace.steps[index].ranking[0].decadePenalty, baseRankWithoutRotation: score.rank, contributions: score.contributions, score: score.score,
         diversity: trace.steps[index].ranking[0].penalty, finalScore: trace.steps[index].ranking[0].score };
     });
     const selected = selections(rotated);
     const withoutRotation = selections(unrotated);
     const admissible = eligible(unrotated);
+    const next = options?.recentEntries ? run(input,
+      new Set([...selected.map(({ id }) => id), ...options.recentEntries].slice(0, recentSelectionLimit))) : undefined;
     const state = {
+      next: next ? { admissible: eligible(next).length, status: next.result.status, selected: selections(next) } : undefined,
+      candidates: options ? admissible.map((id) => ({ id, title: byId.get(id)!.title, affinity: base.get(id)!.affinity.score })) : undefined,
+      categoryPassedButWeak: options ? unrotated.base.filter(({ id }) =>
+        !causes.get(id)?.categoryEvidence && causes.get(id)?.weakEvidence).length : undefined,
       category, status: rotated.result.status, admissible: summarize(admissible), withRotation: eligible(rotated).length,
       proposed: summarize(selected.map(({ id }) => id)), selected, withoutRotation,
       retained: overlap(selected.map(({ id }) => id), withoutRotation.map(({ id }) => id)),
@@ -188,16 +196,19 @@ export function selectionMarkdown(audit: Audit) {
 
 const defaultCriteria = { mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [] };
 
+export async function readSelectionSnapshot(db: CinemaDatabase) {
+  const { catalogue, signals, movies } = await readCatalogue(db);
+  const history = await readHistory(db, recentSelectionLimit);
+  const excludedIds = await franchiseExclusions(db, movies);
+  return { catalogue, signals, movies, excludedIds, ...history };
+}
+
 export async function writeSelectionAudit(options: { sqlite: string; output: string; date: string; criteria?: unknown }) {
   const date = z.iso.date().parse(options.date);
   const criteria = criteriaSchema.parse(options.criteria ?? defaultCriteria);
   if (criteria.mood !== "surprise") throw new Error("Utilisez mood: surprise et les filtres communs aux huit catégories.");
-  const audit = await withLocalSnapshot(options.sqlite, async (db) => {
-    const { catalogue, signals, movies } = await readCatalogue(db);
-    const history = await readHistory(db, recentSelectionLimit);
-    const excludedIds = await franchiseExclusions(db, movies);
-    return auditSelection({ catalogue, signals, excludedIds, ...history }, criteria, date);
-  });
+  const audit = await withLocalSnapshot(options.sqlite, async (db) =>
+    auditSelection(await readSelectionSnapshot(db), criteria, date));
   const directory = await reportDirectory(options.output, true);
   const write = (name: string, body: string) => writeFile(join(directory, name), body, { flag: "wx", mode: 0o600 });
   await write("selection-audit.md", selectionMarkdown(audit));
