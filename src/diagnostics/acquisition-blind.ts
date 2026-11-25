@@ -31,7 +31,7 @@ const responsesSchema = z.strictObject({
 });
 type Manifest = z.infer<typeof manifestSchema>;
 const safeText = (value: string) => value.replace(/[<>]/g, (char) => char === "<" ? "&lt;" : "&gt;")
-  .replace(/[\r\n]+/g, " ").replace(/[\\`*_\[\]]/g, "\\$&");
+  .replace(/[\r\n]+/g, " ").replace(/[\\`*_[\]]/g, "\\$&");
 
 export function prepareBlindAcquisition(comparison: AcquisitionComparison, secret: string) {
   const hash = (value: string) => createHmac("sha256", secret).update(value).digest("hex");
