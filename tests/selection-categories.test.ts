@@ -1,3 +1,4 @@
+import { previousEditorialPolicy } from "../src/domain/selection-category";
 import { compareEditorial, editorialMarkdown } from "../src/diagnostics/editorial";
 import { auditSelection, selectionMarkdown } from "../src/diagnostics/selection";
 import { describe, expect, it } from "vitest";
@@ -77,7 +78,7 @@ describe("catégories de Sélection", () => {
     expect(ids(cult)).toEqual([1]);
     expect(ids(gems)).toEqual([2]);
     expect(ids(trace(films, "personal"))).not.toEqual(ids(gems));
-    expect(cult.base.find(({ id }) => id === 1)?.contributions.selectionCategory).toBeCloseTo(18 / 7);
+    expect(cult.base.find(({ id }) => id === 1)?.contributions.selectionCategory).toBeCloseTo(18 / 28);
     expect(gems.base.find(({ id }) => id === 2)?.contributions.selectionCategory).toBe(0.6);
     expect(gems.exclusions.find(({ id }) => id === 5)?.causes.categoryEvidence).toBe(true);
     expect(trace([...films].reverse(), "gems").result).toEqual(gems.result);
@@ -122,7 +123,7 @@ describe("audit des catégories", () => {
   it("identifie une Pépite écartée par la popularité manquante et un Culte écarté par la période", () => {
     const catalogue = [film(1, ["Drama"], { matching: true }), film(2, ["Drama"], { year: 1965 })];
     const audit = auditSelection({ catalogue, signals, round: 3, recent: new Set(), excludedIds: new Set() },
-      criteria("personal"), policy.referenceDate);
+      criteria("personal"), policy.referenceDate, { experiment: previousEditorialPolicy });
     expect(audit.reports.find(({ category }) => category === "gems")?.nearMisses).toContainEqual(expect.objectContaining({
       title: "Film 1", failure: "popularity", popularity: null, weakEvidence: false,
     }));
@@ -157,7 +158,7 @@ describe("calibration éditoriale", () => {
     const baseline = run("current", 1);
     expect(ids(baseline)).toEqual([]);
     expect(baseline).toEqual(diagnoseRecommendation(films, signals, criteria("classics"), new Set([5]),
-      { ...policy, excludedIds: new Set([4]) }, tonightAffinityModel, tonightRanking, undefined, 10));
+      { ...policy, excludedIds: new Set([4]) }, tonightAffinityModel, tonightRanking, undefined, 10, previousEditorialPolicy));
     const half = run("half", 0.5);
     expect(ids(half)).toEqual([1]);
     expect(half.base[0].contributions.period).toBe(-0.4);
@@ -173,7 +174,7 @@ describe("calibration éditoriale", () => {
     const run = (minimumAffinity: number | null, affinityScale?: number) => diagnoseRecommendation(films, signals, criteria("gems"),
       new Set(), policy, tonightAffinityModel, tonightRanking, undefined, 10, { gems: { minimumAffinity, affinityScale } });
     expect(run(1)).toEqual(diagnoseRecommendation(films, signals, criteria("gems"), new Set(), policy,
-      tonightAffinityModel, tonightRanking, undefined, 10));
+      tonightAffinityModel, tonightRanking, undefined, 10, previousEditorialPolicy));
     const relaxed = run(null, 2);
     const weak = relaxed.exclusions.find(({ id }) => id === 1)!;
     expect(weak.causes).toMatchObject({ categoryEvidence: false, weakEvidence: true });

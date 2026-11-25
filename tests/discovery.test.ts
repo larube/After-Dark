@@ -161,7 +161,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.5.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.6.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });
@@ -299,12 +299,31 @@ describe("intégration TMDB et SQLite", () => {
     expect(comparison.variants).toHaveLength(6);
     expect(comparison.variants.at(-1)).toMatchObject({ matchesCapture: true, forbiddenSelections: 0 });
     const legacy = await compareTonightAffinity(join(folder, "cinema.sqlite"), {
-      ...report, size: undefined, recentLimit: undefined, selected: report.selected.slice(0, 5),
+      ...report, engineVersion: undefined, size: undefined, recentLimit: undefined, selected: report.selected.slice(0, 5),
     });
     expect(legacy.variants.at(-1)).toMatchObject({ matchesCapture: true, forbiddenSelections: 0 });
     const repeat = await findTonight(db, criteria, async () => client, now, true);
     expect(repeat.films).toEqual(result.films);
     expect(capture).toHaveBeenCalledOnce();
+  });
+
+  it("rejoue un diagnostic Cultes pré-calibration et reconnaît le nouveau moteur", async () => {
+    await importProfile(database.db, { version: 1, entries: [{
+      movie: { canonicalId: "classic:fixture", displayTitle: "Classique de test", year: 1954,
+        metadata: { reputation: { source: "TMDB", average: 9, count: 500 } } },
+      status: "unseen",
+    }] });
+    const capture = vi.fn<NonNullable<Parameters<typeof findTonight>[6]>>()
+      .mockResolvedValue(undefined);
+    const result = await findTonight(database.db, { ...criteria, mood: "surprise", selectionCategory: "classics" }, async () => undefined,
+      now, false, undefined, capture);
+    expect(result.films.map(({ title }) => title)).toEqual(["Classique de test"]);
+    const [report] = capture.mock.calls[0];
+    const path = join(folder, "cinema.sqlite");
+    const current = await compareTonightAffinity(path, report);
+    expect(current.variants.at(-1)).toMatchObject({ matchesCapture: true });
+    const old = await compareTonightAffinity(path, { ...report, engineVersion: "1.5.0", selected: [] });
+    expect(old.variants.at(-1)).toMatchObject({ matchesCapture: true, selected: [] });
   });
 
   it("respecte Retry-After sur 429 et distingue une authentification refusée", async () => {

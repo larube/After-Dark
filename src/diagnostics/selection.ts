@@ -31,7 +31,7 @@ function distribution(values: (number | undefined)[]) {
 }
 
 export function auditSelection(snapshot: Snapshot, criteria: Criteria, referenceDate: string,
-  options?: { experiment?: EditorialExperiment; category?: "classics" | "gems"; recentEntries?: number[] }) {
+  options?: { experiment?: EditorialExperiment; category?: "classics" | "gems"; recentEntries?: number[]; engineVersion?: string }) {
   const { catalogue, signals, recent, excludedIds, round } = snapshot;
   const policy = { referenceDate, excludedIds };
   const run = (input: Criteria, history: ReadonlySet<number>) =>
@@ -109,7 +109,7 @@ export function auditSelection(snapshot: Snapshot, criteria: Criteria, reference
   const personal = run({ ...neutral, selectionCategory: "personal" }, recent);
   const legacy = run(neutral, recent);
   return {
-    version: "selection-audit-v1", engineVersion, referenceDate, criteria: neutral, round, recent: recent.size,
+    version: "selection-audit-v1", engineVersion: options?.engineVersion ?? engineVersion, referenceDate, criteria: neutral, round, recent: recent.size,
     catalogue: catalogue.length, signals: signals.length, reports,
     personalParity: JSON.stringify(personal.result) === JSON.stringify(legacy.result)
       && JSON.stringify(personal.steps) === JSON.stringify(legacy.steps) && JSON.stringify(personal.base) === JSON.stringify(legacy.base),

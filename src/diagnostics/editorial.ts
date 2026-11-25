@@ -2,15 +2,16 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { desc } from "drizzle-orm";
+import type { CinemaDatabase } from "../db/client";
 import { movieTitles, recommendationHistory } from "../db/schema";
 import { affinityDetails, buildAffinity, catalogueFrequency, uniqueFeatures } from "../domain/affinity";
 import { classifyContent } from "../domain/candidate-quality";
 import { normalizeTitle } from "../domain/ratings";
-import { tonightAffinityModel } from "../domain/recommendation";
-import { matchesSelectionGenre, type EditorialExperiment } from "../domain/selection-category";
+import { engineVersion, previousEditorialEngineVersion, tonightAffinityModel } from "../domain/recommendation";
+import { matchesSelectionGenre, previousEditorialPolicy, type EditorialExperiment } from "../domain/selection-category";
 import { criteriaSchema, recentSelectionLimit, selectionCategories, type Criteria } from "../shared/recommendation";
 import { reportDirectory, withLocalSnapshot } from "./cli";
-import { auditSelection, readSelectionSnapshot } from "./selection";
+import { auditSelection, readSelectionSnapshot, selectionMarkdown } from "./selection";
 
 const targets = [
   ["Joyeux Halloween, Scooby-Doo !", "Happy Halloween, Scooby-Doo!"],
@@ -42,9 +43,9 @@ const overlap = <T extends { id: number }>(a: T[], b: { id: number }[]) => {
 };
 
 export function compareEditorial(snapshot: Snapshot, criteria: Criteria, date: string, aliases: { movieId: number; title: string }[], recentEntries: number[]) {
-  const baseline = auditSelection(snapshot, criteria, date, {});
+  const baseline = auditSelection(snapshot, criteria, date, { experiment: previousEditorialPolicy, engineVersion: previousEditorialEngineVersion });
   const variants = editorialVariants.map(({ category, name, experiment }) => {
-    const options = { category, experiment, recentEntries };
+    const options = { category, experiment, recentEntries, engineVersion: previousEditorialEngineVersion };
     const { reports: [report] } = auditSelection(snapshot, criteria, date, options);
     const original = baseline.reports.find((row) => row.category === category)!;
     const changed = <T extends { id: number }>(next: T[], previous: { id: number }[]) => {
@@ -172,21 +173,92 @@ export function editorialMarkdown({ version, baseline, variants, affinity }: Com
   ].join("\n");
 }
 
-export async function writeEditorialAudit(options: { sqlite: string; output: string; date: string; criteria?: unknown }) {
+async function readRecentEntries(db: CinemaDatabase) {
+  const history = await db.select({ id: recommendationHistory.movieId }).from(recommendationHistory)
+    .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(recentSelectionLimit);
+  return history.map(({ id }) => id);
+}
+
+export async function writeEditorialAudit(options: { sqlite: string; output: string; date: string; criteria?: unknown; production?: boolean }) {
   const date = z.iso.date().parse(options.date);
   const criteria = criteriaSchema.parse(options.criteria ?? {
     mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [],
   });
   if (criteria.mood !== "surprise") throw new Error("Utilisez mood: surprise et les filtres communs aux catégories.");
-  const report = await withLocalSnapshot(options.sqlite, async (db) => {
+  const files = await withLocalSnapshot(options.sqlite, async (db) => {
     const snapshot = await readSelectionSnapshot(db);
-    const aliases = await db.select().from(movieTitles);
-    const history = await db.select({ id: recommendationHistory.movieId }).from(recommendationHistory)
-      .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(recentSelectionLimit);
-    return compareEditorial(snapshot, criteria, date, aliases, history.map(({ id }) => id));
+    const recentEntries = await readRecentEntries(db);
+    if (options.production) {
+      const { report, markdown } = compareEditorialProduction(snapshot, criteria, date, recentEntries);
+      return {
+        "editorial-production.md": markdown,
+        "editorial-production.json": JSON.stringify(report, null, 2) + "\n",
+        "selection-audit.md": selectionMarkdown(report.after),
+      };
+    }
+    const report = compareEditorial(snapshot, criteria, date, await db.select().from(movieTitles), recentEntries);
+    return {
+      "editorial-calibration.md": editorialMarkdown(report),
+      "editorial-calibration.json": JSON.stringify(report, null, 2) + "\n",
+    };
   });
   const directory = await reportDirectory(options.output, true);
-  const write = (name: string, body: string) => writeFile(join(directory, name), body, { flag: "wx", mode: 0o600 });
-  await write("editorial-calibration.md", editorialMarkdown(report));
-  await write("editorial-calibration.json", JSON.stringify(report, null, 2) + "\n");
+  for (const [name, body] of Object.entries(files)) {
+    if (body !== undefined) await writeFile(join(directory, name), body, { flag: "wx", mode: 0o600 });
+  }
+}
+
+export function compareEditorialProduction(snapshot: Snapshot, criteria: Criteria, date: string, recentEntries: number[]) {
+  const before = auditSelection(snapshot, criteria, date,
+    { experiment: previousEditorialPolicy, engineVersion: previousEditorialEngineVersion, recentEntries });
+  const after = auditSelection(snapshot, criteria, date, { recentEntries });
+  const eligible = (rows: typeof after.reports[number]["candidates"]) => rows?.map(({ id }) => id);
+  const signature = (row: typeof after.reports[number]) =>
+    [eligible(row.candidates), row.withRotation, row.selected, row.withoutRotation, row.next, row.exclusions];
+  const categories = (["classics", "gems"] as const).map((category) => {
+    const historical = before.reports.find((row) => row.category === category)!;
+    const production = after.reports.find((row) => row.category === category)!;
+    const preset = editorialVariants.find((row) => row.category === category &&
+      row.name === (category === "classics" ? "admit / 25%" : "Seuil 0.8"))!;
+    const { reports: [experimental] } = auditSelection(snapshot, criteria, date,
+      { category, experiment: preset.experiment, recentEntries });
+    return { category, historical, production,
+      matchesExperiment: JSON.stringify(signature(production)) === JSON.stringify(signature(experimental)) };
+  });
+  const lines = [
+    "# Calibration éditoriale en production · PR28", "",
+    `${previousEditorialEngineVersion} → ${engineVersion} · ${date} · ${after.catalogue} films · ${after.signals} sources de signaux.`, "",
+    "Les deux moteurs utilisent le même instantané, les mêmes critères et le même historique, hors ligne.", "",
+    "| Catégorie | Admissibles avant rotation | Admissibles après rotation | Affinité médiane avec rotation | Affinité médiane sans rotation | Sélection suivante (admissibles / proposés) | Variante PR27 reproduite |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  type Row = typeof after.reports[number];
+  const median = ({ withoutRotation }: Row) =>
+    withoutRotation.map(({ affinity }) => affinity).sort((a, b) => a - b)[Math.floor((withoutRotation.length - 1) / 2)];
+  const next = (row: Row) => `${row.next?.admissible ?? 0} / ${row.next?.selected.length ?? 0}`;
+  for (const { category, historical: a, production: b, matchesExperiment } of categories) {
+    lines.push(`| ${selectionCategories[category]} | ${a.admissible.count} → ${b.admissible.count} | ${a.withRotation} → ${b.withRotation} | ${n(a.proposed.affinity.median)} → ${n(b.proposed.affinity.median)} | ${n(median(a))} → ${n(median(b))} | ${next(a)} → ${next(b)} | ${matchesExperiment ? "Oui" : "Écart détecté"} |`);
+  }
+  for (const { category, historical, production, matchesExperiment } of categories) {
+    lines.push("", `## ${selectionCategories[category]}`, "",
+      matchesExperiment ? "Les viviers, les exclusions et les listes avec et sans rotation et au tour suivant correspondent à la variante PR27." :
+        "Les résultats diffèrent. Comparer les viviers, les exclusions et les sélections dans le JSON.", "");
+    const tables = [
+      { label: "Avec rotation", before: historical.selected, after: production.selected },
+      { label: "Sans rotation", before: historical.withoutRotation, after: production.withoutRotation },
+      { label: "Sélection suivante", before: historical.next?.selected ?? [], after: production.next?.selected ?? [] },
+    ];
+    for (const table of tables) {
+      lines.push(`### ${table.label}`, "",
+        `Entrées · ${titles(table.after.filter(({ id }) => !table.before.some((row) => row.id === id)))}.`,
+        `Sorties · ${titles(table.before.filter(({ id }) => !table.after.some((row) => row.id === id)))}.`, "");
+      for (const [label, films] of [["Avant", table.before], ["Après", table.after]] as const) {
+        lines.push(`**${label}**`, "",
+          "| Film | Affinité | Score de base | Contributions signées | Pénalité de diversité | Score de sélection |",
+          "| --- | ---: | ---: | --- | ---: | ---: |",
+          ...films.map((film) => `| ${escape(film.title)} | ${n(film.affinity)} | ${n(film.score)} | ${Object.entries(film.contributions).map(([key, value]) => `${key} ${n(value)}`).join(" · ")} | ${n(film.diversity)} | ${n(film.finalScore)} |`), "");
+      }
+    }
+  }
+  return { report: { version: "editorial-production-v1", before, after, categories }, markdown: lines.join("\n") };
 }
