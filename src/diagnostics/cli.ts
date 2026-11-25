@@ -60,6 +60,30 @@ const within = (root: string, path: string) => {
   return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../") && !rel.startsWith("..\\"));
 };
 
+export async function reportDirectory(destination: string, privateReport: boolean) {
+  const output = resolve(destination);
+  const root = await realpath(process.cwd());
+  if (privateReport && within(root, output)) throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
+  // Resolve the existing ancestor before creating anything, including when part of the output path is a symlink.
+  let ancestor = output;
+  while (true) {
+    try {
+      const resolved = await realpath(ancestor);
+      if (privateReport && within(root, resolve(resolved, relative(ancestor, output)))) {
+        throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      ancestor = resolve(ancestor, "..");
+    }
+  }
+  await mkdir(output, { recursive: true, mode: 0o700 });
+  const directory = await realpath(output);
+  if (privateReport && within(root, directory)) throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
+  return directory;
+}
+
 export async function diagnose(options: { input?: string; sqlite?: string; output: string; baseline?: string; referenceDate?: string; comparePolicy?: boolean; compareRanking?: boolean; comparePr21?: boolean; compareAffinity?: boolean; affinity?: string }) {
   if ([options.baseline, options.comparePolicy, options.compareRanking, options.comparePr21].filter(Boolean).length > 1) {
     throw new Error("Choisissez une seule comparaison : --baseline, --compare-policy --compare-ranking ou --compare-pr21.");
@@ -74,26 +98,7 @@ export async function diagnose(options: { input?: string; sqlite?: string; outpu
       affinityModel, ranking: options.comparePr21 ? "relevance-initial" : "legacy",
     }) : undefined;
   const comparison = baseline ? compareReports(baseline, report) : undefined;
-  const output = resolve(options.output);
-  const root = await realpath(process.cwd());
-  if (options.sqlite && within(root, output)) throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
-  // Resolve the existing ancestor before creating anything, including when part of the output path is a symlink.
-  let ancestor = output;
-  while (true) {
-    try {
-      const resolved = await realpath(ancestor);
-      if (options.sqlite && within(root, resolve(resolved, relative(ancestor, output)))) {
-        throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
-      }
-      break;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      ancestor = resolve(ancestor, "..");
-    }
-  }
-  await mkdir(output, { recursive: true, mode: 0o700 });
-  const directory = await realpath(output);
-  if (options.sqlite && within(root, directory)) throw new Error("Placez les rapports du profil SQLite hors de ce dépôt.");
+  const directory = await reportDirectory(options.output, !!options.sqlite);
   const write = (name: string, data: string) => writeFile(join(directory, name), data, { mode: 0o600, flag: "wx" });
   await write("report.json", JSON.stringify(report, null, 2) + "\n");
   await write("report.html", renderReport(report, comparison));

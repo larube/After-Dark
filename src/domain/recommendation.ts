@@ -135,6 +135,7 @@ function scoreFilm(film: Film, criteria: Criteria, traits: ReturnType<typeof bui
     convincing, categoryAccepted: category.accepted, older, periodMismatch, decade: decadeOf(film.year),
     film, affinity: affinity.score, exploration, reasons, warnings,
     details: { affinity, contributions, mood, avoided,
+      ...(category.checks ? { categoryChecks: category.checks } : {}),
       ...(criteria.selectionCategory === "gems" ? { lessExposedThan: lessExposedThan ?? null } : {}),
     },
     score,

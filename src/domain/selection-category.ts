@@ -45,11 +45,13 @@ export function categoryEvidence(category: SelectionCategory | undefined, film: 
   const supported = (film.metadata.reputation?.count ?? 0) >= reputationPriorVotes;
   if (category === "classics") {
     const established = film.year !== null && film.year > 0 && Number(referenceDate.slice(0, 4)) - film.year >= classicMinimumAge;
-    return { accepted: established && supported && reputation >= 1.5, boost: reputation,
+    const checks = { established, votes: supported, reputation: reputation >= 1.5 };
+    return { accepted: Object.values(checks).every(Boolean), checks, boost: reputation,
       reason: "Film sorti depuis au moins dix ans, avec des avis TMDB favorables et suffisamment nombreux." };
   }
   if (category === "gems") {
-    return { accepted: supported && reputation > 0 && affinity >= 1 && (lessExposedThan ?? 0) >= 0.5,
+    const checks = { votes: supported, reputation: reputation > 0, affinity: affinity >= 1, popularity: (lessExposedThan ?? 0) >= 0.5 };
+    return { accepted: Object.values(checks).every(Boolean), checks,
       boost: lessExposedThan ?? 0,
       reason: "Popularité TMDB dans la moitié basse du vivier renseigné, avec des avis favorables et des signaux personnels positifs." };
   }
