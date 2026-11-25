@@ -1,3 +1,4 @@
+import { auditSelection, selectionMarkdown } from "../src/diagnostics/selection";
 import { describe, expect, it } from "vitest";
 import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking, type Film, type Signal } from "../src/domain/recommendation";
 import { discoveryQueries } from "../src/main/tmdb";
@@ -88,5 +89,44 @@ describe("catégories de Sélection", () => {
     expect(discoveryQueries(criteria("gems"), 0, 2026)[0]).toMatchObject({
       sort_by: "popularity.asc", "vote_count.gte": "50",
     });
+  });
+});
+
+describe("audit des catégories", () => {
+  it("sépare rotation, admissibilité, exclusions et recoupement avec les mêmes entrées", () => {
+    const candidate = film(1, ["Drama"], { matching: true, popularity: 1 });
+    const catalogue = [candidate, film(2, ["Drama"], { popularity: 10 }),
+      { ...candidate, id: 3, status: "seen" as const }, { ...candidate, id: 4, dismissed: true }, { ...candidate, id: 5 }];
+    const snapshot = { catalogue, signals, round: 0, recent: new Set([1]), excludedIds: new Set([5]) };
+    const audit = auditSelection(snapshot, criteria("personal"), policy.referenceDate);
+    expect(audit).toEqual(auditSelection(snapshot, criteria("personal"), policy.referenceDate));
+    expect(audit.personalParity).toBe(true);
+    expect(audit.reports.map(({ category }) => category)).toEqual(Object.keys(selectionCategories));
+    const drama = audit.reports.find(({ category }) => category === "drama")!;
+    expect(drama.admissible.count).toBe(2);
+    expect(drama.withRotation).toBe(1);
+    expect(drama.selected.map(({ id }) => id)).toEqual([2]);
+    expect(drama.withoutRotation.map(({ id }) => id)).toContain(1);
+    expect(drama.exclusions).toEqual(expect.arrayContaining([["seen", 1], ["blocked", 1], ["dismissed", 1]]));
+    expect(audit.overlaps[0][5]).toEqual({ rotated: 1, unrotated: 2 });
+    expect(drama.selected[0].score - drama.selected[0].diversity).toBeCloseTo(drama.selected[0].finalScore);
+    expect(selectionMarkdown(audit)).toContain("| Film 2 |");
+    for (const acquisition of audit.acquisition) {
+      expect(acquisition.preferred).toEqual(acquisition.neutral);
+      expect(acquisition.strictMultiple).toEqual(acquisition.neutral);
+      expect(acquisition.strictSingle.every((query) => query.with_original_language === "fr" && !query.with_origin_country)).toBe(true);
+    }
+  });
+
+  it("identifie une Pépite écartée par la popularité manquante et un Culte écarté par la période", () => {
+    const catalogue = [film(1, ["Drama"], { matching: true }), film(2, ["Drama"], { year: 1965 })];
+    const audit = auditSelection({ catalogue, signals, round: 3, recent: new Set(), excludedIds: new Set() },
+      criteria("personal"), policy.referenceDate);
+    expect(audit.reports.find(({ category }) => category === "gems")?.nearMisses).toContainEqual(expect.objectContaining({
+      title: "Film 1", failure: "popularity", popularity: null, weakEvidence: false,
+    }));
+    expect(audit.reports.find(({ category }) => category === "classics")?.classicConflicts).toContainEqual(expect.objectContaining({
+      title: "Film 2", period: -0.8,
+    }));
   });
 });

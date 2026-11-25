@@ -1,3 +1,4 @@
+import { writeSelectionAudit } from "../src/diagnostics/selection";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -123,6 +124,15 @@ describe("engine diagnostics", () => {
       const snapshot = await readLocalDatabase(path);
       expect(snapshot).toMatchObject({ catalogue: [{ id: 1, status: "seen" }], recent: [1],
         signals: [{ id: 1, spontaneous: true, ratings: [{ numeric: 8.5 }, { numeric: 0 }] }] });
+      const output = join(directory, "audit");
+      await writeSelectionAudit({ sqlite: path, output, date: "2026-11-25" });
+      const report = JSON.parse(await readFile(join(output, "selection-audit.json"), "utf8"));
+      expect(report).toMatchObject({ version: "selection-audit-v1", catalogue: 1, signals: 1, recent: 1, personalParity: true });
+      expect(report.reports).toHaveLength(8);
+      expect(report.reports.every((row: { selected: unknown[] }) => row.selected.length === 0)).toBe(true);
+      await expect(writeSelectionAudit({ sqlite: path, output, date: "2026-11-25" })).rejects.toMatchObject({ code: "EEXIST" });
+      await expect(writeSelectionAudit({ sqlite: path, output: "docs", date: "2026-11-25" })).rejects.toThrow("hors de ce dépôt");
+      await rm(output, { recursive: true });
       expect(await files()).toEqual(before);
       expect((await db.select().from(movieEvaluations)).map(({ source, score, rangeMin, rangeMax }) => ({ source, score, rangeMin, rangeMax })))
         .toEqual([{ source: "import", score: null, rangeMin: "8", rangeMax: "9" },
