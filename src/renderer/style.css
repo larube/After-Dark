@@ -342,6 +342,8 @@ summary:hover { color: var(--focus); }
 .metrics dd { font: 900 2.5rem/1.2 var(--display); font-variant-numeric: tabular-nums; }
 .library-section { margin-top: 24px; }
 .library-section h2 { margin-bottom: 8px; }
+.horror-acquisition-setting { display: flex; align-items: baseline; gap: 8px; }
+.horror-acquisition-setting input { accent-color: var(--accent); }
 .favorites li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .favorites span { color: var(--muted); }
 .enrichment { margin: 16px 0; padding: 11px 14px; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); }

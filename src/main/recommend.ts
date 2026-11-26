@@ -33,12 +33,14 @@ export async function localTmdb(directory: string) {
 
 export async function findTonight(
   db: CinemaDatabase, criteria: Criteria, getClient: () => Promise<TmdbClient | undefined>, now = new Date(), allowRecent = false,
-  preferences?: TonightPreferences, onDiagnostic?: (report: TonightDiagnostic) => Promise<void>,
+  preferences?: TonightPreferences, onDiagnostic?: (report: TonightDiagnostic) => Promise<void>, profileHorror = false,
 ): Promise<Recommendation> {
   const catalogue = await readCatalogue(db);
   const history = await readHistory(db, recentSelectionLimit);
   const recent = allowRecent ? new Set<number>() : history.recent;
-  const { state, blocked, report } = await acquireTonight(db, catalogue, criteria, recent, history.round, now, getClient, preferences, { measure: !!onDiagnostic });
+  const strategy = profileHorror && criteria.selectionCategory === "horror" ? "profile" : "baseline";
+  const { state, blocked, report } = await acquireTonight(db, catalogue, criteria, recent, history.round, now, getClient, preferences,
+    { strategy, measure: !!onDiagnostic });
   const date = now.toISOString();
   const args = [state.catalogue, state.signals, criteria, recent,
     { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, preferences, selectionSize] as const;

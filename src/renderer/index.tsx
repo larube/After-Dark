@@ -6,6 +6,7 @@ import { AppShell, type Page } from "./shell";
 import { CatalogueSummary, Enrichment, ImportFeedback } from "./library";
 import { needsRating, type FeedbackEntry, type FeedbackRequest } from "../shared/feedback";
 import { FeedbackCollection, FilmActions, ViewingReminder } from "./feedback";
+import { HorrorAcquisitionSetting } from "./horror-acquisition";
 import { Laboratory } from "./lab";
 import { Tonight } from "./tonight";
 import "./style.css";
@@ -175,6 +176,7 @@ function App() {
       <ImportFeedback error={importError} cancelled={cancelled} report={report} />
       <Enrichment progress={enrichment} />
       <div className="library-section"><CatalogueSummary summary={summary} /></div>
+      <HorrorAcquisitionSetting />
     </>}
   </AppShell>;
 }

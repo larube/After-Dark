@@ -66,6 +66,8 @@ export const ipc = {
   collection: { channel: "cinema:collection", request: z.tuple([]), response: reply(z.array(feedbackEntrySchema)) },
   deferViewing: { channel: "cinema:defer-viewing", request: z.tuple([z.number().int().positive()]), response: reply(z.null()) },
   saveFeedback: { channel: "cinema:feedback", request: z.tuple([feedbackRequestSchema]), response: reply(feedbackEntrySchema.nullable()) },
+  horrorAcquisition: { channel: "profile:horror-acquisition", request: z.tuple([]), response: reply(z.boolean()) },
+  setHorrorAcquisition: { channel: "profile:set-horror-acquisition", request: z.tuple([z.boolean()]), response: reply(z.boolean()) },
   enrichment: { channel: "profile:enrichment", request: z.tuple([]), response: reply(enrichmentSchema) },
   summary: { channel: "profile:summary", request: z.tuple([]), response: reply(summarySchema) },
   importProfile: { channel: "profile:import", request: z.tuple([]), response: reply(importResultSchema) },

@@ -17,6 +17,7 @@ import { ipc, type DesktopApi } from "../shared/ipc";
 import { cachedDiscoveryPosterPath, createDiscoveryPosters } from "./discovery-posters";
 import { openAllocine } from "./allocine";
 import { exportDiscoveryDiagnostic } from "./discovery-export";
+import { readHorrorAcquisition, saveHorrorAcquisition } from "./horror-acquisition";
 import { readFilmFranchises } from "./franchises";
 import { startEnrichment } from "./enrichment";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../diagnostics/tonight";
@@ -133,6 +134,10 @@ void app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   if (database) enrichment = startEnrichment(database.db, () => localTmdb(app.getPath("userData")),
     () => importing || recommending || savingFeedback);
+  register(ipc.horrorAcquisition, async (): ReturnType<DesktopApi["horrorAcquisition"]> => ({ ok: true, data: await readHorrorAcquisition(app.getPath("userData")) }));
+  register(ipc.setHorrorAcquisition, async (_db, _owner, [enabled]): ReturnType<DesktopApi["setHorrorAcquisition"]> => ({
+    ok: true, data: await saveHorrorAcquisition(app.getPath("userData"), enabled),
+  }));
   register(ipc.enrichment, async (): ReturnType<DesktopApi["enrichment"]> => enrichment
     ? { ok: true, data: await enrichment.progress() }
     : { ok: false, error: "Enrichissement indisponible." });
@@ -197,7 +202,11 @@ void app.whenReady().then(async () => {
       const directory = app.getPath("userData");
       const capture = captureTonight;
       captureTonight = undefined;
-      const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent, undefined, capture);
+      const profileHorror = criteria.selectionCategory === "horror" && await readHorrorAcquisition(directory).catch(() => {
+        console.error("Impossible de lire le réglage expérimental Horreur.");
+        return false;
+      });
+      const result = await findTonight(db, criteria, () => localTmdb(directory), new Date(), allowRecent, undefined, capture, profileHorror);
       latestSelection = result;
       return { ok: true, data: result };
     } finally {

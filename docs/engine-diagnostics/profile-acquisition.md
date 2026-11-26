@@ -80,3 +80,11 @@ npm run diagnose:acquisition-blind -- --output "$questionnaire" --reveal
 ```
 
 La révélation exige une réponse valide pour chaque fiche. Elle écrit un bilan par groupe et catégorie dans le dossier privé et laisse la décision d’activation à la revue humaine. Les réponses « Déjà vu » et « Informations insuffisantes » sont comptabilisées séparément. Les fichiers restent locaux et ne sont pas lus par l’application.
+
+## Essai dans l’application pour Horreur
+
+Dans **Profil → Réglages expérimentaux**, l’option **Acquisition personnalisée — Horreur (expérimental)** est désactivée au départ. Elle est enregistrée sur ce Mac dans le dossier de données d’After Dark. Une fois cochée, la prochaine recherche **Horreur** utilise `profile`. Les autres catégories continuent à utiliser `baseline`. Le budget prévu par la stratégie peut générer davantage d’appels TMDB. Hors ligne, Sélection continue à exploiter le catalogue local.
+
+Décocher l’option rétablit `baseline` dès la recherche suivante. Les films acquis et l’historique des sélections restent dans la base. Le classement, la rotation et les exclusions continuent à s’appliquer au catalogue courant.
+
+Le diagnostic de Sélection déjà disponible via `AFTER_DARK_TONIGHT_DIAGNOSTIC_DIR` indique la stratégie, le nombre d’appels Discover et détail, et les effectifs admissibles après acquisition, avec et sans rotation.
