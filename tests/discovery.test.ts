@@ -14,9 +14,10 @@ import { importProfile } from "../src/import/profile";
 import { recommendationPoster } from "../src/main/posters";
 import { compareTonightAffinity } from "../src/diagnostics/tonight-affinity";
 import { writeTonightDiagnostic, type TonightDiagnostic } from "../src/diagnostics/tonight";
+import { readHorrorAcquisition, saveHorrorAcquisition } from "../src/main/horror-acquisition";
 import { findTonight } from "../src/main/recommend";
 import { discoveryQueries, TmdbClient, type TmdbFilm } from "../src/main/tmdb";
-import { criteriaSchema, metadataSchema, recommendationSchema } from "../src/shared/recommendation";
+import { criteriaSchema, metadataSchema, recommendationSchema, selectionCategories, type SelectionCategory } from "../src/shared/recommendation";
 
 const criteria = criteriaSchema.parse({
   mood: "tension", preferredCountries: [], requiredCountries: [],
@@ -164,6 +165,72 @@ describe("intégration TMDB et SQLite", () => {
     expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.6.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
+  });
+
+  it("persiste l’option Horreur et la désactivation conserve le catalogue, l’historique et les exclusions", async () => {
+    const input = { ...criteria, mood: "surprise" as const, selectionCategory: "horror" as const };
+    const client = new TmdbClient("test-token", vi.fn<typeof fetch>(), () => now);
+    const baseline = vi.spyOn(client, "discover").mockResolvedValue([]);
+    const profile = vi.spyOn(client, "discoverPage").mockResolvedValue([remote.tmdbId]);
+    vi.spyOn(client, "film").mockResolvedValue({ ...remote, metadata: { ...remote.metadata, genres: ["Horreur"] } });
+    const capture = vi.fn<NonNullable<Parameters<typeof findTonight>[6]>>().mockResolvedValue(undefined);
+    const find = async (category?: SelectionCategory, allowRecent = false) => findTonight(database.db,
+      { ...input, selectionCategory: category }, async () => client, now, allowRecent, undefined, capture, await readHorrorAcquisition(folder));
+
+    expect(await readHorrorAcquisition(folder)).toBe(false);
+    await find("horror");
+    expect(baseline).toHaveBeenCalledOnce();
+    expect(profile).not.toHaveBeenCalled();
+    expect(capture.mock.lastCall?.[0].acquisition.pool?.strategy).toBe("baseline");
+
+    await saveHorrorAcquisition(folder, true);
+    database.close();
+    database = await openDatabase(join(folder, "cinema.sqlite"), resolve("drizzle"));
+    expect(await readHorrorAcquisition(folder)).toBe(true);
+    for (const category of [...Object.keys(selectionCategories) as SelectionCategory[], undefined]) {
+      if (category === "horror") continue;
+      await find(category);
+      expect(capture.mock.lastCall?.[0].acquisition.pool?.strategy).toBe("baseline");
+    }
+    expect(profile).not.toHaveBeenCalled();
+    const result = await find("horror");
+    expect(result.films).toHaveLength(1);
+    expect(capture.mock.lastCall?.[0].acquisition.pool).toMatchObject({
+      strategy: "profile", detailRequests: 1, after: { afterRotation: 1, beforeRotation: 1 },
+    });
+    expect(capture.mock.lastCall?.[0].acquisition.pool?.discoveryRequests).toBe(profile.mock.calls.length);
+    const id = result.films[0].id;
+    const { db } = database;
+    const oldHistory = await db.select().from(recommendationHistory).all();
+    const state = await readCatalogue(db);
+    const expected = recommend(state.catalogue, state.signals, input, new Set(), { referenceDate: "2026-07-13" },
+      tonightAffinityModel, tonightRanking, undefined, 10);
+    expect(result.films).toEqual(expected.films);
+
+    await saveHorrorAcquisition(folder, false);
+    profile.mockClear();
+    expect(await find("horror")).toMatchObject({ status: "exhausted", films: [] });
+    expect((await find("horror", true)).films).toEqual(result.films);
+    expect(capture.mock.lastCall?.[0].acquisition.pool?.strategy).toBe("baseline");
+    expect(profile).not.toHaveBeenCalled();
+    await saveFeedback(db, { action: "intention", movieId: id, intention: "not_interested" });
+    expect((await find("horror", true)).films).toEqual([]);
+    expect(await readCatalogue(db)).toMatchObject({ catalogue: [{ id, dismissed: true }] });
+    expect(await db.select().from(recommendationHistory).all()).toEqual(expect.arrayContaining(oldHistory));
+    expect(await readHorrorAcquisition(folder)).toBe(false);
+  });
+
+  it("indique profile dans le diagnostic lors du repli hors ligne pour Horreur", async () => {
+    const { db } = database;
+    await cacheFilm(db, { ...remote, metadata: { ...remote.metadata, genres: ["Horreur"] } });
+    const input = { ...criteria, mood: "surprise" as const, selectionCategory: "horror" as const };
+    const capture = vi.fn<NonNullable<Parameters<typeof findTonight>[6]>>().mockResolvedValue(undefined);
+    const client = new TmdbClient("test-token", vi.fn<typeof fetch>().mockRejectedValue(new Error("offline")), () => now);
+    const result = await findTonight(db, input, async () => client, now, false, undefined, capture, true);
+    expect(result).toMatchObject({ connection: "offline", films: [{ title: remote.title }] });
+    expect(capture.mock.lastCall?.[0].acquisition.pool).toMatchObject({
+      strategy: "profile", stop: "tmdb-unavailable", detailRequests: 0, discoveryRequests: 1, after: { afterRotation: 1 },
+    });
   });
 
   it("écarte durablement les refus et n’apprend rien d’un visionnage sans note", async () => {

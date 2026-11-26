@@ -3,11 +3,20 @@ import { ipc } from "../src/shared/ipc";
 
 describe("contrats IPC", () => {
   it("n’accepte ni chemin depuis le renderer ni argument dans les deux canaux", () => {
-    for (const route of [ipc.summary, ipc.importProfile, ipc.enrichment, ipc.collection]) {
+    for (const route of [ipc.summary, ipc.importProfile, ipc.enrichment, ipc.collection, ipc.horrorAcquisition]) {
       expect(route.request.safeParse([]).success).toBe(true);
       expect(route.request.safeParse([undefined]).success).toBe(false);
       expect(route.request.safeParse([{ path: "/tmp/file.json" }]).success).toBe(false);
     }
+  });
+
+  it("valide uniquement un booléen pour le réglage expérimental Horreur", () => {
+    expect(ipc.setHorrorAcquisition.request.parse([true])).toEqual([true]);
+    expect(ipc.setHorrorAcquisition.request.parse([false])).toEqual([false]);
+    for (const args of [[], ["true"], [true, "horror"], [{ enabled: true }]]) {
+      expect(ipc.setHorrorAcquisition.request.safeParse(args).success).toBe(false);
+    }
+    expect(ipc.horrorAcquisition.response.safeParse({ ok: true, data: false }).success).toBe(true);
   });
 
   it("valide et borne les mutations de retours", () => {
