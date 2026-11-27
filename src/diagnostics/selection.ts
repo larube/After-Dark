@@ -6,9 +6,9 @@ import { z } from "zod";
 import type { CinemaDatabase } from "../db/client";
 import { franchiseExclusions } from "../db/franchises";
 import { readCatalogue, readHistory } from "../db/recommendations";
-import { diagnoseRecommendation, engineVersion, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
+import { diagnoseRecommendation, engineVersion, previousCompositionEngineVersion, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
 import { matchesSelectionGenre, type EditorialExperiment } from "../domain/selection-category";
-import { decadeOf, tonightDefaults } from "../domain/tonight-preferences";
+import { decadeOf, selectionPreferences, tonightDefaults } from "../domain/tonight-preferences";
 import { discoveryQueries } from "../main/tmdb";
 import { criteriaSchema, recentSelectionLimit, selectionCategories, selectionSize, type Criteria, type SelectionCategory } from "../shared/recommendation";
 import { reportDirectory, withLocalSnapshot } from "./cli";
@@ -35,9 +35,9 @@ function distribution(values: (number | undefined)[]) {
 export function auditSelection(snapshot: Snapshot, criteria: Criteria, referenceDate: string,
   options?: { experiment?: EditorialExperiment; category?: "classics" | "gems"; recentEntries?: number[]; engineVersion?: string }) {
   const { catalogue, signals, recent, excludedIds, round } = snapshot;
-  const policy = { referenceDate, excludedIds, genreTagsOnly: !!options?.engineVersion && options.engineVersion !== engineVersion };
+  const policy = { referenceDate, excludedIds, genreTagsOnly: !!options?.engineVersion && ![engineVersion, previousCompositionEngineVersion].includes(options.engineVersion) };
   const run = (input: Criteria, history: ReadonlySet<number>) =>
-    diagnoseRecommendation(catalogue, signals, input, history, policy, tonightAffinityModel, tonightRanking, tonightDefaults, selectionSize, options?.experiment);
+    diagnoseRecommendation(catalogue, signals, input, history, policy, tonightAffinityModel, tonightRanking, !options?.engineVersion || options.engineVersion === engineVersion ? selectionPreferences : tonightDefaults, selectionSize, options?.experiment);
   const byId = new Map(catalogue.map((film) => [film.id, film]));
   const neutral = { ...criteria, mood: "surprise" as const, selectionCategory: undefined };
   const year = Number(referenceDate.slice(0, 4));

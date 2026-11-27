@@ -7,6 +7,7 @@ export type TonightPreferences = {
     minimumAffinity: number;
     minimumReputationWithMood: number;
   } | null;
+  composition?: "balanced";
   animationPenalty: number;
   repeatedDecadePenalty: number;
 };
@@ -16,6 +17,8 @@ export const tonightDefaults: Readonly<TonightPreferences> = {
   animationPenalty: 0.45,
   repeatedDecadePenalty: 0.35,
 };
+
+export const selectionPreferences: TonightPreferences = { ...tonightDefaults, composition: "balanced" };
 
 export function decadeOf(year: number | null) {
   return year !== null && Number.isInteger(year) && year > 0 ? Math.floor(year / 10) * 10 : null;

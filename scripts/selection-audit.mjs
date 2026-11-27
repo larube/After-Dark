@@ -4,18 +4,22 @@ import { createServer } from "vite";
 
 try {
   const { values } = parseArgs({ options: {
-    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" }, editorial: { type: "boolean" }, "editorial-production": { type: "boolean" }, "genre-editorial": { type: "boolean" },
+    sqlite: { type: "string" }, output: { type: "string" }, date: { type: "string" }, criteria: { type: "string" }, composition: { type: "boolean" }, "acquisition-report": { type: "string" }, editorial: { type: "boolean" }, "editorial-production": { type: "boolean" }, "genre-editorial": { type: "boolean" },
   } });
   if (!values.sqlite || !values.output || !values.date) {
-    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>] [--editorial | --editorial-production | --genre-editorial]");
+    throw Error("Usage : npm run diagnose:selection -- --sqlite <base> --output <dossier privé> --date <AAAA-MM-JJ> [--criteria <json>] [--editorial | --editorial-production | --genre-editorial | --composition [--acquisition-report <json>]]");
   }
-  if ([values.editorial, values["editorial-production"], values["genre-editorial"]].filter(Boolean).length > 1) throw Error("Choisissez un seul mode éditorial.");
+  if ([values.composition, values.editorial, values["editorial-production"], values["genre-editorial"]].filter(Boolean).length > 1) throw Error("Choisissez un seul mode éditorial.");
   const server = await createServer({ configFile: false, logLevel: "error",
     server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
   try {
 
     const criteria = values.criteria ? JSON.parse(await readFile(values.criteria, "utf8")) : undefined;
-    if (values["genre-editorial"]) {
+    if (values.composition) {
+      const { writeCompositionAudit } = await server.ssrLoadModule("/src/diagnostics/composition.ts");
+      const acquisition = values["acquisition-report"] ? JSON.parse(await readFile(values["acquisition-report"], "utf8")) : undefined;
+      await writeCompositionAudit({ ...values, criteria, acquisition });
+    } else if (values["genre-editorial"]) {
       const { writeGenreEditorialAudit } = await server.ssrLoadModule("/src/diagnostics/genre-editorial.ts");
       await writeGenreEditorialAudit({ ...values, criteria });
     } else if (values.editorial || values["editorial-production"]) {

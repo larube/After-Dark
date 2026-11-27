@@ -5,7 +5,7 @@ import { readCatalogue, readHistory, saveRecommendation } from "../db/recommenda
 import { acquisitionPolicy } from "../domain/acquisition-policy";
 import { acquisitionProfile } from "../domain/acquisition-profile";
 import { diagnoseRecommendation, engineVersion, tonightAffinityModel, tonightRanking, type Film } from "../domain/recommendation";
-import { decadeOf, tonightDefaults } from "../domain/tonight-preferences";
+import { decadeOf, selectionPreferences, tonightDefaults } from "../domain/tonight-preferences";
 import { acquireTonight, type AcquisitionBudget } from "../main/acquire";
 import { localTmdb } from "../main/recommend";
 import { TmdbError, type TmdbClient } from "../main/tmdb";
@@ -71,7 +71,7 @@ export async function compareAcquisition(options: {
               history.round, options.date, options.client, tonightDefaults, { strategy, budget: options.budget });
 
             const trace = diagnoseRecommendation(state.catalogue, state.signals, input, history.recent,
-              { referenceDate, excludedIds: blocked }, tonightAffinityModel, tonightRanking, tonightDefaults, selectionSize);
+              { referenceDate, excludedIds: blocked }, tonightAffinityModel, tonightRanking, selectionPreferences, selectionSize);
             await saveRecommendation(db, input, { ...trace.result, connection: report.connection }, options.date.toISOString());
 
             const milliseconds = Math.round(performance.now() - timer);

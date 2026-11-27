@@ -213,7 +213,7 @@ export function compareEditorialProduction(snapshot: Snapshot, criteria: Criteri
     const preset = editorialVariants.find((row) => row.category === category &&
       row.name === (category === "classics" ? "admit / 25%" : "Seuil 0.8"))!;
     const { reports: [experimental] } = auditSelection(snapshot, criteria, date,
-      { category, experiment: preset.experiment, recentEntries });
+      { category, experiment: preset.experiment, engineVersion: previousGenreEngineVersion, recentEntries });
     return { category, historical, production,
       matchesExperiment: JSON.stringify(signature(production)) === JSON.stringify(signature(experimental)) };
   });
