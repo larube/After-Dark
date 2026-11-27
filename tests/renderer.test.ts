@@ -22,6 +22,7 @@ describe("Interface Neon Underground", () => {
   it("ouvre la Sélection avec un seul bouton principal et les filtres repliés", () => {
     const html = renderToStaticMarkup(createElement(Tonight, { ready: true, onComplete() {}, filmActions: () => null }));
     expect(html).toContain("<h1>Sélection</h1>");
+    expect(html).toMatch(/<header class="hero">.*Votre séance personnelle.*<h1>Sélection<\/h1>/);
     expect(html).toMatch(/checked="" value="personal"\/><span>Pour moi<\/span>/);
     expect(html.match(/type="submit"/g)).toHaveLength(1);
     expect(html).toMatch(/<fieldset class="mood-fieldset".*<\/fieldset><button[^>]*type="submit"[^>]*>.*Découvrir 10 films.*<details class="selection-refine"><summary>Affiner/);
@@ -29,7 +30,28 @@ describe("Interface Neon Underground", () => {
       page: "tonight", status: "Base locale prête", navigate() {}, children: null,
     }));
     expect(shell).toMatch(/aria-current="page"[^>]*>.*?Sélection<\/button>/);
+    expect(shell).toMatch(/class="nav-icon" aria-hidden="true"><svg[^>]+focusable="false"[^>]*>.*?<\/svg><\/span>Sélection/);
     expect(shell).not.toMatch(/Découvertes|Ce soir/);
+  });
+
+  it("conserve l’affiche, son alternative et les états de recherche dans une sélection incomplète", () => {
+    const result = recommendationSchema.parse({
+      connection: "cached", personalized: true, status: "ready",
+      films: [
+        { id: 1, title: "La vedette", year: 1997, category: "safe", metadata: {}, reasons: [], warnings: [] },
+        { id: 2, title: "Une alternative au titre très long", year: null, category: "gem", metadata: {}, reasons: [], warnings: [] },
+      ],
+    });
+    const html = renderToStaticMarkup(createElement(Results, {
+      category: "thriller", result, posters: { 1: "data:image/jpeg;base64,AA==" }, ready: true,
+      loading: true, error: "Impossible de charger les propositions.", repeat() {}, filmActions: () => null,
+    }));
+    expect(html).toMatch(/class="featured".*<img class="poster" src="data:image\/jpeg;base64,AA==" alt=""\/?>/);
+    expect(html).toMatch(/aria-label="Propositions suivantes".*Affiche indisponible.*Une alternative au titre très long/);
+    expect(html).toContain('class="results-count">2 films');
+    expect(html).toContain("2 sur 10 proposés");
+    expect(html).toContain('role="alert">Impossible de charger les propositions.');
+    expect(html).toContain('role="status" class="live-status">Recherche en cours…');
   });
 
   it("expose les trois modes de découverte en radios natives et masque l’onglet inactif", () => {

@@ -73,13 +73,14 @@ export function Tonight({ ready, onComplete, filmActions }: {
 
   return <>
     <form className="programme" onSubmit={submit}>
-      <div className="projection" aria-hidden="true" />
       <header className="hero">
+        <p className="hero-kicker">Votre séance personnelle</p>
         <h1>Sélection</h1>
+        <p className="hero-intro">Choisissez l’envie du moment.<br />On s’occupe du reste.</p>
       </header>
       <CategorySelector value={category} onChange={setCategory} busy={loading} />
       <button className="button button-primary" type="submit" disabled={loading || !ready}>
-        <span aria-hidden="true">▶</span> {loading ? "Recherche en cours…" : `Découvrir ${selectionSize} films`}
+        {loading ? "Recherche en cours…" : `Découvrir ${selectionSize} films`} <span aria-hidden="true">→</span>
       </button>
       <details className="selection-refine">
         <summary>Affiner</summary>
