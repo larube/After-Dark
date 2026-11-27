@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const pages = [
-  ["tonight", "Sélection", "◒"], ["collection", "Ma collection", "▤"],
+  ["tonight", "Sélection", null], ["collection", "Ma collection", "▤"],
   ["history", "Historique", "↶"], ["lab", "Laboratoire", "✦"], ["profile", "Profil", "◎"],
 ] as const;
 export type Page = typeof pages[number][0];
@@ -22,7 +22,13 @@ export function AppShell({ page, navigate, status, ratingCount = 0, children }: 
       <nav aria-label="Navigation principale">
         {pages.map(([id, name, icon]) => <button key={id} type="button" aria-current={page === id ? "page" : undefined}
           onClick={() => navigate(id)}>
-          <span aria-hidden="true">{icon}</span>{name}
+          <span className="nav-icon" aria-hidden="true">{id === "tonight" ?
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" focusable="false">
+              <rect x="2.5" y="9.5" width="13" height="10" rx="1.5" />
+              <circle cx="6.5" cy="6" r="3.5" />
+              <circle cx="13" cy="6.5" r="3" />
+              <path d="m15.5 13 5.5-3v9l-5.5-3" />
+            </svg> : icon}</span>{name}
           {id === "collection" && ratingCount > 0 && <small className="rating-count" aria-label={`${ratingCount} à noter`}>{ratingCount}</small>}
         </button>)}
       </nav>
