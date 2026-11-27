@@ -4,6 +4,19 @@ import { normalizeTitle } from "../domain/ratings";
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
 const positive = "Traits associés à vos appréciations positives : ";
 const negative = "Traits associés aussi à des appréciations négatives : ";
+const avoided = "Moins prioritaire : indices de l’ambiance que vous préférez éviter";
+const weakMood = "Les métadonnées donnent peu d’indices sur le mood demandé.";
+const long = "Séance longue pour une soirée à faible énergie.";
+
+export function selectionWarnings(warnings: string[]) {
+  const summaries = [
+    [warnings.some((warning) => warning.startsWith(avoided)), "Indices d’une ambiance que tu souhaites éviter"],
+    [warnings.some((warning) => warning.startsWith(negative)), "Des éléments associés à tes appréciations négatives"],
+    [warnings.includes(long), "Film long pour une soirée à faible énergie"],
+    [warnings.includes(weakMood), "Peu d’indices sur l’ambiance demandée"],
+  ] as const;
+  return summaries.filter(([present]) => present).map(([, label]) => label);
+}
 const genreDetails: Record<string, string> = {
   "psychological horror": "Horreur psychologique",
   "psychological thriller": "Thriller psychologique",
@@ -15,7 +28,7 @@ export function selectionExplanation({ metadata, reasons, warnings }: Recommenda
   }
   if (reasons.includes("Langue originale parmi vos préférences.")) return "Langue originale parmi tes préférences";
   if (reasons.some((reason) => reason.startsWith(positive) && reason.slice(positive.length).replace(/\.$/, "").trim()) &&
-      !warnings.some((warning) => warning.startsWith(negative))) {
+      !warnings.some((warning) => warning.startsWith(negative) || warning.startsWith(avoided) || warning === weakMood)) {
     return "Des éléments associés à des films que tu as appréciés";
   }
   if (reasons.some((reason) => reason.startsWith("Avis TMDB favorables, pondérés par le nombre de votes ("))) {

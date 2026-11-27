@@ -1,7 +1,7 @@
 import { selectionCategories, selectionSize, type SelectionCategory, type Recommendation } from "../shared/recommendation";
 import { useRef, useState, type ReactNode, type Ref } from "react";
 import { FilmFranchise } from "./franchises";
-import { selectionExplanation } from "./selection-explanation";
+import { selectionExplanation, selectionWarnings } from "./selection-explanation";
 import { AllocineLink } from "./allocine";
 
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
@@ -25,6 +25,7 @@ function RecommendationCard({ film, actions, image }: {
 }) {
   const { title, year, metadata, posterData = image, reasons, warnings } = film;
   const explanation = selectionExplanation(film);
+  const cautions = selectionWarnings(warnings);
   const [skipped, setSkipped] = useState(false);
   const [franchise, setFranchise] = useState(film.franchise);
   const [verification, setVerification] = useState<"idle" | "pending" | "done" | "error">("idle");
@@ -57,6 +58,9 @@ function RecommendationCard({ film, actions, image }: {
         {(year || metadata.minutes) && <p className="film-meta">{[year,
           metadata.minutes ? `${metadata.minutes} min` : undefined].filter(Boolean).join(" · ")}</p>}
         {explanation && <p className="film-reason">{explanation}</p>}
+        {cautions.length > 0 && <p className="warning film-cautions">
+          <strong>À garder en tête</strong> · {cautions.join(" · ")}
+        </p>}
         {actions}
       </div>
       {skipped && <p className="film-skipped-label" role="status"><strong>{title}</strong> · Mis de côté pour cette sélection</p>}

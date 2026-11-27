@@ -123,9 +123,33 @@ describe("Interface Neon Underground", () => {
     const cards = html.match(/<article[\s\S]+?<\/article>/g)!;
     expect(cards[0]).toContain('class="film-reason">Des éléments associés à des films que tu as appréciés');
     expect(cards[1]).toContain('class="film-reason">Horreur psychologique');
-    expect(cards[1]).not.toContain("Des éléments associés");
+    expect(cards[1]).not.toContain("Des éléments associés à des films que tu as appréciés");
     expect(cards[2]).not.toContain("film-reason");
     expect(html).not.toContain("%");
+  });
+
+  it("affiche les avertissements décisifs avant les actions et conserve le détail dans Informations", () => {
+    const warnings = [
+      "Traits associés aussi à des appréciations négatives : Horreur.",
+      "Moins prioritaire : indices de l’ambiance que vous préférez éviter (horreur).",
+      "Séance longue pour une soirée à faible énergie.",
+      "Les métadonnées donnent peu d’indices sur le mood demandé.",
+      "Autre avertissement du moteur.",
+    ];
+    const result = recommendationSchema.parse({
+      connection: "cached", personalized: true, status: "ready",
+      films: [{ id: 1, title: "Cure", year: 1997, category: "safe", metadata: { genres: ["Thriller"] },
+        reasons: ["Traits associés à vos appréciations positives : Mystère."], warnings }],
+    });
+    const html = renderToStaticMarkup(createElement(Results, {
+      result, ready: true, loading: false, error: "", repeat() {}, filmActions: () => "Actions film",
+    }));
+    const card = html.slice(0, html.indexOf("<details"));
+    expect(card).toMatch(/Thriller.*À garder en tête.*ambiance que tu souhaites éviter.*appréciations négatives.*faible énergie.*ambiance demandée.*Actions film/);
+    expect(card).not.toContain("des films que tu as appréciés");
+    expect(card).not.toContain(warnings[4]);
+    const details = html.slice(html.indexOf("<details"));
+    for (const warning of warnings) expect(details).toContain(warning);
   });
 
   it("rend les intentions existantes lisibles dans Sélection et garde leurs états accessibles", () => {

@@ -307,6 +307,7 @@ summary:hover { color: var(--focus); }
 .film-meta { color: var(--muted); margin-top: 4px; letter-spacing: .01em; }
 .synopsis { margin-top: 7px; max-width: 62ch; line-height: 1.45; }
 .film-reason { margin-block-start: 8px; font-size: .9rem; line-height: 1.4; color: var(--paper); }
+.film-cautions { font-size: .84rem; line-height: 1.4; overflow-wrap: anywhere; }
 .featured .film-reason { padding: 5px 10px; background: #1b1713; border-left: 2px solid #a5694b; }
 .film-secondary { margin-block-start: 5px; font-size: .84rem; color: var(--muted); }
 .film-secondary summary { padding-block: 5px; overflow-wrap: anywhere; color: var(--paper); }
