@@ -162,7 +162,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.6.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.7.0" });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });
@@ -218,6 +218,27 @@ describe("intégration TMDB et SQLite", () => {
     expect(await readCatalogue(db)).toMatchObject({ catalogue: [{ id, dismissed: true }] });
     expect(await db.select().from(recommendationHistory).all()).toEqual(expect.arrayContaining(oldHistory));
     expect(await readHorrorAcquisition(folder)).toBe(false);
+  });
+
+  it("applique la même exclusion éditoriale Horreur avec baseline et profile", async () => {
+    const input = { ...criteria, mood: "surprise" as const, selectionCategory: "horror" as const };
+    const client = new TmdbClient("test-token", vi.fn<typeof fetch>(), () => now);
+    const ids = [13151, 310131, 15999];
+    const baseline = vi.spyOn(client, "discover").mockResolvedValue(ids);
+    const profile = vi.spyOn(client, "discoverPage").mockResolvedValue(ids);
+    vi.spyOn(client, "film").mockImplementation(async (tmdbId) => ({
+      ...remote, tmdbId, title: "Film " + tmdbId, imdbId: undefined, aliases: [], originalTitle: undefined,
+      metadata: { ...remote.metadata, genres: tmdbId === 13151 ? ["Horreur", "Familial", "Animation"]
+        : tmdbId === 15999 ? ["Horreur", "Animation"] : ["Horreur"],
+        keywords: tmdbId === 13151 ? ["cartoon"] : tmdbId === 15999 ? ["adult animation"] : [] },
+    }));
+    const before = await findTonight(database.db, input, async () => client, now, true);
+    const after = await findTonight(database.db, input, async () => client, now, true, undefined, undefined, true);
+    expect(baseline).toHaveBeenCalledOnce();
+    expect(profile).toHaveBeenCalled();
+    expect(before.films.map(({ title }) => title).sort()).toEqual(["Film 15999", "Film 310131"]);
+    expect(after.films).toEqual(before.films);
+    expect((await readCatalogue(database.db)).movies.map(({ tmdbId }) => tmdbId)).toEqual(ids);
   });
 
   it("indique profile dans le diagnostic lors du repli hors ligne pour Horreur", async () => {

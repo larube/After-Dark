@@ -1,17 +1,15 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
-import { desc } from "drizzle-orm";
-import type { CinemaDatabase } from "../db/client";
-import { movieTitles, recommendationHistory } from "../db/schema";
+import { movieTitles } from "../db/schema";
 import { affinityDetails, buildAffinity, catalogueFrequency, uniqueFeatures } from "../domain/affinity";
 import { classifyContent } from "../domain/candidate-quality";
 import { normalizeTitle } from "../domain/ratings";
-import { engineVersion, previousEditorialEngineVersion, tonightAffinityModel } from "../domain/recommendation";
+import { previousGenreEngineVersion, previousEditorialEngineVersion, tonightAffinityModel } from "../domain/recommendation";
 import { matchesSelectionGenre, previousEditorialPolicy, type EditorialExperiment } from "../domain/selection-category";
-import { criteriaSchema, recentSelectionLimit, selectionCategories, type Criteria } from "../shared/recommendation";
+import { criteriaSchema, selectionCategories, type Criteria } from "../shared/recommendation";
 import { reportDirectory, withLocalSnapshot } from "./cli";
-import { auditSelection, readSelectionSnapshot, selectionMarkdown } from "./selection";
+import { auditSelection, readRecentEntries, readSelectionSnapshot, selectionMarkdown } from "./selection";
 
 const targets = [
   ["Joyeux Halloween, Scooby-Doo !", "Happy Halloween, Scooby-Doo!"],
@@ -173,12 +171,6 @@ export function editorialMarkdown({ version, baseline, variants, affinity }: Com
   ].join("\n");
 }
 
-async function readRecentEntries(db: CinemaDatabase) {
-  const history = await db.select({ id: recommendationHistory.movieId }).from(recommendationHistory)
-    .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(recentSelectionLimit);
-  return history.map(({ id }) => id);
-}
-
 export async function writeEditorialAudit(options: { sqlite: string; output: string; date: string; criteria?: unknown; production?: boolean }) {
   const date = z.iso.date().parse(options.date);
   const criteria = criteriaSchema.parse(options.criteria ?? {
@@ -211,7 +203,7 @@ export async function writeEditorialAudit(options: { sqlite: string; output: str
 export function compareEditorialProduction(snapshot: Snapshot, criteria: Criteria, date: string, recentEntries: number[]) {
   const before = auditSelection(snapshot, criteria, date,
     { experiment: previousEditorialPolicy, engineVersion: previousEditorialEngineVersion, recentEntries });
-  const after = auditSelection(snapshot, criteria, date, { recentEntries });
+  const after = auditSelection(snapshot, criteria, date, { recentEntries, engineVersion: previousGenreEngineVersion });
   const eligible = (rows: typeof after.reports[number]["candidates"]) => rows?.map(({ id }) => id);
   const signature = (row: typeof after.reports[number]) =>
     [eligible(row.candidates), row.withRotation, row.selected, row.withoutRotation, row.next, row.exclusions];
@@ -227,7 +219,7 @@ export function compareEditorialProduction(snapshot: Snapshot, criteria: Criteri
   });
   const lines = [
     "# Calibration éditoriale en production · PR28", "",
-    `${previousEditorialEngineVersion} → ${engineVersion} · ${date} · ${after.catalogue} films · ${after.signals} sources de signaux.`, "",
+    `${previousEditorialEngineVersion} → ${previousGenreEngineVersion} · ${date} · ${after.catalogue} films · ${after.signals} sources de signaux.`, "",
     "Les deux moteurs utilisent le même instantané, les mêmes critères et le même historique, hors ligne.", "",
     "| Catégorie | Admissibles avant rotation | Admissibles après rotation | Affinité médiane avec rotation | Affinité médiane sans rotation | Sélection suivante (admissibles / proposés) | Variante PR27 reproduite |",
     "| --- | --- | --- | --- | --- | --- | --- |",

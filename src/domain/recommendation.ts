@@ -1,7 +1,7 @@
 import type { Criteria, Metadata, Recommendation } from "../shared/recommendation";
 import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
 import { decadeOf, tonightDefaults, type TonightPreferences } from "./tonight-preferences";
-import { type EditorialExperiment, type EditorialPolicy, productionEditorialPolicy, categoryEvidence, exposureRanks, matchesSelectionGenre, reputationPriorVotes } from "./selection-category";
+import { type EditorialExperiment, type EditorialPolicy, productionEditorialPolicy, categoryEvidence, exposureRanks, selectionGenreExclusions, reputationPriorVotes } from "./selection-category";
 import { normalizeTitle } from "./ratings";
 
 import { affinityDetails, buildAffinity, catalogueFrequency, features, type TonightAffinityModel } from "./affinity";
@@ -9,7 +9,8 @@ export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
 
 export const legacyEngineVersion = "1.3.0";
 export const previousEditorialEngineVersion = "1.5.0";
-export const engineVersion = "1.6.0";
+export const previousGenreEngineVersion = "1.6.0";
+export const engineVersion = "1.7.0";
 export const tonightAffinityModel = "personal" as const;
 export const tonightRanking = "relevance-personal" as const;
 export type RankingPolicy = "legacy" | "relevance-initial" | "relevance" | "relevance-personal";
@@ -62,7 +63,7 @@ function candidateEligibility(film: Film, criteria: Criteria, policy: CandidateP
   const content = policy.mode !== "legacy" && quality.exclusionReasons.length > 0;
   return { quality, causes: {
     ...eligibility(film, criteria), content, blocked: policy.excludedIds?.has(film.id) ?? false,
-    ...(criteria.selectionCategory ? { genre: !matchesSelectionGenre(film, criteria.selectionCategory) } : {}),
+    ...(criteria.selectionCategory ? selectionGenreExclusions(film, criteria.selectionCategory, policy.genreTagsOnly) : {}),
   } };
 }
 

@@ -4,7 +4,7 @@ import { franchiseExclusions } from "../db/franchises";
 import { readCatalogue } from "../db/recommendations";
 import { moodSessions, recommendationHistory } from "../db/schema";
 import { affinityModels, catalogueFrequency, type TonightAffinityModel } from "../domain/affinity";
-import { diagnoseRecommendation, engineVersion, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
+import { diagnoseRecommendation, engineVersion, previousGenreEngineVersion, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
 import { previousEditorialPolicy } from "../domain/selection-category";
 import { criteriaSchema, recentSelectionLimit, selectionSize } from "../shared/recommendation";
 import { withLocalSnapshot } from "./cli";
@@ -25,7 +25,8 @@ const captureSchema = z.object({
 
 export async function compareTonightAffinity(sqlite: string, rawCapture: unknown) {
   const capture = captureSchema.parse(rawCapture);
-  const editorial = capture.engineVersion === engineVersion ? undefined : previousEditorialPolicy;
+  const currentEditorial = capture.engineVersion === engineVersion || capture.engineVersion === previousGenreEngineVersion;
+  const editorial = currentEditorial ? undefined : previousEditorialPolicy;
   return withLocalSnapshot(sqlite, async (db) => {
     const session = await db.select({ id: moodSessions.id }).from(moodSessions).where(eq(moodSessions.date, capture.date)).get();
     if (!session) throw Error("Séance absente de cette base.");
@@ -34,7 +35,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
       .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(capture.recentLimit);
     const { catalogue, signals, movies } = await readCatalogue(db);
     const excludedIds = await franchiseExclusions(db, movies);
-    const policy = { referenceDate: capture.date.slice(0, 10), excludedIds };
+    const policy = { referenceDate: capture.date.slice(0, 10), excludedIds, genreTagsOnly: capture.engineVersion !== engineVersion };
     const recent = new Set(history.map(({ id }) => id));
     const byId = new Map(catalogue.map((film) => [film.id, film]));
     const hasVotes = (id: number) => (byId.get(id)?.metadata.reputation?.count ?? 0) > 0;
