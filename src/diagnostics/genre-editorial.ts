@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { criteriaSchema, recentSelectionLimit, selectionCategories, selectionSize } from "../shared/recommendation";
 import { diagnoseRecommendation, engineVersion, previousGenreEngineVersion, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
-import { selectionGenreExclusions } from "../domain/selection-category";
+import { matchesSelectionGenre, selectionGenreExclusions } from "../domain/selection-category";
 import { normalizeTitle } from "../domain/ratings";
 import { reportDirectory, withLocalSnapshot } from "./cli";
 import { defaultSelectionCriteria, readRecentEntries, readSelectionSnapshot } from "./selection";
@@ -29,7 +29,8 @@ export async function writeGenreEditorialAudit(options: { sqlite: string; output
           { referenceDate, excludedIds, genreTagsOnly }, tonightAffinityModel, tonightRanking, undefined, selectionSize);
         const ids = (trace: ReturnType<typeof run>) => new Set(trace.exclusions.filter(({ causes }) =>
           !Object.entries(causes).some(([key, excluded]) => key !== "periodLimit" && excluded)).map(({ id }) => id));
-        const all = ids(run(new Set()));
+        const unrotated = run(new Set());
+        const all = ids(unrotated);
         const rotated = run(recent);
         const available = ids(rotated);
         let history = recentEntries;
@@ -40,7 +41,7 @@ export async function writeGenreEditorialAudit(options: { sqlite: string; output
           history = [...films.map(({ id }) => id), ...history].slice(0, recentSelectionLimit);
           return { count: films.length, available: ids(trace).size, films };
         });
-        return { all, available, sessions, causes: new Map(rotated.exclusions.map(({ id, causes }) => [id, causes])) };
+        return { all, available, sessions, ranked: new Map(unrotated.base.map((row) => [row.id, row])), causes: new Map(rotated.exclusions.map(({ id, causes }) => [id, causes])) };
       };
       const before = simulate(true);
       const after = simulate(false);
@@ -51,10 +52,24 @@ export async function writeGenreEditorialAudit(options: { sqlite: string; output
           previousCauses: Object.entries(before.causes.get(film.id) ?? {}).filter(([, excluded]) => excluded).map(([reason]) => reason),
           reason: "Genre familial et marqueur jeunesse concordants." }));
       const keptAnimation = catalogue.filter((film) => after.all.has(film.id) && animated(film)).map(describe);
+      const animationEvidence = selectionCategory === "horror"
+        ? catalogue.filter((film) => animated(film) && matchesSelectionGenre(film, "horror", true)).map((film) => {
+          const { genres, keywords, release, synopsis, fullSynopsis } = film.metadata;
+          const inspect = (state: typeof before) => ({
+            admissible: state.all.has(film.id), available: state.available.has(film.id),
+            causes: Object.entries(state.causes.get(film.id) ?? {}).filter(([, excluded]) => excluded).map(([reason]) => reason),
+            score: state.ranked.get(film.id)?.score ?? null,
+            reasons: state.ranked.get(film.id)?.reasons ?? [],
+            selections: state.sessions.flatMap(({ films }, index) => films.some(({ id }) => id === film.id) ? [index + 1] : []),
+          });
+          return { ...describe(film), genres: [...new Set([...genres, ...(release?.genres ?? []).map(({ name }) => name)])],
+            keywords: [...new Set([...keywords, ...(release?.keywords ?? []).map(({ name }) => name)])],
+            synopsis: fullSynopsis ?? synopsis ?? null, before: inspect(before), after: inspect(after) };
+        }) : [];
       const summary = (state: typeof before) => ({ admissible: state.all.size, available: state.available.size, sessions: state.sessions });
-      return { selectionCategory, before: summary(before), after: summary(after), removed, added, familyExclusions, keptAnimation };
+      return { selectionCategory, before: summary(before), after: summary(after), removed, added, familyExclusions, keptAnimation, animationEvidence };
     });
-    return { format: "after-dark-genre-editorial-v1", referenceDate, baseline: previousGenreEngineVersion, engineVersion,
+    return { format: "after-dark-genre-editorial-v2", referenceDate, baseline: previousGenreEngineVersion, engineVersion,
       catalogue: catalogue.length, signals: signals.length, recent: recent.size, filters, categories };
   });
   const titles = (films: { title: string; year: number | null }[]) => films.map(({ title, year }) =>
@@ -77,6 +92,22 @@ export async function writeGenreEditorialAudit(options: { sqlite: string; output
         `- Séance ${index + 1}, nouvelle politique · ${titles(after.sessions[index].films)}`,
       ]), "",
     ]),
+    "## Inventaire complet des animations marquées Horreur", "",
+    "Admissible indique le vivier après les filtres personnels et de pertinence, avant rotation. Disponible tient compte de l’historique. Les raisons proviennent du moteur avant rotation. Un motif d’affinité ne constitue pas une preuve éditoriale.", "",
+    ...report.categories.flatMap(({ animationEvidence }) => animationEvidence.map((entry) => {
+      const list = (values: string[]) => values.map(clean).join(", ") || "—";
+      const state = ({ admissible, available, causes, score, reasons, selections }: typeof entry.before) =>
+        `admissible ${admissible ? "oui" : "non"}, disponible ${available ? "oui" : "non"}, séance(s) ${selections.join(", ") || "—"}. Exclusions · ${list(causes)}. Score de base · ${score?.toFixed(2) ?? "—"}. Raisons · ${list(reasons)}`;
+      return [
+        `### ${titles([entry])}`, "",
+        `- Genres · ${list(entry.genres)}`,
+        `- Mots-clés · ${list(entry.keywords)}`,
+        `- Avant · ${state(entry.before)}`,
+        `- Après · ${state(entry.after)}`, "",
+      ].join("\n");
+    })),
+    "## Catalogue local et découverte TMDB", "",
+    "Les requêtes Thriller conservent with_genres=53 dans les deux acquisitions. Une fiche comme Cure peut entrer dans Thriller via ses métadonnées locales après un import ou une autre acquisition. Le seul flux Discover Thriller ne cible pas cette fiche.", "",
     "Comparaison hors ligne sur un instantané unique. La rotation part de l’historique existant et avance séparément dans chaque simulation. Les conditions de classement et la limite de dix propositions sont communes. Ce test mesure la couverture et la cohérence des métadonnées.", "",
   ].join("\n");
   const output = await reportDirectory(options.output, true);

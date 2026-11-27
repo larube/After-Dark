@@ -31,3 +31,13 @@ Le rapport local Markdown et JSON compare le moteur 1.6.0 et la nouvelle admissi
 Sur l’instantané de validation, Horreur passe de 18 à 17 admissibles avant rotation et de 10 à 9 après rotation. *Joyeux Halloween, Scooby-Doo !* sort de la première sélection. Deux œuvres d’animation restent admissibles. Thriller passe de 47 à 48 admissibles avant rotation avec l’entrée de *Cure*. Le vivier après rotation reste à 40.
 
 La première séance Horreur passe de dix à neuf propositions. Les deux séances suivantes, simulées à catalogue fixe, sont épuisées avec les deux politiques. Thriller conserve dix films à chacune des trois séances.
+
+## Revue des animations avant fusion
+
+Le rapport v2 inventorie les 23 fiches portant Animation et Horreur sur l’instantané. Pour chacune, il indique les genres, les mots-clés, les motifs et le score de base lorsqu’il existe, l’admissibilité, la rotation et les éventuelles propositions simulées. Le JSON conserve le synopsis disponible.
+
+Trois animations étaient admissibles avant rotation. *Joyeux Halloween, Scooby-Doo !* était la seule disponible et proposée. Son genre Familial, le marqueur `talking dog` et le synopsis centré sur une farce concordent. *Unicorn Wars* reste admissible avec des marqueurs d’horreur adulte. *Ninja Scroll* reste admissible en tant qu’hybride plausible, avec des indices horrifiques et un synopsis d’action fantastique. Ces deux titres étaient récents.
+
+Le filtre signale aussi *Scooby-Doo ! Sur l’île aux zombies* et *Coraline*. Ils étaient déjà écartés par d’autres critères. *Coraline* montre que la règle s’applique hors de la franchise, via le marqueur explicite `horror for children`. *Frankelda* illustre le risque d’élargissement avec son genre Familial et plusieurs mots-clés d’horreur gothique. Les métadonnées ne suffisent pas à conclure qu’il est hors sujet. Le résultat mesuré est un retrait effectif. Aucun indice ne justifie d’étendre la règle.
+
+Le filtre local Thriller admet *Cure* sur la combinaison Crime ou Mystère et `psychological thriller`. Discover cible toujours le genre TMDB 53 dans les deux plans d’acquisition. *Cure* peut entrer dans Thriller depuis le catalogue local à la suite d’un import ou d’une acquisition Horreur. Le flux de genre Thriller ne le cible pas.
