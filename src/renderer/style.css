@@ -306,10 +306,10 @@ summary:hover { color: var(--focus); }
 .featured h3 { font-size: clamp(2.45rem, 4.6vw, 4rem); letter-spacing: -.017em; line-height: .97; }
 .film-meta { color: var(--muted); margin-top: 4px; letter-spacing: .01em; }
 .synopsis { margin-top: 7px; max-width: 62ch; line-height: 1.45; }
-.film-reason { margin-block-start: 7px; font-size: .9rem; }
+.film-reason { margin-block-start: 8px; font-size: .9rem; line-height: 1.4; color: var(--paper); }
 .featured .film-reason { padding: 5px 10px; background: #1b1713; border-left: 2px solid #a5694b; }
 .film-secondary { margin-block-start: 5px; font-size: .84rem; color: var(--muted); }
-.film-secondary summary { padding-block: 4px; overflow-wrap: anywhere; }
+.film-secondary summary { padding-block: 5px; overflow-wrap: anywhere; color: var(--paper); }
 .film-details ul { list-style: disc; padding-inline-start: 18px; margin-block: 5px; }
 .alternatives { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; }
 @media (min-width: 1050px) {

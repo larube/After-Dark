@@ -58,10 +58,12 @@ const choices = [
   ["tonight", "Pour ce soir", "◷"],
 ] as const;
 
-export function FilmActions({ movieId, title, entry, disabled, save, rating }: {
+export function FilmActions({ movieId, title, entry, disabled, save, rating, selection = false }: {
   movieId: number; title: string; entry?: FeedbackEntry; disabled: boolean; save: SaveFeedback;
+  selection?: boolean;
   rating?: { open: boolean; setOpen: (open: boolean) => void };
 }) {
+  const [pending, setPending] = useState(false);
   const [localEditing, setLocalEditing] = useState(false);
   const editing = rating?.open ?? localEditing;
   const setEditing = rating?.setOpen ?? setLocalEditing;
@@ -72,10 +74,11 @@ export function FilmActions({ movieId, title, entry, disabled, save, rating }: {
   const selected = !!entry?.selectedAt;
   const active = choices.find(([value]) => value === entry?.intention)?.[1];
   const state = seen ? "Déjà vu" : selected ? "Séance choisie" :
-    entry?.intention === "watch_later" ? "Dans ma liste" : entry?.intention === "not_interested" ? "Écarté" : active;
+    entry?.intention === "watch_later" ? "Dans ma liste" : entry?.intention === "not_interested" ? "Écarté" : selection && entry?.intention === "tonight" ? "Envisagé pour ce soir" : active;
 
   async function submit(request: FeedbackRequest) {
     setError("");
+    setPending(true);
     try {
       await save(request);
       if (request.action === "seen") setEditing(true);
@@ -85,6 +88,8 @@ export function FilmActions({ movieId, title, entry, disabled, save, rating }: {
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossible d’enregistrer ce retour.");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -93,7 +98,9 @@ export function FilmActions({ movieId, title, entry, disabled, save, rating }: {
   }
 
   return <div className="film-feedback" role="group" aria-label={`Choix pour ${title}`}>
-    {state && <p className="film-state">{state}{selected && entry?.intention === "watch_later" && " · Dans ma liste"}</p>}
+    {(state || (selection && pending)) && <p className="film-state" role={selection ? "status" : undefined}>
+      {selection && pending ? "Enregistrement…" : state}{!pending && selected && entry?.intention === "watch_later" && " · Dans ma liste"}
+    </p>}
     {!seen ? <>
       <button ref={primary} type="button" className="button button-primary film-launch"
         disabled={disabled} aria-disabled={selected || undefined}
@@ -104,7 +111,7 @@ export function FilmActions({ movieId, title, entry, disabled, save, rating }: {
         {choices.map(([value, label, icon]) => <button key={value} type="button" className="text-action" disabled={disabled}
           aria-pressed={value === "seen" ? undefined : entry?.intention === value}
           onClick={() => value === "seen" ? void submit({ action: "seen", movieId, score: null, appreciation: null }) : select(value)}>
-          <span aria-hidden="true">{icon}</span> {label}
+          <span aria-hidden="true">{icon}</span> {selection && value === "watch_later" ? "Envie de voir" : selection && value === "tonight" ? "Peut-être ce soir" : label}
         </button>)}
         {selected && <button className="text-action" type="button" disabled={disabled}
           onClick={() => void submit({ action: "cancel_viewing", movieId })}>Annuler la séance</button>}

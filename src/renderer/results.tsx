@@ -1,6 +1,7 @@
 import { selectionCategories, selectionSize, type SelectionCategory, type Recommendation } from "../shared/recommendation";
 import { useRef, useState, type ReactNode, type Ref } from "react";
 import { FilmFranchise } from "./franchises";
+import { selectionExplanation } from "./selection-explanation";
 import { AllocineLink } from "./allocine";
 
 const regions = new Intl.DisplayNames(["fr"], { type: "region" });
@@ -22,7 +23,8 @@ const empty = {
 function RecommendationCard({ film, actions, image }: {
   film: Recommendation["films"][number]; actions: ReactNode; image?: string;
 }) {
-  const { title, year, metadata, posterData = image, reasons: [reason, ...otherReasons], warnings } = film;
+  const { title, year, metadata, posterData = image, reasons, warnings } = film;
+  const explanation = selectionExplanation(film);
   const [skipped, setSkipped] = useState(false);
   const [franchise, setFranchise] = useState(film.franchise);
   const [verification, setVerification] = useState<"idle" | "pending" | "done" | "error">("idle");
@@ -54,8 +56,7 @@ function RecommendationCard({ film, actions, image }: {
         <h3>{title}</h3>
         {(year || metadata.minutes) && <p className="film-meta">{[year,
           metadata.minutes ? `${metadata.minutes} min` : undefined].filter(Boolean).join(" · ")}</p>}
-        {reason && <p className="film-reason">{reason}</p>}
-        {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
+        {explanation && <p className="film-reason">{explanation}</p>}
         {actions}
       </div>
       {skipped && <p className="film-skipped-label" role="status"><strong>{title}</strong> · Mis de côté pour cette sélection</p>}
@@ -66,10 +67,13 @@ function RecommendationCard({ film, actions, image }: {
       </button>
       <div hidden={skipped} className="film-secondary">
         <details className="film-details">
-          <summary ref={detailsSummary}>Détails du film</summary>
+          <summary ref={detailsSummary}>Informations</summary>
           {metadata.countries.length > 0 && <p className="film-meta">{metadata.countries.map((code) => regions.of(code)).join(", ")}</p>}
-          {metadata.synopsis && <p className="synopsis">{metadata.synopsis}</p>}
-          {otherReasons.length > 0 && <ul>{otherReasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
+          {metadata.genres.length > 0 && <p className="film-meta">{metadata.genres.join(" · ")}</p>}
+          {metadata.directors.length > 0 && <p className="film-meta">Réalisation · {metadata.directors.join(", ")}</p>}
+          {(metadata.fullSynopsis || metadata.synopsis) && <p className="synopsis">{metadata.fullSynopsis || metadata.synopsis}</p>}
+          {reasons.length > 0 && <ul aria-label="Raisons de la recommandation">{reasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
+          {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
           <AllocineLink title={title} year={year} />
           {!franchise && verification !== "done" && <div>
             <button ref={verifyButton} className="text-action" type="button" aria-disabled={verification === "pending"}
