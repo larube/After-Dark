@@ -48,6 +48,7 @@ describe("Interface Neon Underground", () => {
     }));
     expect(html).toMatch(/class="featured".*<img class="poster" src="data:image\/jpeg;base64,AA==" alt=""\/?>/);
     expect(html).toMatch(/aria-label="Propositions suivantes".*Affiche indisponible.*Une alternative au titre très long/);
+    expect(html).toContain('class="results-count">2 films');
     expect(html).toContain("2 sur 10 proposés");
     expect(html).toContain('role="alert">Impossible de charger les propositions.');
     expect(html).toContain('role="status" class="live-status">Recherche en cours…');

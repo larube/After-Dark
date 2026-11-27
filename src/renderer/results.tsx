@@ -53,41 +53,45 @@ function RecommendationCard({ film, actions, image }: {
         <div className="poster poster-empty"><span aria-hidden="true">◈</span><span>Affiche indisponible</span></div>}
     </div>
     <div className="film-copy">
-      <div hidden={skipped}>
+      <header className="film-heading" hidden={skipped}>
         <h3>{title}</h3>
         {(year || metadata.minutes) && <p className="film-meta">{[year,
           metadata.minutes ? `${metadata.minutes} min` : undefined].filter(Boolean).join(" · ")}</p>}
-        {explanation && <p className="film-reason">{explanation}</p>}
-        {cautions.length > 0 && <p className="warning film-cautions">
-          <strong>À garder en tête</strong> · {cautions.join(" · ")}
-        </p>}
-        {actions}
-      </div>
-      {skipped && <p className="film-skipped-label" role="status"><strong>{title}</strong> · Mis de côté pour cette sélection</p>}
-      <button type="button" className="text-action film-skip"
-        aria-label={skipped ? `Annuler « Pas ce soir » pour ${title}` : `Pas ce soir · ${title}`}
-        onClick={() => setSkipped(!skipped)}>
-        <span aria-hidden="true">{skipped ? "↶" : "–"}</span> {skipped ? "Annuler « Pas ce soir »" : "Pas ce soir"}
-      </button>
-      <div hidden={skipped} className="film-secondary">
-        <details className="film-details">
-          <summary ref={detailsSummary}>Informations</summary>
-          {metadata.countries.length > 0 && <p className="film-meta">{metadata.countries.map((code) => regions.of(code)).join(", ")}</p>}
-          {metadata.genres.length > 0 && <p className="film-meta">{metadata.genres.join(" · ")}</p>}
-          {metadata.directors.length > 0 && <p className="film-meta">Réalisation · {metadata.directors.join(", ")}</p>}
-          {(metadata.fullSynopsis || metadata.synopsis) && <p className="synopsis">{metadata.fullSynopsis || metadata.synopsis}</p>}
-          {reasons.length > 0 && <ul aria-label="Raisons de la recommandation">{reasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
-          {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
-          <AllocineLink title={title} year={year} />
-          {!franchise && verification !== "done" && <div>
-            <button ref={verifyButton} className="text-action" type="button" aria-disabled={verification === "pending"}
-              onClick={() => { if (verification !== "pending") void verifyFranchise(); }}>
-              {verification === "pending" ? "Vérification en cours…" : "Vérifier la saga sur TMDB"}
-            </button>
-            {verification === "error" && <p role="alert" className="warning">Impossible de vérifier la saga sur TMDB. Réessayer est possible.</p>}
-          </div>}
-        </details>
-        {franchise && <FilmFranchise movieId={film.id} franchise={franchise} />}
+      </header>
+      <div className="film-body">
+        <div hidden={skipped}>
+          {explanation && <p className="film-reason">{explanation}</p>}
+          {cautions.length > 0 && <p className="warning film-cautions">
+            <strong>À garder en tête</strong> · {cautions.join(" · ")}
+          </p>}
+          {actions}
+        </div>
+        {skipped && <p className="film-skipped-label" role="status"><strong>{title}</strong> · Mis de côté pour cette sélection</p>}
+        <button type="button" className="text-action film-skip"
+          aria-label={skipped ? `Annuler « Pas ce soir » pour ${title}` : `Pas ce soir · ${title}`}
+          onClick={() => setSkipped(!skipped)}>
+          <span aria-hidden="true">{skipped ? "↶" : "–"}</span> {skipped ? "Annuler « Pas ce soir »" : "Pas ce soir"}
+        </button>
+        <div hidden={skipped} className="film-secondary">
+          <details className="film-details">
+            <summary ref={detailsSummary}>Informations</summary>
+            {metadata.countries.length > 0 && <p className="film-meta">{metadata.countries.map((code) => regions.of(code)).join(", ")}</p>}
+            {metadata.genres.length > 0 && <p className="film-meta">{metadata.genres.join(" · ")}</p>}
+            {metadata.directors.length > 0 && <p className="film-meta">Réalisation · {metadata.directors.join(", ")}</p>}
+            {(metadata.fullSynopsis || metadata.synopsis) && <p className="synopsis">{metadata.fullSynopsis || metadata.synopsis}</p>}
+            {reasons.length > 0 && <ul aria-label="Raisons de la recommandation">{reasons.map((item, index) => <li key={index}>{item}</li>)}</ul>}
+            {warnings.map((warning, index) => <p key={index} className="warning">{warning}</p>)}
+            <AllocineLink title={title} year={year} />
+            {!franchise && verification !== "done" && <div>
+              <button ref={verifyButton} className="text-action" type="button" aria-disabled={verification === "pending"}
+                onClick={() => { if (verification !== "pending") void verifyFranchise(); }}>
+                {verification === "pending" ? "Vérification en cours…" : "Vérifier la saga sur TMDB"}
+              </button>
+              {verification === "error" && <p role="alert" className="warning">Impossible de vérifier la saga sur TMDB. Réessayer est possible.</p>}
+            </div>}
+          </details>
+          {franchise && <FilmFranchise movieId={film.id} franchise={franchise} />}
+        </div>
       </div>
     </div>
   </article>;
@@ -100,7 +104,8 @@ export function Results({ category, headingRef, result, posters, selectionNumber
 }) {
   return <section className="results" aria-labelledby="results-heading">
     <header className="results-header">
-      <h2 id="results-heading" ref={headingRef} tabIndex={-1}>À l’affiche</h2>
+      <h2 id="results-heading" ref={headingRef} tabIndex={-1}>Votre sélection à l’affiche</h2>
+      {!!result?.films.length && <p className="results-count">{result.films.length} film{result.films.length > 1 ? "s" : ""}</p>}
       <p role="status" className="live-status">
         {loading ? "Recherche en cours…" : result ? connections[result.connection] : ""}
       </p>
@@ -119,7 +124,7 @@ export function Results({ category, headingRef, result, posters, selectionNumber
         <div className="featured">
           <RecommendationCard key={result.films[0].id} film={result.films[0]} image={posters?.[result.films[0].id]} actions={filmActions(result.films[0], loading)} />
         </div>
-        {result.films.length > 1 && <ol className="alternatives" start={2} aria-label="Propositions suivantes">
+        {result.films.length > 1 && <ol className="alternatives" start={2} role="list" aria-label="Propositions suivantes">
           {result.films.slice(1).map((film) => <li key={film.id}>
             <RecommendationCard film={film} image={posters?.[film.id]} actions={filmActions(film, loading)} />
           </li>)}
