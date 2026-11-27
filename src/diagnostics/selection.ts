@@ -1,5 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { desc } from "drizzle-orm";
+import { recommendationHistory } from "../db/schema";
 import { z } from "zod";
 import type { CinemaDatabase } from "../db/client";
 import { franchiseExclusions } from "../db/franchises";
@@ -33,7 +35,7 @@ function distribution(values: (number | undefined)[]) {
 export function auditSelection(snapshot: Snapshot, criteria: Criteria, referenceDate: string,
   options?: { experiment?: EditorialExperiment; category?: "classics" | "gems"; recentEntries?: number[]; engineVersion?: string }) {
   const { catalogue, signals, recent, excludedIds, round } = snapshot;
-  const policy = { referenceDate, excludedIds };
+  const policy = { referenceDate, excludedIds, genreTagsOnly: !!options?.engineVersion && options.engineVersion !== engineVersion };
   const run = (input: Criteria, history: ReadonlySet<number>) =>
     diagnoseRecommendation(catalogue, signals, input, history, policy, tonightAffinityModel, tonightRanking, tonightDefaults, selectionSize, options?.experiment);
   const byId = new Map(catalogue.map((film) => [film.id, film]));
@@ -87,7 +89,7 @@ export function auditSelection(snapshot: Snapshot, criteria: Criteria, reference
       retained: overlap(selected.map(({ id }) => id), withoutRotation.map(({ id }) => id)),
       exclusions: tally(rotated.exclusions.flatMap(({ causes }) => Object.entries(causes).flatMap(([key, value]) => value ? [key] : []))),
       recentAdmissible: admissible.filter((id) => recent.has(id)).length,
-      offGenre: selected.filter(({ id }) => !matchesSelectionGenre(byId.get(id)!, category)).length,
+      offGenre: selected.filter(({ id }) => !matchesSelectionGenre(byId.get(id)!, category, policy.genreTagsOnly)).length,
       forbidden: selected.filter(({ id }) => causes.get(id)?.seen || causes.get(id)?.dismissed || causes.get(id)?.blocked).length,
     };
     const nearMisses = category === "gems" ? unrotated.base.flatMap((row) => {
@@ -194,7 +196,13 @@ export function selectionMarkdown(audit: Audit) {
   ].join("\n");
 }
 
-const defaultCriteria = { mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [] };
+export const defaultSelectionCriteria = { mood: "surprise", preferredCountries: [], requiredCountries: [], preferredLanguages: [], requiredLanguages: [] };
+
+export async function readRecentEntries(db: CinemaDatabase) {
+  const history = await db.select({ id: recommendationHistory.movieId }).from(recommendationHistory)
+    .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(recentSelectionLimit);
+  return history.map(({ id }) => id);
+}
 
 export async function readSelectionSnapshot(db: CinemaDatabase) {
   const { catalogue, signals, movies } = await readCatalogue(db);
@@ -205,7 +213,7 @@ export async function readSelectionSnapshot(db: CinemaDatabase) {
 
 export async function writeSelectionAudit(options: { sqlite: string; output: string; date: string; criteria?: unknown }) {
   const date = z.iso.date().parse(options.date);
-  const criteria = criteriaSchema.parse(options.criteria ?? defaultCriteria);
+  const criteria = criteriaSchema.parse(options.criteria ?? defaultSelectionCriteria);
   if (criteria.mood !== "surprise") throw new Error("Utilisez mood: surprise et les filtres communs aux huit catégories.");
   const audit = await withLocalSnapshot(options.sqlite, async (db) =>
     auditSelection(await readSelectionSnapshot(db), criteria, date));

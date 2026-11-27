@@ -10,7 +10,7 @@ const formatKeywords = {
 
 export const contentTypes = ["feature_film", "short_film", "concert", "stage_performance", "other_special", "tv_program", "tv_movie", "unknown"] as const;
 type ContentType = typeof contentTypes[number];
-export type CandidatePolicy = { referenceDate: string; mode?: "classic" | "legacy"; excludedIds?: ReadonlySet<number> };
+export type CandidatePolicy = { referenceDate: string; mode?: "classic" | "legacy"; excludedIds?: ReadonlySet<number>; genreTagsOnly?: boolean };
 export const todayUtc = () => new Date().toISOString().slice(0, 10);
 
 export function calendarDate(raw?: string | null) {

@@ -17,12 +17,38 @@ export function selectionGenre(category?: SelectionCategory) {
   return category && category in genres ? genres[category as keyof typeof genres] : undefined;
 }
 
-export function matchesSelectionGenre(film: Film, category?: SelectionCategory) {
-  const genre = selectionGenre(category);
-  if (!genre) return true;
+function hasGenre(film: Film, genre: { ids: number[]; names: string[] }) {
   const raw = film.metadata.release?.genres ?? [];
   return raw.some(({ id }) => id !== undefined && genre.ids.includes(id)) ||
     [...film.metadata.genres, ...raw.map(({ name }) => name)].some((name) => genre.names.includes(normalizeTitle(name)));
+}
+
+const familyGenre = { ids: [10751], names: ["family", "familial", "famille"] };
+const crimeOrMystery = { ids: [80, 9648], names: ["crime", "mystery", "mystere"] };
+const youthKeywords = new Set(["cartoon", "cartoon dog", "talking dog", "horror for children"]);
+
+export function selectionGenreExclusions(film: Film, category: SelectionCategory, tagsOnly = false): { genre: boolean; familyHorror?: true } {
+  const genre = selectionGenre(category);
+  if (!genre) return { genre: false };
+  const tagged = hasGenre(film, genre);
+  if (tagsOnly || (category !== "horror" && category !== "thriller")) return { genre: !tagged };
+
+  if (category === "horror" ? !tagged : tagged) return { genre: !tagged };
+  const keywords = new Set([...film.metadata.keywords, ...(film.metadata.release?.keywords ?? []).map(({ name }) => name)]
+    .map(normalizeTitle));
+  if (category === "thriller") {
+    const corroborated = keywords.has("psychological thriller") && hasGenre(film, crimeOrMystery);
+    return { genre: !corroborated };
+  }
+
+  // Family and a separate youth marker must agree. Animation alone never determines eligibility.
+  if (hasGenre(film, familyGenre) && !keywords.has("adult animation") &&
+    [...keywords].some((keyword) => youthKeywords.has(keyword))) return { genre: false, familyHorror: true };
+  return { genre: false };
+}
+
+export function matchesSelectionGenre(film: Film, category?: SelectionCategory, tagsOnly = false) {
+  return !category || !Object.values(selectionGenreExclusions(film, category, tagsOnly)).some(Boolean);
 }
 
 export function exposureRanks(films: Film[]) {
