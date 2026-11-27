@@ -104,6 +104,66 @@ describe("Interface Neon Underground", () => {
     expect(html).not.toMatch(/Valeur sûre|Pépite|Wildcard|data-category/);
   });
 
+  it("présente des explications fondées sur la fiche ou les raisons calculées", () => {
+    const result = recommendationSchema.parse({
+      connection: "cached", personalized: true, status: "ready",
+      films: [
+        { id: 1, title: "Signaux", year: null, category: "safe", metadata: {},
+          reasons: ["Traits associés à vos appréciations positives : amitié."], warnings: [] },
+        { id: 2, title: "Données contradictoires", year: null, category: "gem",
+          metadata: { release: { source: "TMDB", keywords: [{ name: "psychological horror" }] } },
+          reasons: ["Traits associés à vos appréciations positives : amitié."],
+          warnings: ["Traits associés aussi à des appréciations négatives : Horreur."] },
+        { id: 3, title: "Sans métadonnées", year: null, category: "wildcard", metadata: {}, reasons: [], warnings: [] },
+      ],
+    });
+    const html = renderToStaticMarkup(createElement(Results, {
+      result, ready: true, loading: false, error: "", repeat() {}, filmActions: () => null,
+    }));
+    const cards = html.match(/<article[\s\S]+?<\/article>/g)!;
+    expect(cards[0]).toContain('class="film-reason">Des éléments associés à des films que tu as appréciés');
+    expect(cards[1]).toContain('class="film-reason">Horreur psychologique');
+    expect(cards[1]).not.toContain("Des éléments associés à des films que tu as appréciés");
+    expect(cards[2]).not.toContain("film-reason");
+    expect(html).not.toContain("%");
+  });
+
+  it("affiche les avertissements décisifs avant les actions et conserve le détail dans Informations", () => {
+    const warnings = [
+      "Traits associés aussi à des appréciations négatives : Horreur.",
+      "Moins prioritaire : indices de l’ambiance que vous préférez éviter (horreur).",
+      "Séance longue pour une soirée à faible énergie.",
+      "Les métadonnées donnent peu d’indices sur le mood demandé.",
+      "Autre avertissement du moteur.",
+    ];
+    const result = recommendationSchema.parse({
+      connection: "cached", personalized: true, status: "ready",
+      films: [{ id: 1, title: "Cure", year: 1997, category: "safe", metadata: { genres: ["Thriller"] },
+        reasons: ["Traits associés à vos appréciations positives : Mystère."], warnings }],
+    });
+    const html = renderToStaticMarkup(createElement(Results, {
+      result, ready: true, loading: false, error: "", repeat() {}, filmActions: () => "Actions film",
+    }));
+    const card = html.slice(0, html.indexOf("<details"));
+    expect(card).toMatch(/Thriller.*À garder en tête.*ambiance que tu souhaites éviter.*appréciations négatives.*faible énergie.*ambiance demandée.*Actions film/);
+    expect(card).not.toContain("des films que tu as appréciés");
+    expect(card).not.toContain(warnings[4]);
+    const details = html.slice(html.indexOf("<details"));
+    for (const warning of warnings) expect(details).toContain(warning);
+  });
+
+  it("rend les intentions existantes lisibles dans Sélection et garde leurs états accessibles", () => {
+    const html = renderToStaticMarkup(createElement(FilmActions, {
+      selection: true, title: "Cure", movieId: 1, disabled: true,
+      entry: { movieId: 1, title: "Cure", year: 1997, intention: "tonight", seenAt: null, score: null, appreciation: null }, save: async () => {},
+    }));
+    for (const label of ["Envie de voir", "Peut-être ce soir", "Pas pour moi", "Déjà vu", "Envisagé pour ce soir"]) {
+      expect(html).toContain(label);
+    }
+    expect(html).toMatch(/<button[^>]+disabled=""[^>]+aria-pressed="true"[^>]*>.*?Peut-être ce soir/);
+    expect(html).not.toContain("À voir un jour");
+  });
+
   it.each([false, true])("place les actions avant les détails avec ou sans franchise (%s)", (withFranchise) => {
     const film = { id: 1, title: "Cure", year: 1997, category: "safe", metadata: { synopsis: "Le synopsis.", minutes: 111 },
       reasons: ["Premier indice.", "Deuxième indice."], warnings: [] };
@@ -118,7 +178,7 @@ describe("Interface Neon Underground", () => {
     const cards = html.match(/<article[\s\S]+?<\/article>/g)!;
     expect(cards).toHaveLength(2);
     for (const card of cards) {
-      expect(card).toMatch(/Premier indice.*Pas pour moi.*Pas ce soir.*Détails du film.*Le synopsis.*Deuxième indice/);
+      expect(card).toMatch(/Pas pour moi.*Pas ce soir.*Informations.*Le synopsis.*Premier indice.*Deuxième indice/);
       expect(card).not.toMatch(/<details[^>]* open|Aucune franchise|Pays inconnu/);
     }
     expect(cards[0].includes("Franchise · Une saga")).toBe(withFranchise);
