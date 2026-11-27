@@ -4,7 +4,7 @@ import { franchiseExclusions } from "../db/franchises";
 import { readCatalogue } from "../db/recommendations";
 import { moodSessions, recommendationHistory } from "../db/schema";
 import { affinityModels, catalogueFrequency, type TonightAffinityModel } from "../domain/affinity";
-import { diagnoseRecommendation, engineVersion, previousGenreEngineVersion, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
+import { diagnoseRecommendation, engineVersion, previousCompositionEngineVersion, previousGenreEngineVersion, tonightAffinityModel, tonightRanking, type RankingPolicy } from "../domain/recommendation";
 import { previousEditorialPolicy } from "../domain/selection-category";
 import { criteriaSchema, recentSelectionLimit, selectionSize } from "../shared/recommendation";
 import { withLocalSnapshot } from "./cli";
@@ -19,13 +19,13 @@ const captureSchema = z.object({
     period: z.object({
       fromYear: z.number().int(), penalty: z.number(), maxExceptions: z.number().int(),
       minimumAffinity: z.number(), minimumReputationWithMood: z.number(),
-    }).nullable(), animationPenalty: z.number(), repeatedDecadePenalty: z.number(),
+    }).nullable(), composition: z.literal("balanced").optional(), animationPenalty: z.number(), repeatedDecadePenalty: z.number(),
   }),
 });
 
 export async function compareTonightAffinity(sqlite: string, rawCapture: unknown) {
   const capture = captureSchema.parse(rawCapture);
-  const currentEditorial = capture.engineVersion === engineVersion || capture.engineVersion === previousGenreEngineVersion;
+  const currentEditorial = [engineVersion, previousCompositionEngineVersion, previousGenreEngineVersion].some((version) => version === capture.engineVersion);
   const editorial = currentEditorial ? undefined : previousEditorialPolicy;
   return withLocalSnapshot(sqlite, async (db) => {
     const session = await db.select({ id: moodSessions.id }).from(moodSessions).where(eq(moodSessions.date, capture.date)).get();
@@ -35,7 +35,7 @@ export async function compareTonightAffinity(sqlite: string, rawCapture: unknown
       .orderBy(desc(recommendationHistory.moodSessionId), recommendationHistory.rank).limit(capture.recentLimit);
     const { catalogue, signals, movies } = await readCatalogue(db);
     const excludedIds = await franchiseExclusions(db, movies);
-    const policy = { referenceDate: capture.date.slice(0, 10), excludedIds, genreTagsOnly: capture.engineVersion !== engineVersion };
+    const policy = { referenceDate: capture.date.slice(0, 10), excludedIds, genreTagsOnly: capture.engineVersion !== engineVersion && capture.engineVersion !== previousCompositionEngineVersion };
     const recent = new Set(history.map(({ id }) => id));
     const byId = new Map(catalogue.map((film) => [film.id, film]));
     const hasVotes = (id: number) => (byId.get(id)?.metadata.reputation?.count ?? 0) > 0;

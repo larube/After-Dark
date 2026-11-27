@@ -37,6 +37,7 @@ const specialKeywords = new Set([
 function summarize(films: Film[]) {
   const decades: Record<string, number> = {};
   const genres: Record<string, number> = {};
+  const countries: Record<string, number> = {};
   let withVotes = 0;
   for (const film of films) {
     const decade = decadeOf(film.year) ?? "unknown";
@@ -45,9 +46,10 @@ function summarize(films: Film[]) {
       const key = normalizeTitle(genre);
       if (key) genres[key] = (Object.hasOwn(genres, key) ? genres[key] : 0) + 1;
     }
+    for (const code of new Set(film.metadata.countries)) countries[code] = (countries[code] ?? 0) + 1;
     withVotes += Number((film.metadata.reputation?.count ?? 0) > 0);
   }
-  return { count: films.length, decades, genres, withVotes };
+  return { count: films.length, decades, genres, countries, withVotes };
 }
 
 export function tonightDiagnostic(input: {
@@ -68,10 +70,10 @@ export function tonightDiagnostic(input: {
     const exclusion = exclusions.get(row.id)!;
     const selection = selected.get(row.id);
     const collection = movie && filmFranchise(movie);
-    const steps = trace.steps.flatMap(({ ranking }, index) => {
+    const steps = trace.steps.flatMap(({ ranking, composition }, index) => {
       const position = index + 1;
       const candidate = ranking.find(({ id }) => id === row.id);
-      return candidate ? [{ position, ...candidate, winnerId: ranking[0].id, winnerScore: ranking[0].score }] : [];
+      return candidate ? [{ position, ...candidate, winnerId: ranking[0].id, winnerScore: ranking[0].score, ...(composition ? { composition } : {}) }] : [];
     });
     return {
       id: film.id, tmdbId, title: film.title, year: film.year, genres: film.metadata.genres,
@@ -113,6 +115,8 @@ export function tonightDiagnostic(input: {
       afterAcquisition: summarize(input.catalogue),
       foundByTmdb: summarize(input.catalogue.filter(({ id }) => acquired.has(movies.get(id)?.tmdbId ?? -1))),
       scored: summarize(trace.base.map(({ id }) => catalogue.get(id)!)),
+      eligible: summarize(trace.exclusions.filter(({ causes }) => !Object.entries(causes).some(([key, active]) =>
+        key !== "periodLimit" && active)).map(({ id }) => catalogue.get(id)!)),
       selected: summarize(trace.result.films),
       overlappingExclusionCounts: counts,
     },
@@ -140,7 +144,7 @@ export function tonightMarkdown(report: TonightDiagnostic) {
     const excluded = Object.entries(row.exclusions).filter(([, active]) => active).map(([key]) => causesFr[key]).join(", ");
     const winnerStep = row.steps.find((step) => step.position === ("position" in row.decision ? row.decision.position : undefined));
     const bestAttempt = [...row.steps].sort((a, b) => a.rank - b.rank)[0];
-    const decision = winnerStep ? `Choix ${winnerStep.position} · meilleur score à cette étape (${number(winnerStep.score)})`
+    const decision = winnerStep ? `Choix ${winnerStep.position} · ${winnerStep.composition ? "arbitrage de composition" : "meilleur score à cette étape"} (${number(winnerStep.score)})`
       : excluded || (bestAttempt ? `Dépassé à chaque étape accessible · meilleur rang ${bestAttempt.rank}` : "Non retenu");
     const flags = [row.review.content.category === "unknown" ? "Type incertain" : row.review.content.category !== "feature_film" ? row.review.content.category : undefined, row.review.franchise?.name, ...row.review.metadataKeywords,
       ...row.review.sharedKeywords.map(({ id, keywords }) => `avec #${id} : ${keywords.join(", ")}`)].filter(Boolean);
@@ -164,11 +168,11 @@ export function tonightMarkdown(report: TonightDiagnostic) {
       `Appels Discover / détail : ${report.acquisition.pool.discoveryRequests} / ${report.acquisition.pool.detailRequests}. Stratégie : ${report.acquisition.pool.strategy}.`, "",
     ] : []),
     ...report.acquisition.sources.map(({ kind, parameters, listed, forwarded }) => `- ${kind ? kind + " · " : ""}${Object.entries(parameters).map(([key, value]) => `${key}=${value}`).join(" · ")} — ${listed} fiches valides, ${forwarded} transmises.`),
-    "", "| Étape | Décennies (effectifs) | Genres les plus fréquents | Avis TMDB disponibles |",
-    "| --- | --- | --- | ---: |",
+    "", "| Étape | Décennies (effectifs) | Principaux pays | Genres les plus fréquents | Avis TMDB disponibles |",
+    "| --- | --- | --- | --- | ---: |",
     ...([["Catalogue après acquisition", report.pool.afterAcquisition], ["Correspondances Discover", report.pool.foundByTmdb],
-      ["Candidats scorés", report.pool.scored], ["Sélection", report.pool.selected]] as const).map(([name, counts]) =>
-      `| ${name} | ${Object.entries(counts.decades).map(([decade, count]) => `${decade} (${count})`).join(", ")} | ${Object.entries(counts.genres)
+      ["Candidats scorés", report.pool.scored], ["Admissibles après rotation", report.pool.eligible], ["Sélection", report.pool.selected]] as const).map(([name, counts]) =>
+      `| ${name} | ${Object.entries(counts.decades).map(([decade, count]) => `${decade} (${count})`).join(", ")} | ${Object.entries(counts.countries).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([country, count]) => `${country} (${count})`).join(", ")} | ${Object.entries(counts.genres)
         .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([genre, count]) => `${genre} (${count})`).join(", ")} | ${counts.withVotes}/${counts.count} |`),
     "", "Les films déjà présents dans le catalogue peuvent être retenus sans avoir été renvoyés par Discover. Comparer le vivier et les alternatives avec les choix avant d’attribuer l’écart à l’acquisition ou au classement.", "",
     "## Films proposés", "", table(report.selected), "", "## Meilleurs films non retenus", "", table(report.alternatives), "",

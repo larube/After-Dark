@@ -2,6 +2,7 @@ import type { Criteria, Metadata, Recommendation } from "../shared/recommendatio
 import { classifyContent, todayUtc, type CandidatePolicy } from "./candidate-quality";
 import { decadeOf, tonightDefaults, type TonightPreferences } from "./tonight-preferences";
 import { type EditorialExperiment, type EditorialPolicy, productionEditorialPolicy, categoryEvidence, exposureRanks, selectionGenreExclusions, reputationPriorVotes } from "./selection-category";
+import { compositionWinner } from "./selection-composition";
 import { normalizeTitle } from "./ratings";
 
 import { affinityDetails, buildAffinity, catalogueFrequency, features, type TonightAffinityModel } from "./affinity";
@@ -10,7 +11,8 @@ export { affinityFor, buildAffinity, qualitativeWeights } from "./affinity";
 export const legacyEngineVersion = "1.3.0";
 export const previousEditorialEngineVersion = "1.5.0";
 export const previousGenreEngineVersion = "1.6.0";
-export const engineVersion = "1.7.0";
+export const previousCompositionEngineVersion = "1.7.0";
+export const engineVersion = "1.8.0";
 export const tonightAffinityModel = "personal" as const;
 export const tonightRanking = "relevance-personal" as const;
 export type RankingPolicy = "legacy" | "relevance-initial" | "relevance" | "relevance-personal";
@@ -170,6 +172,7 @@ type Trace = {
 };
 type Step = {
   category: Category;
+  composition?: { scoreLeader: number };
   ranking: { id: number; rank: number; bonus: number; penalty: number; decadePenalty: number; score: number }[];
 };
 
@@ -218,8 +221,14 @@ function runRecommendation(catalogue: Film[], signals: Signal[], criteria: Crite
         : category === "wildcard" ? -Math.max(0, candidate.affinity) * 0.6 : candidate.affinity;
       return { candidate, penalty: penalty + decadePenalty, decadePenalty, bonus, score: candidate.score - (penalty + decadePenalty) + bonus };
     }).sort((a, b) => b.score - a.score || a.candidate.film.id - b.candidate.film.id);
+    const originalLeader = ranking[0]?.candidate.film.id;
+    if (preferences.composition === "balanced" && rankingPolicy === tonightRanking) {
+      const index = compositionWinner(ranking, selected, criteria, preferences.repeatedDecadePenalty);
+      if (index > 0) ranking.unshift(ranking.splice(index, 1)[0]);
+    }
     if (trace && ranking.length) trace.steps.push({
-      category, ranking: ranking.map(({ candidate, ...value }, index) => ({ id: candidate.film.id, rank: index + 1, ...value })),
+      category, ...(originalLeader !== undefined && originalLeader !== ranking[0].candidate.film.id
+        ? { composition: { scoreLeader: originalLeader } } : {}), ranking: ranking.map(({ candidate, ...value }, index) => ({ id: candidate.film.id, rank: index + 1, ...value })),
     });
     const winner = ranking.shift();
     if (!winner) break;

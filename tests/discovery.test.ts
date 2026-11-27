@@ -6,7 +6,7 @@ import { openDatabase } from "../src/db/client";
 import { enrichmentQueue } from "../src/db/enrichment";
 import { enrichNext } from "../src/main/enrichment";
 import { setFranchisePreference } from "../src/db/franchises";
-import { recommend, tonightAffinityModel, tonightRanking } from "../src/domain/recommendation";
+import { engineVersion, recommend, tonightAffinityModel, tonightRanking } from "../src/domain/recommendation";
 import { saveFeedback } from "../src/db/feedback";
 import { cacheFilm, readCatalogue } from "../src/db/recommendations";
 import { moodSessions, recommendationHistory } from "../src/db/schema";
@@ -162,7 +162,7 @@ describe("intégration TMDB et SQLite", () => {
     const result = await findTonight(db, criteria, async () => client, now);
     expect(result).toMatchObject({ status: "ready", connection: "offline", personalized: false, films: [{ title: "Premier Contact" }] });
     expect(await db.select().from(moodSessions).get()).toMatchObject({ criteria: { atmosphere: "tension" } });
-    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion: "1.7.0" });
+    expect(await db.select().from(recommendationHistory).get()).toMatchObject({ rank: 1, engineVersion });
     expect(await findTonight(db, criteria, async () => undefined, now)).toMatchObject({ connection: "unconfigured", status: "exhausted" });
     expect(await findTonight(db, criteria, async () => undefined, now, true)).toMatchObject({ status: "ready" });
   });

@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { CinemaDatabase } from "../db/client";
 import { readCatalogue, readHistory, saveRecommendation } from "../db/recommendations";
 import { filmFranchise } from "../domain/franchises";
-import type { TonightPreferences } from "../domain/tonight-preferences";
+import { selectionPreferences, type TonightPreferences } from "../domain/tonight-preferences";
 import { tonightDiagnostic, type TonightDiagnostic } from "../diagnostics/tonight";
 import { diagnoseRecommendation, recommend, tonightAffinityModel, tonightRanking } from "../domain/recommendation";
 import { recentSelectionLimit, selectionSize, type Criteria, type Recommendation } from "../shared/recommendation";
@@ -42,15 +42,16 @@ export async function findTonight(
   const { state, blocked, report } = await acquireTonight(db, catalogue, criteria, recent, history.round, now, getClient, preferences,
     { strategy, measure: !!onDiagnostic });
   const date = now.toISOString();
+  const selection = { ...selectionPreferences, ...preferences };
   const args = [state.catalogue, state.signals, criteria, recent,
-    { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, preferences, selectionSize] as const;
+    { referenceDate: date.slice(0, 10), excludedIds: blocked }, tonightAffinityModel, tonightRanking, selection, selectionSize] as const;
   const trace = onDiagnostic ? diagnoseRecommendation(...args) : undefined;
   const result = { ...(trace?.result ?? recommend(...args)), connection: report.connection };
   await saveRecommendation(db, criteria, result, date);
   if (trace && onDiagnostic) {
     try {
       await onDiagnostic(tonightDiagnostic({
-        date, criteria, allowRecent, preferences, size: selectionSize, recentLimit: recentSelectionLimit, catalogue: state.catalogue, movies: state.movies, trace,
+        date, criteria, allowRecent, preferences: selection, size: selectionSize, recentLimit: recentSelectionLimit, catalogue: state.catalogue, movies: state.movies, trace,
         acquisition: report,
       }));
     } catch {
